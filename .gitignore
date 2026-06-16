@@ -13,3 +13,4 @@ workspace/tasks-state.json
 !workspace/output/.gitkeep
 !workspace/drafts/.gitkeep
 .playwright-mcp
+tsconfig.tsbuildinfo
