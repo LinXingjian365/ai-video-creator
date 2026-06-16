@@ -36,6 +36,17 @@ export async function GET() {
     hint: envHint(name)
   }));
 
+  const llmProvider = (process.env.LLM_PROVIDER ?? "openai").toLowerCase();
+  const llmKeyName = llmProvider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+  const llm = {
+    provider: llmProvider,
+    keyName: llmKeyName,
+    ok: Boolean(process.env[llmKeyName]),
+    hint: llmProvider === "anthropic"
+      ? "热点情报 LLM 分析(Claude provider):在 .env 配置 ANTHROPIC_API_KEY(+ 可选 ANTHROPIC_BASE_URL)"
+      : "热点情报 LLM 分析(GPT provider,默认):在 .env 配置 OPENAI_API_KEY + OPENAI_BASE_URL(指向你的网关)"
+  };
+
   const stages = creatorToolkit.reduce<Record<string, { total: number; core: number; readyHints: string[] }>>((acc, tool) => {
     const current = acc[tool.stage] ?? { total: 0, core: 0, readyHints: [] };
     current.total += 1;
@@ -48,6 +59,7 @@ export async function GET() {
   return NextResponse.json({
     commands,
     env,
+    llm,
     stages,
     nextSteps: [
       "Install missing local commands first: python, uv, yt-dlp, ffmpeg, n8n.",
