@@ -1,0 +1,15 @@
+.next
+node_modules
+dist
+*.log
+.env
+.env.local
+.env.*.local
+workspace/input/*
+workspace/output/*
+workspace/drafts/*
+workspace/tasks-state.json
+!workspace/input/.gitkeep
+!workspace/output/.gitkeep
+!workspace/drafts/.gitkeep
+.playwright-mcp
