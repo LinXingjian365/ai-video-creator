@@ -192,3 +192,9 @@ export const creatorSuiteSchema = z.object({
   competitorStyle: z.string().min(1).optional(),
   riskTolerance: z.enum(["low", "medium", "high"]).default("medium")
 });
+
+export const trendReportSchema = z.object({
+  platform: z.enum(["bilibili"]).default("bilibili"),
+  category: z.string().min(1).default("all"),
+  topN: z.coerce.number().int().min(1).max(50).default(20)
+});
