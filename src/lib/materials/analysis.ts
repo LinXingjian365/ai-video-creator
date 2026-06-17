@@ -4,6 +4,7 @@ import path from "node:path";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { getVideoInfo, type VideoInfo } from "@/lib/ffmpeg";
 import { defaultDraftPath, inputRoot, resolveLocalPath } from "@/lib/paths";
+import { getVideoToolsPython } from "@/lib/python-tools";
 import type { ImportedMaterialFile, MaterialImportManifest } from "./yt-dlp";
 
 export interface TranscriptSegment {
@@ -17,7 +18,7 @@ export interface SceneChange {
   index: number;
   timeMs: number;
   confidence: number;
-  source: "ffmpeg-scene";
+  source: "ffmpeg-scene" | "pyscenedetect";
 }
 
 export interface SilenceRange {
@@ -44,6 +45,17 @@ export interface CandidateClip {
   source: "subtitle" | "speech" | "scene" | "fallback";
 }
 
+export interface AutoEditorPreview {
+  source: "auto-editor-preview" | "none";
+  enabled: boolean;
+  inputDurationMs?: number;
+  outputDurationMs?: number;
+  cutCount?: number;
+  clipCount?: number;
+  raw?: string;
+  error?: string;
+}
+
 export interface MaterialAnalysis {
   schema: "ai-video-assistant.material-analysis.v1";
   createdAt: string;
@@ -58,16 +70,17 @@ export interface MaterialAnalysis {
     primaryVideoPath?: string;
   };
   transcript: {
-    source: "subtitle-file" | "none";
+    source: "subtitle-file" | "faster-whisper" | "none";
     segmentCount: number;
     segments: TranscriptSegment[];
   };
   scenes: {
-    source: "ffmpeg-scene" | "none";
+    source: "ffmpeg-scene" | "pyscenedetect" | "none";
     threshold: number;
     sceneCount: number;
     changes: SceneChange[];
   };
+  autoEditor: AutoEditorPreview;
   audio: {
     source: "ffmpeg-silence" | "none";
     silenceNoiseDb: number;
@@ -93,6 +106,11 @@ export interface MaterialAnalysisOptions {
   silenceMinDurationSec: number;
   minClipMs: number;
   targetClipMs: number;
+  transcriptionMode?: "subtitle-only" | "auto" | "faster-whisper";
+  whisperModel?: string;
+  whisperLanguage?: string;
+  sceneBackend?: "auto" | "ffmpeg" | "pyscenedetect";
+  autoEditorEnabled?: boolean;
   timeoutMs?: number;
 }
 
@@ -110,14 +128,37 @@ export async function analyzeMaterial(options: MaterialAnalysisOptions): Promise
   const subtitlePaths = await resolveSubtitlePaths(manifest, materialDir);
 
   const video = videoPath ? await getVideoInfo(videoPath) : undefined;
-  const transcriptSegments = await loadTranscriptSegments(subtitlePaths);
+  const transcriptNotes: string[] = [];
+  let transcriptSegments = await loadTranscriptSegments(subtitlePaths);
+  let transcriptSource: MaterialAnalysis["transcript"]["source"] = transcriptSegments.length > 0 ? "subtitle-file" : "none";
+  if (videoPath && transcriptSegments.length === 0 && shouldRunFasterWhisper(options.transcriptionMode)) {
+    try {
+      transcriptSegments = await transcribeWithFasterWhisper(videoPath, {
+        model: options.whisperModel ?? "tiny",
+        language: options.whisperLanguage,
+        timeoutMs: options.timeoutMs ?? 600000
+      });
+      transcriptSource = transcriptSegments.length > 0 ? "faster-whisper" : "none";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (options.transcriptionMode === "faster-whisper") {
+        throw error;
+      }
+      transcriptNotes.push(`faster-whisper auto transcription failed and analysis continued without ASR: ${message}`);
+    }
+  }
+  const sceneNotes: string[] = [];
   const scenes = videoPath
-    ? await detectScenesWithFfmpeg(videoPath, {
+    ? await detectScenes(videoPath, {
       threshold: options.sceneThreshold,
       maxScenes: options.maxScenes,
+      backend: options.sceneBackend ?? "auto",
       timeoutMs: options.timeoutMs
     })
     : [];
+  if (videoPath && scenes.length === 0) {
+    sceneNotes.push("No scene cuts were detected by the selected scene backend for this material.");
+  }
   const durationMs = Math.round((video?.duration ?? 0) * 1000);
   const silences = videoPath
     ? await detectSilencesWithFfmpeg(videoPath, {
@@ -131,6 +172,9 @@ export async function analyzeMaterial(options: MaterialAnalysisOptions): Promise
     durationMs,
     minClipMs: options.minClipMs
   });
+  const autoEditor = videoPath && options.autoEditorEnabled !== false
+    ? await previewAutoEditor(videoPath, options.timeoutMs ?? 120000)
+    : { source: "none", enabled: false } satisfies AutoEditorPreview;
   const candidates = buildCandidateClips({
     transcriptSegments,
     speechRanges,
@@ -155,16 +199,17 @@ export async function analyzeMaterial(options: MaterialAnalysisOptions): Promise
       primaryVideoPath: videoPath
     },
     transcript: {
-      source: transcriptSegments.length > 0 ? "subtitle-file" : "none",
+      source: transcriptSource,
       segmentCount: transcriptSegments.length,
       segments: transcriptSegments
     },
     scenes: {
-      source: scenes.length > 0 ? "ffmpeg-scene" : "none",
+      source: scenes[0]?.source ?? "none",
       threshold: options.sceneThreshold,
       sceneCount: scenes.length,
       changes: scenes
     },
+    autoEditor,
     audio: {
       source: silences.length > 0 || speechRanges.length > 0 ? "ffmpeg-silence" : "none",
       silenceNoiseDb: options.silenceNoiseDb,
@@ -177,16 +222,22 @@ export async function analyzeMaterial(options: MaterialAnalysisOptions): Promise
     candidates,
     outputPath,
     notes: [
-      "Transcript currently uses subtitle files imported by yt-dlp when available.",
-      "Scene changes use FFmpeg scene detection as the baseline; PySceneDetect can be added as a stronger backend.",
-      "Speech ranges use FFmpeg silencedetect as a baseline for removing dead air; Auto-Editor can be added as a stronger backend.",
-      "Candidate clips are suggestions for review, not final editorial decisions."
+      "Transcript uses yt-dlp subtitle files first. When transcriptionMode is auto or faster-whisper and no subtitle exists, the py312 faster-whisper backend can generate local ASR segments.",
+      "Scene changes use PySceneDetect when sceneBackend is auto/pyscenedetect and fall back to FFmpeg scene detection when needed.",
+      "Speech ranges use FFmpeg silencedetect; Auto-Editor preview adds a second opinion for jump-cut potential without modifying media.",
+      "Candidate clips are suggestions for review, not final editorial decisions.",
+      ...transcriptNotes,
+      ...sceneNotes
     ]
   };
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, JSON.stringify(analysis, null, 2), "utf8");
   return analysis;
+}
+
+function shouldRunFasterWhisper(mode: MaterialAnalysisOptions["transcriptionMode"]) {
+  return mode === "auto" || mode === "faster-whisper";
 }
 
 async function readManifest(manifestPath: string): Promise<MaterialImportManifest> {
@@ -303,6 +354,18 @@ export function parseSubtitle(raw: string): TranscriptSegment[] {
   return segments;
 }
 
+export function parseFasterWhisperSegments(raw: string): TranscriptSegment[] {
+  const parsed = JSON.parse(raw) as Array<Partial<TranscriptSegment>>;
+  return parsed
+    .map((segment, index) => ({
+      index: Number(segment.index ?? index + 1),
+      startMs: Number(segment.startMs ?? 0),
+      endMs: Number(segment.endMs ?? 0),
+      text: typeof segment.text === "string" ? segment.text.trim() : ""
+    }))
+    .filter((segment) => Number.isFinite(segment.startMs) && Number.isFinite(segment.endMs) && segment.endMs > segment.startMs && segment.text);
+}
+
 function parseSubtitleTimestamp(value: string): number {
   const normalized = value.replace(",", ".");
   const parts = normalized.split(":");
@@ -310,6 +373,68 @@ function parseSubtitleTimestamp(value: string): number {
   const minutes = Number(parts.pop() ?? 0);
   const hours = Number(parts.pop() ?? 0);
   return Math.round(((hours * 3600) + (minutes * 60) + seconds) * 1000);
+}
+
+function transcribeWithFasterWhisper(
+  videoPath: string,
+  options: { model: string; language?: string; timeoutMs: number }
+): Promise<TranscriptSegment[]> {
+  return new Promise((resolve, reject) => {
+    const script = [
+      "import json, sys",
+      "from faster_whisper import WhisperModel",
+      "video_path = sys.argv[1]",
+      "model_name = sys.argv[2]",
+      "language = sys.argv[3] or None",
+      "model = WhisperModel(model_name, device='cpu', compute_type='int8')",
+      "segments, _info = model.transcribe(video_path, language=language, vad_filter=True)",
+      "out = []",
+      "for index, segment in enumerate(segments, start=1):",
+      "    text = (segment.text or '').strip()",
+      "    if text:",
+      "        out.append({'index': index, 'startMs': round(segment.start * 1000), 'endMs': round(segment.end * 1000), 'text': text})",
+      "print(json.dumps(out, ensure_ascii=False))"
+    ].join("\n");
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const child = spawn(getVideoToolsPython(), ["-c", script, videoPath, options.model, options.language ?? ""], {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(() => reject(new Error(`faster-whisper timed out after ${options.timeoutMs}ms`)));
+    }, options.timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => finish(() => reject(error)));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish(() => reject(new Error(`faster-whisper exited with code ${code ?? "unknown"}: ${stderr.trim()}`)));
+        return;
+      }
+      try {
+        const segments = parseFasterWhisperSegments(stdout);
+        finish(() => resolve(segments));
+      } catch (error) {
+        finish(() => reject(error));
+      }
+    });
+  });
 }
 
 export function buildCandidateClips(options: {
@@ -372,6 +497,51 @@ export function buildCandidateClips(options: {
   return clips
     .filter((clip) => clip.endMs - clip.startMs >= options.minClipMs)
     .slice(0, 12);
+}
+
+export function parseAutoEditorPreview(raw: string): AutoEditorPreview {
+  const inputMs = parsePreviewDuration(raw, /input:\s+([0-9:.]+)/);
+  const outputMs = parsePreviewDuration(raw, /output:\s+([0-9:.]+)/);
+  const clipCount = parsePreviewInt(raw, /clips:\s*[\s\S]*?amount:\s+(\d+)/);
+  const cutCount = parsePreviewInt(raw, /cuts:\s*[\s\S]*?amount:\s+(\d+)/);
+
+  return {
+    source: "auto-editor-preview",
+    enabled: true,
+    inputDurationMs: inputMs,
+    outputDurationMs: outputMs,
+    clipCount,
+    cutCount,
+    raw: raw.trim()
+  };
+}
+
+function parsePreviewInt(raw: string, pattern: RegExp): number | undefined {
+  const match = raw.match(pattern);
+  if (!match) {
+    return undefined;
+  }
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function parsePreviewDuration(raw: string, pattern: RegExp): number | undefined {
+  const match = raw.match(pattern);
+  if (!match) {
+    return undefined;
+  }
+  return parseClockDurationMs(match[1]);
+}
+
+function parseClockDurationMs(value: string): number | undefined {
+  const parts = value.split(":").map(Number);
+  if (parts.some((part) => !Number.isFinite(part))) {
+    return undefined;
+  }
+  const seconds = parts.pop() ?? 0;
+  const minutes = parts.pop() ?? 0;
+  const hours = parts.pop() ?? 0;
+  return Math.round(((hours * 3600) + (minutes * 60) + seconds) * 1000);
 }
 
 export function parseSilenceDetectOutput(raw: string): SilenceRange[] {
@@ -483,6 +653,94 @@ async function detectScenesWithFfmpeg(
   return changes;
 }
 
+async function detectScenes(
+  videoPath: string,
+  options: { threshold: number; maxScenes: number; backend: "auto" | "ffmpeg" | "pyscenedetect"; timeoutMs?: number }
+): Promise<SceneChange[]> {
+  if (options.backend === "ffmpeg") {
+    return detectScenesWithFfmpeg(videoPath, options);
+  }
+
+  try {
+    const scenes = await detectScenesWithPySceneDetect(videoPath, options);
+    if (scenes.length > 0 || options.backend === "pyscenedetect") {
+      return scenes;
+    }
+  } catch (error) {
+    if (options.backend === "pyscenedetect") {
+      throw error;
+    }
+  }
+
+  return detectScenesWithFfmpeg(videoPath, options);
+}
+
+function detectScenesWithPySceneDetect(
+  videoPath: string,
+  options: { threshold: number; maxScenes: number; timeoutMs?: number }
+): Promise<SceneChange[]> {
+  return new Promise((resolve, reject) => {
+    const threshold = Math.round(Math.max(0.05, Math.min(0.95, options.threshold)) * 100);
+    const script = [
+      "import json, sys",
+      "from scenedetect import open_video, SceneManager",
+      "from scenedetect.detectors import ContentDetector",
+      "video_path = sys.argv[1]",
+      "threshold = float(sys.argv[2])",
+      "max_scenes = int(sys.argv[3])",
+      "video = open_video(video_path)",
+      "manager = SceneManager()",
+      "manager.add_detector(ContentDetector(threshold=threshold, min_scene_len='0.6s'))",
+      "manager.detect_scenes(video, show_progress=False)",
+      "scene_list = manager.get_scene_list()",
+      "out = []",
+      "for index, scene in enumerate(scene_list[1:max_scenes + 1], start=1):",
+      "    start = scene[0]",
+      "    out.append({'index': index, 'timeMs': round(start.get_seconds() * 1000), 'confidence': round(threshold), 'source': 'pyscenedetect'})",
+      "print(json.dumps(out, ensure_ascii=False))"
+    ].join("\n");
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const child = spawn(getVideoToolsPython(), ["-c", script, videoPath, String(threshold), String(options.maxScenes)], {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(() => reject(new Error(`PySceneDetect timed out after ${options.timeoutMs ?? 120000}ms`)));
+    }, options.timeoutMs ?? 120000);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => finish(() => reject(error)));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish(() => reject(new Error(`PySceneDetect exited with code ${code ?? "unknown"}: ${stderr.trim()}`)));
+        return;
+      }
+      try {
+        const scenes = JSON.parse(stdout) as SceneChange[];
+        finish(() => resolve(scenes.slice(0, options.maxScenes)));
+      } catch (error) {
+        finish(() => reject(error));
+      }
+    });
+  });
+}
+
 async function detectSilencesWithFfmpeg(
   videoPath: string,
   options: { noiseDb: number; minDurationSec: number; timeoutMs?: number }
@@ -530,6 +788,57 @@ function runFfmpeg(args: string[], timeoutMs: number): Promise<string> {
     });
     child.on("error", (error) => finish(() => reject(error)));
     child.on("close", () => finish(() => resolve(stderr)));
+  });
+}
+
+function previewAutoEditor(videoPath: string, timeoutMs: number): Promise<AutoEditorPreview> {
+  return new Promise((resolve) => {
+    let output = "";
+    let settled = false;
+    const child = spawn(getVideoToolsPython(), ["-m", "auto_editor", videoPath, "--preview", "--no-open", "--progress", "none"], {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(() => resolve({
+        source: "none",
+        enabled: true,
+        error: `Auto-Editor preview timed out after ${timeoutMs}ms`
+      }));
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.on("error", (error) => finish(() => resolve({
+      source: "none",
+      enabled: true,
+      error: error.message
+    })));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish(() => resolve({
+          source: "none",
+          enabled: true,
+          raw: output.trim(),
+          error: `Auto-Editor preview exited with code ${code ?? "unknown"}`
+        }));
+        return;
+      }
+      finish(() => resolve(parseAutoEditorPreview(output)));
+    });
   });
 }
 

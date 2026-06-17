@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { workspaceRoot } from "@/lib/paths";
 
-export type TaskType = "info" | "clip" | "merge" | "split" | "video-variants" | "jianying-plan" | "jianying-draft" | "auto-plan" | "auto-render" | "auto-simulate" | "creator-suite" | "trend-report" | "script-generate" | "material-import" | "material-analysis";
+export type TaskType = "info" | "clip" | "merge" | "split" | "video-variants" | "jianying-plan" | "jianying-draft" | "auto-plan" | "auto-render" | "auto-simulate" | "creator-suite" | "trend-report" | "script-generate" | "material-import" | "material-analysis" | "remotion-render";
 export type TaskStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface TaskRecord {
@@ -21,29 +21,67 @@ export interface TaskRecord {
 
 const STATE_FILE = path.join(workspaceRoot, "tasks-state.json");
 const MAX_PERSISTED = 200;
+const DEFAULT_INTERRUPTED_TASK_STALE_MS = 10 * 60 * 1000;
 
 const tasks = loadTasks();
 
+function interruptedTaskStaleMs() {
+  const value = Number(process.env.TASK_INTERRUPT_AFTER_MS ?? DEFAULT_INTERRUPTED_TASK_STALE_MS);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_INTERRUPTED_TASK_STALE_MS;
+}
+
+export function normalizeLoadedTask(
+  record: TaskRecord,
+  nowIso = new Date().toISOString(),
+  staleMs = interruptedTaskStaleMs()
+): TaskRecord {
+  if (record.status !== "pending" && record.status !== "processing") {
+    return record;
+  }
+
+  const updatedAtMs = Date.parse(record.updatedAt || record.createdAt);
+  const nowMs = Date.parse(nowIso);
+  if (Number.isFinite(updatedAtMs) && Number.isFinite(nowMs) && nowMs - updatedAtMs < staleMs) {
+    return record;
+  }
+
+  return {
+    ...record,
+    status: "failed",
+    updatedAt: nowIso,
+    completedAt: nowIso,
+    error: record.error ?? "Task was interrupted by a server restart."
+  };
+}
+
 function loadTasks(): Map<string, TaskRecord> {
   try {
-    const raw = fs.readFileSync(STATE_FILE, "utf8");
-    const records = JSON.parse(raw) as TaskRecord[];
-    return new Map(records.map((record) => {
-      if (record.status === "pending" || record.status === "processing") {
-        const updated = new Date().toISOString();
-        return [record.id, {
-          ...record,
-          status: "failed",
-          updatedAt: updated,
-          completedAt: updated,
-          error: record.error ?? "Task was interrupted by a server restart."
-        }];
-      }
-
-      return [record.id, record];
-    }));
+    const records = readPersistedRecords();
+    return new Map(records.map((record) => [record.id, normalizeLoadedTask(record)]));
   } catch {
     return new Map();
+  }
+}
+
+function readPersistedRecords(): TaskRecord[] {
+  const raw = fs.readFileSync(STATE_FILE, "utf8");
+  return JSON.parse(raw) as TaskRecord[];
+}
+
+function mergePersistedTasks() {
+  let records: TaskRecord[];
+  try {
+    records = readPersistedRecords();
+  } catch {
+    return;
+  }
+
+  for (const record of records) {
+    const normalized = normalizeLoadedTask(record);
+    const current = tasks.get(record.id);
+    if (!current || normalized.updatedAt > current.updatedAt) {
+      tasks.set(record.id, normalized);
+    }
   }
 }
 
@@ -134,9 +172,11 @@ export function failTask(id: string, error: unknown) {
 }
 
 export function listTasks() {
+  mergePersistedTasks();
   return [...tasks.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function getTask(id: string) {
+  mergePersistedTasks();
   return tasks.get(id);
 }

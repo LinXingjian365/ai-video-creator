@@ -19,16 +19,16 @@
 
 目标：从真实参考视频到结构化剪辑决策。
 
-- 接 yt-dlp：导入视频、封面、字幕、元数据。状态：API/UI 已接入，本机 `python -m yt_dlp` 已验证可用；公开视频导入可生成 manifest。
-- 接 faster-whisper：生成字幕和时间戳。状态：下一步增强；当前可先读取 yt-dlp 字幕文件。
-- 接 PySceneDetect：镜头边界和缩略图。状态：下一步增强；当前已接 FFmpeg scene detect 基线。
-- 接静音检测/Auto-Editor：静音段、口播停顿、快剪建议。状态：已接 FFmpeg silencedetect 基线，Auto-Editor 待增强。
+- 接 yt-dlp：导入视频、封面、字幕、元数据。状态：API/UI 已接入，py312 环境 `python -m yt_dlp` 已验证可用；公开视频导入可生成 manifest。
+- 接 faster-whisper：生成字幕和时间戳。状态：py312 已安装并接入 `/api/materials/analyze` 的 `transcriptionMode=auto|faster-whisper`，字幕文件优先，缺字幕时可本地 ASR。
+- 接 PySceneDetect：镜头边界和缩略图。状态：py312 已安装并纳入 readiness；`/api/materials/analyze` 已支持 `sceneBackend=auto|pyscenedetect|ffmpeg`，强制 PySceneDetect 已用红蓝硬切测试视频验证 2000ms 切点。
+- 接静音检测/Auto-Editor：静音段、口播停顿、快剪建议。状态：已接 FFmpeg silencedetect 基线；Auto-Editor 已纳入 readiness，并已接入 `autoEditor` preview 统计信号，不直接修改视频。
 - 统一生成 `workspace/drafts/*-analysis.json`。
 - 从 `material-analysis-*.json` 驱动 `/api/auto/render` 自动粗剪。状态：已接入，支持传具体 JSON 或 `workspace/drafts` 目录自动取最新。
 
 验收：
 
-- 给一个本地视频或公开视频链接，能生成转写、场景列表、静音/有声段、候选切点。状态：本地视频 + 字幕文件/FFmpeg 场景和静音基线已可生成 `material-analysis-*.json`。
+- 给一个本地视频或公开视频链接，能生成转写、场景列表、静音/有声段、候选切点。状态：本地视频 + 字幕文件/faster-whisper 可选 ASR + PySceneDetect/FFmpeg 场景检测 + FFmpeg 静音基线 + Auto-Editor preview 已可生成 `material-analysis-*.json`。
 - 给一个 `material-analysis-*.json`，能生成 rough cut MP4 和 JianYing plan JSON。状态：已接入 `/api/auto/render` 和“自动剪辑”UI 按钮。
 
 ## P2：接入热点和选题
@@ -47,14 +47,14 @@
 
 目标：让粗剪不只是拼接，而有可复用的视频包装层。
 
-- 新增 Remotion 子项目。
-- 建字幕组件、标题卡、步骤卡、数据卡、片尾关注组件。
-- 从自动剪辑决策 JSON 生成 Remotion props。
-- 输出 9:16、16:9、1:1 多平台版本。状态：已接 FFmpeg 平台版本导出，Remotion 包装层待增强。
+- 新增 Remotion 子项目。状态：已接 `src/remotion/*`，包含 `ScriptPackageVertical` 和 `ScriptPackageWide` 两个 composition。
+- 建字幕组件、标题卡、步骤卡、数据卡、片尾关注组件。状态：已完成脚本包装 MVP：标题、钩子、分镜字幕、标签、进度条；数据卡/片尾关注后续增强。
+- 从自动剪辑决策 JSON 生成 Remotion props。状态：已从脚本分镜 props 渲染，后续接 auto-plan/material-analysis props。
+- 输出 9:16、16:9、1:1 多平台版本。状态：已接 FFmpeg 平台版本导出；Remotion 已实测 9:16 输出 MP4。
 
 验收：
 
-- 同一条内容能输出抖音、快手、B站不同尺寸版本。
+- 同一条内容能输出抖音、快手、B站不同尺寸版本。状态：脚本包装视频已实测输出 1080x1920 H.264/AAC 45 秒 MP4；16:9 composition 已注册，1:1 可复用 FFmpeg variants。
 
 ## P4：JianYing MCP 真实草稿
 

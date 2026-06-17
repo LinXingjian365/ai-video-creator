@@ -233,6 +233,11 @@ export const materialAnalysisSchema = z.object({
   materialDir: z.string().min(1).optional(),
   videoPath: z.string().min(1).optional(),
   outputPath: z.string().min(1).optional(),
+  transcriptionMode: z.enum(["subtitle-only", "auto", "faster-whisper"]).default("auto"),
+  whisperModel: z.string().min(1).default("tiny"),
+  whisperLanguage: z.string().min(1).optional(),
+  sceneBackend: z.enum(["auto", "ffmpeg", "pyscenedetect"]).default("auto"),
+  autoEditorEnabled: z.coerce.boolean().default(true),
   sceneThreshold: z.coerce.number().min(0.05).max(0.95).default(0.3),
   maxScenes: z.coerce.number().int().min(0).max(200).default(40),
   silenceNoiseDb: z.coerce.number().min(-80).max(-10).default(-35),
@@ -243,4 +248,20 @@ export const materialAnalysisSchema = z.object({
 }).refine((value) => Boolean(value.manifestPath || value.materialDir || value.videoPath), {
   message: "Provide manifestPath, materialDir, or videoPath.",
   path: ["manifestPath"]
+});
+
+export const remotionRenderSchema = z.object({
+  title: z.string().min(1),
+  hook: z.string().min(1).optional(),
+  aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
+  platform: z.string().min(1).optional(),
+  bgm: z.string().min(1).optional(),
+  tags: z.array(z.string().min(1)).default([]),
+  outputPath: z.string().min(1).optional(),
+  beats: z.array(z.object({
+    time: z.string().min(1).optional(),
+    shot: z.string().min(1).optional(),
+    voiceover: z.string().min(1).optional(),
+    caption: z.string().min(1).optional()
+  })).default([])
 });

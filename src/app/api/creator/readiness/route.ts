@@ -2,23 +2,31 @@ import { spawnSync } from "node:child_process";
 import { NextResponse } from "next/server";
 import { creatorToolkit, requiredEnvVars } from "@/lib/creator-toolkit";
 import { getYtDlpInvocation } from "@/lib/materials/yt-dlp";
+import { getVideoToolsPython } from "@/lib/python-tools";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const ytDlp = getYtDlpInvocation();
+  const sceneDetect = pythonImportVersionCheck("scenedetect");
+  const autoEditor = pythonImportVersionCheck("auto_editor");
+  const fasterWhisper = pythonImportVersionCheck("faster_whisper");
   const commandChecks = [
     { id: "node", command: "node", args: ["--version"], stage: "base" },
     { id: "npm", command: "npm", args: ["--version"], stage: "base" },
-    { id: "python", command: "python", args: ["--version"], stage: "python" },
+    { id: "python", command: getVideoToolsPython(), args: ["--version"], stage: "python" },
     { id: "uv", command: "uv", args: ["--version"], stage: "python" },
     { id: "yt-dlp", command: ytDlp.command, args: [...ytDlp.prefixArgs, "--version"], stage: "download" },
+    { id: "pyscenedetect", command: sceneDetect.command, args: sceneDetect.args, stage: "analyze" },
+    { id: "auto-editor", command: autoEditor.command, args: autoEditor.args, stage: "edit" },
+    { id: "faster-whisper", command: fasterWhisper.command, args: fasterWhisper.args, stage: "transcribe" },
     { id: "ffmpeg", command: "ffmpeg", args: ["-version"], stage: "edit" },
     { id: "n8n", command: "n8n", args: ["--version"], stage: "orchestrate" }
   ];
 
   const commands = commandChecks.map((check) => {
-    const result = spawnSync(check.command, check.args, {
+    const invocation = commandInvocation(check.command, check.args);
+    const result = spawnSync(invocation.command, invocation.args, {
       encoding: "utf8",
       timeout: 5000,
       windowsHide: true
@@ -62,12 +70,27 @@ export async function GET() {
     llm,
     stages,
     nextSteps: [
-      "Install missing local commands first: python, uv, yt-dlp, ffmpeg, and n8n.",
+      "Install missing local commands first: python, uv, yt-dlp, PySceneDetect, faster-whisper, ffmpeg, and n8n.",
       "For trend intelligence, configure LLM_PROVIDER plus the matching provider key such as DEEPSEEK_API_KEY, ARK_API_KEY, ANTHROPIC_API_KEY, or GPT_GATEWAY_API_KEY.",
       "Use dry-run publishing before any real platform upload.",
       "After credentials are configured, test one Bilibili category report before expanding to Douyin/Kuaishou."
     ]
   });
+}
+
+function commandInvocation(command: string, args: string[]) {
+  if (process.platform === "win32" && (command === "npm" || command === "n8n")) {
+    return { command: "cmd.exe", args: ["/d", "/s", "/c", command, ...args] };
+  }
+
+  return { command, args };
+}
+
+function pythonImportVersionCheck(moduleName: string) {
+  return {
+    command: getVideoToolsPython(),
+    args: ["-c", `import ${moduleName}; print(getattr(${moduleName}, '__version__', 'ok'))`]
+  };
 }
 
 function llmProviderConfig(provider: string) {
@@ -109,6 +132,7 @@ function envHint(name: string) {
     TIKHUB_API_KEY: "Unified social data provider for Douyin/Kuaishou/Bilibili/TikTok style data.",
     BILI_COOKIE: "Optional Bilibili browser cookie. Helps when public ranking APIs return risk-control codes such as -352.",
     YTDLP_BINARY: "Optional absolute path to yt-dlp. On Windows the app defaults to python -m yt_dlp when empty.",
+    VIDEO_TOOLS_PYTHON: "Optional Python executable for yt-dlp, PySceneDetect, Auto-Editor, and faster-whisper. Defaults to the py312 conda env on this machine.",
     YTDLP_COOKIES_PATH: "Optional cookies.txt path for yt-dlp when importing authorized reference videos from platforms that require login.",
     YTDLP_TIMEOUT_MS: "Optional yt-dlp process timeout. Default is 120000ms.",
     DASHSCOPE_API_KEY: "ASR/OCR/vision provider for extractor workflows.",

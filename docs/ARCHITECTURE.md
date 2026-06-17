@@ -18,7 +18,9 @@ flowchart TB
   Materials --> Analysis["material analysis JSON\nsubtitles / scenes / speech ranges / candidate clips"]
   Analysis --> AutoRender["auto-render\nFFmpeg rough cut + JianYing plan"]
   AutoRender --> Workspace
-  Core --> External["Exa / Firecrawl / TikHub / Whisper / PySceneDetect / Remotion / n8n\n待逐项接入"]
+  Core --> Remotion["Remotion package render\nscript beats -> social MP4"]
+  Remotion --> Workspace
+  Core --> External["Exa / Firecrawl / TikHub / n8n\n待逐项接入"]
 ```
 
 ## 目录职责
@@ -35,6 +37,7 @@ flowchart TB
 | `src/app/api/trend/report/route.ts` | B站真实趋势情报，返回完成后的 task |
 | `src/app/api/materials/import/route.ts` | 公开视频参考素材导入，调用 yt-dlp 并生成 manifest |
 | `src/app/api/materials/analyze/route.ts` | 素材分析，生成字幕片段、场景变化、静音/有声段和候选切点 |
+| `src/app/api/remotion/render/route.ts` | 将脚本节拍渲染成可发布的 Remotion 包装 MP4 |
 | `src/app/api/integrations/route.ts` | 成熟工具集成目录 |
 | `src/app/api/mcp/config/route.ts` | MCP 配置建议 |
 | `src/lib/ffmpeg.ts` | FFmpeg/FFprobe 封装 |
@@ -44,12 +47,15 @@ flowchart TB
 | `src/lib/creator-suite.ts` | 热点、脚本、素材、发布、复盘方案生成 |
 | `src/lib/creator-toolkit.ts` | 全链路工具目录 |
 | `src/lib/integrations.ts` | 外部工具集成目录 |
+| `src/lib/python-tools.ts` | Python/CLI 工具解释器选择与模块调用封装 |
+| `src/lib/remotion-render.ts` | Remotion bundle、composition 选择和 MP4 渲染封装 |
 | `src/lib/schemas.ts` | Zod 输入校验 schema |
 | `src/lib/tasks.ts` | 内存任务管理 |
 | `src/lib/workspace-assets.ts` | 工作区资产分类与索引 |
 | `src/lib/trend/*` | B站趋势源、榜单映射、评分、LLM 分析与报告组装 |
 | `src/lib/materials/yt-dlp.ts` | yt-dlp 命令构造、执行、素材 manifest 生成 |
-| `src/lib/materials/analysis.ts` | 素材 manifest/视频分析、字幕解析、FFmpeg 场景检测、候选切点 |
+| `src/lib/materials/analysis.ts` | 素材 manifest/视频分析、字幕/Whisper 转写、FFmpeg/PySceneDetect 场景检测、Auto-Editor 预览、候选切点 |
+| `src/remotion/*` | Remotion 视频组件、composition 注册和入口 |
 | `workspace/input` | 用户素材、模拟素材、待处理视频 |
 | `workspace/output` | 输出视频、临时片段、发布素材 |
 | `workspace/drafts` | 自动剪辑决策、剪映草稿计划、创作方案 JSON |
@@ -95,10 +101,11 @@ flowchart TB
 
 1. 支持输入 `manifestPath`、`materialDir` 或 `videoPath`。
 2. 自动读取最新 manifest 或目录内最新视频。
-3. 解析 SRT/VTT 字幕文件为时间戳 transcript segments。
-4. 使用 FFmpeg scene detect 生成场景变化。
+3. 优先解析 SRT/VTT 字幕；按配置可调用 faster-whisper 生成 transcript segments。
+4. 按配置使用 PySceneDetect 或 FFmpeg scene detect 生成场景变化。
 5. 使用 FFmpeg silencedetect 生成静音段，并反推出可粗剪的有声段。
-6. 生成 candidate clips 并保存到 `workspace/drafts/material-analysis-*.json`。
+6. 可调用 Auto-Editor preview 获取自动剪辑预估结果。
+7. 生成 candidate clips 并保存到 `workspace/drafts/material-analysis-*.json`。
 
 分析结果粗剪流程已经接入：
 
@@ -107,6 +114,14 @@ flowchart TB
 3. 系统从 `material-analysis-*.json` 读取 primary video 和 candidate clips。
 4. 复用 FFmpeg clip/merge 生成 rough cut MP4。
 5. 同步输出 JianYing plan JSON，后续可继续映射到真实剪映 MCP 草稿。
+
+Remotion 包装渲染流程已经接入：
+
+1. UI 从脚本生成结果中读取标题、开场钩子和节拍。
+2. `/api/remotion/render` 校验脚本结构、比例、时长和输出文件名。
+3. 服务端 bundle `src/remotion/index.ts`，选择竖版或横版 composition。
+4. `@remotion/renderer` 渲染 H.264 MP4 到 `workspace/output/remotion`。
+5. task 记录输出路径、composition、分辨率、帧率和时长，UI 可继续轮询展示结果。
 
 ## 外部工具接入方式
 

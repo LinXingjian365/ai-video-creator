@@ -255,12 +255,17 @@ best | 1080p | 720p | 480p | audio | metadata
 
 ### POST `/api/materials/analyze`
 
-分析已导入素材或本地视频，输出 `material-analysis-*.json`。当前基线会读取 yt-dlp 字幕文件，并用 FFmpeg scene detection 生成场景变化、用 FFmpeg silencedetect 生成静音段和有声段；没有字幕/有声段/场景信号时会生成均匀分布的复核候选段。
+分析已导入素材或本地视频，输出 `material-analysis-*.json`。当前链路会优先读取 yt-dlp 字幕文件；当 `transcriptionMode` 为 `auto` 或 `faster-whisper` 且没有字幕时，会调用 py312 环境里的 faster-whisper 做本地 ASR。随后用 FFmpeg scene detection 生成场景变化、用 FFmpeg silencedetect 生成静音段和有声段；没有字幕/有声段/场景信号时会生成均匀分布的复核候选段。
 
 ```json
 {
   "materialDir": "workspace/input/references",
   "sceneThreshold": 0.3,
+  "transcriptionMode": "auto",
+  "whisperModel": "tiny",
+  "whisperLanguage": "zh",
+  "sceneBackend": "auto",
+  "autoEditorEnabled": true,
   "maxScenes": 40,
   "silenceNoiseDb": -35,
   "silenceMinDurationSec": 0.8,
@@ -307,6 +312,14 @@ best | 1080p | 720p | 480p | audio | metadata
 }
 ```
 
+参数说明：
+
+- `transcriptionMode`: `auto` 字幕优先、缺字幕用 faster-whisper；`subtitle-only` 只读字幕文件；`faster-whisper` 强制本地 ASR，失败时任务失败。
+- `whisperModel`: 默认 `tiny`，适合快速验证；长视频可先用 `tiny/base`，质量优先再切 `small/medium`。
+- `whisperLanguage`: 可选，中文建议 `zh`；留空时由 faster-whisper 自动判断。
+- `sceneBackend`: `auto` 优先 PySceneDetect、失败或无结果回退 FFmpeg；`pyscenedetect` 强制 PySceneDetect；`ffmpeg` 使用 FFmpeg scene 基线。
+- `autoEditorEnabled`: 默认 true，运行 Auto-Editor preview 输出建议剪掉/保留的统计信号；不会直接修改原视频。
+
 ### POST `/api/creator/suite`
 
 生成热点、参考拆解、脚本、素材、剪辑蓝图、发布矩阵、复盘方案。
@@ -325,7 +338,44 @@ best | 1080p | 720p | 480p | audio | metadata
 
 ### GET `/api/creator/readiness`
 
-检查 FFmpeg、环境变量、外部工具配置位。
+检查 FFmpeg、环境变量、外部工具配置位。当前会检查 DeepSeek provider key、yt-dlp、PySceneDetect、Auto-Editor、faster-whisper、npm、Python、uv、n8n 等。
+
+### POST `/api/remotion/render`
+
+把结构化脚本渲染成 Remotion 包装视频，输出到 `workspace/output/remotion`。当前模板会生成标题、开场钩子、分镜字幕、标签和进度条，适合先作为脚本视频包装层或后续与素材粗剪合成。
+
+```json
+{
+  "title": "Remotion包装层实测",
+  "hook": "把AI脚本变成可发布的视频包装层。",
+  "aspectRatio": "9:16",
+  "platform": "douyin",
+  "tags": ["AI剪辑", "Remotion"],
+  "beats": [
+    {
+      "time": "0-3s",
+      "shot": "标题卡",
+      "voiceover": "先抓痛点",
+      "caption": "热点不是猜，是数据判断"
+    }
+  ]
+}
+```
+
+返回任务，前端会轮询 `/api/tasks?id=...`：
+
+```json
+{
+  "task": {
+    "type": "remotion-render",
+    "status": "completed",
+    "result": {
+      "outputPath": "workspace/output/remotion/xxx-script-package.mp4",
+      "compositionId": "ScriptPackageVertical"
+    }
+  }
+}
+```
 
 ### GET `/api/workspace/assets`
 

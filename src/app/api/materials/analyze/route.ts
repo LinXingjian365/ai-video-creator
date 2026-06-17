@@ -15,12 +15,10 @@ export async function POST(request: Request) {
   const payload = parsed.data;
   const label = payload.manifestPath ?? payload.videoPath ?? payload.materialDir ?? "material";
   const task = createTask("material-analysis", `Analyze ${label}`);
-  const finalTask = await runAnalysis(task.id, payload);
 
-  return NextResponse.json(
-    { task: finalTask },
-    { status: finalTask.status === "failed" ? 500 : 200 }
-  );
+  void runAnalysis(task.id, payload);
+
+  return NextResponse.json({ task });
 }
 
 async function runAnalysis(taskId: string, payload: ReturnType<typeof materialAnalysisSchema.parse>) {

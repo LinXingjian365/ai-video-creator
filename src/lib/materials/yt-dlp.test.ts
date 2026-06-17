@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildYtDlpArgs, resolveMaterialOutputDir, safeCollectionName } from "./yt-dlp";
+import { buildYtDlpArgs, getYtDlpInvocation, resolveMaterialOutputDir, safeCollectionName } from "./yt-dlp";
 
 describe("safeCollectionName", () => {
   it("sanitizes Windows-hostile characters and appends timestamp", () => {
@@ -54,5 +54,18 @@ describe("buildYtDlpArgs", () => {
     expect(args).toContain("--extract-audio");
     expect(args).toContain("--audio-format");
     expect(args).toContain("mp3");
+  });
+});
+
+describe("getYtDlpInvocation", () => {
+  it("uses a python module invocation on Windows when no binary override exists", () => {
+    const invocation = getYtDlpInvocation();
+    if (process.platform !== "win32") {
+      expect(invocation.command).toBe("yt-dlp");
+      return;
+    }
+
+    expect(invocation.prefixArgs).toEqual(["-m", "yt_dlp"]);
+    expect(invocation.label).toContain("-m yt_dlp");
   });
 });

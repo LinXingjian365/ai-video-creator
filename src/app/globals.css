@@ -343,6 +343,14 @@ h2 {
   align-content: start;
 }
 
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .selector-box {
   display: grid;
   gap: 10px;
@@ -679,6 +687,18 @@ summary {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.65;
+}
+
+.stage-command {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #eef8f4;
+  color: var(--accent-dark);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .stage-proof {

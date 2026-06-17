@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { inputRoot, resolveLocalPath } from "@/lib/paths";
+import { pythonModuleInvocation } from "@/lib/python-tools";
 
 export type MaterialQuality = "best" | "1080p" | "720p" | "480p" | "audio" | "metadata";
 
@@ -51,7 +52,8 @@ export function getYtDlpInvocation(): { command: string; prefixArgs: string[]; l
   }
 
   if (process.platform === "win32") {
-    return { command: "python", prefixArgs: ["-m", "yt_dlp"], label: "python -m yt_dlp" };
+    const invocation = pythonModuleInvocation("yt_dlp");
+    return { command: invocation.command, prefixArgs: invocation.args, label: invocation.label };
   }
 
   return { command: "yt-dlp", prefixArgs: [], label: "yt-dlp" };

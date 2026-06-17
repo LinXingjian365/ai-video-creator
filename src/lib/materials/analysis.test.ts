@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCandidateClips, buildSpeechRanges, parseSilenceDetectOutput, parseSubtitle } from "./analysis";
+import { buildCandidateClips, buildSpeechRanges, parseAutoEditorPreview, parseFasterWhisperSegments, parseSilenceDetectOutput, parseSubtitle } from "./analysis";
 
 describe("parseSubtitle", () => {
   it("parses srt timestamps and text", () => {
@@ -36,6 +36,20 @@ describe("parseSubtitle", () => {
   });
 });
 
+describe("parseFasterWhisperSegments", () => {
+  it("normalizes faster-whisper JSON output", () => {
+    const segments = parseFasterWhisperSegments(JSON.stringify([
+      { startMs: 120, endMs: 980, text: " 开场钩子 " },
+      { startMs: 1000, endMs: 1000, text: "bad" },
+      { startMs: 1100, endMs: 2000, text: "" }
+    ]));
+
+    expect(segments).toEqual([
+      { index: 1, startMs: 120, endMs: 980, text: "开场钩子" }
+    ]);
+  });
+});
+
 describe("buildCandidateClips", () => {
   it("prefers subtitle cues when transcript exists", () => {
     const clips = buildCandidateClips({
@@ -61,7 +75,7 @@ describe("buildCandidateClips", () => {
     const clips = buildCandidateClips({
       transcriptSegments: [],
       speechRanges: [],
-      scenes: [{ index: 1, timeMs: 3000, confidence: 30, source: "ffmpeg-scene" }],
+      scenes: [{ index: 1, timeMs: 3000, confidence: 30, source: "pyscenedetect" }],
       durationMs: 12000,
       minClipMs: 1000,
       targetClipMs: 6000
@@ -106,6 +120,28 @@ describe("buildCandidateClips", () => {
 
     expect(clips).toHaveLength(3);
     expect(clips[0].source).toBe("fallback");
+  });
+});
+
+describe("parseAutoEditorPreview", () => {
+  it("extracts clip and cut counts from auto-editor preview output", () => {
+    const preview = parseAutoEditorPreview([
+      "length:",
+      " - input:     0:00:11.97  (359)  100.0%",
+      " - output:    0:00:08.00  (240)  66.8%",
+      "clips:",
+      " - amount:    3",
+      "cuts:",
+      " - amount:    2"
+    ].join("\n"));
+
+    expect(preview).toMatchObject({
+      source: "auto-editor-preview",
+      inputDurationMs: 11970,
+      outputDurationMs: 8000,
+      clipCount: 3,
+      cutCount: 2
+    });
   });
 });
 

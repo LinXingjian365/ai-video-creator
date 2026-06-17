@@ -99,15 +99,15 @@ const capabilities: Array<{
     id: "collect",
     icon: Network,
     title: "联网素材",
-    body: "查看 yt-dlp、Exa、Firecrawl、TikHub、Whisper 等成熟工具接入状态",
-    action: "查看集成目录",
+    body: "导入公开视频参考素材，并用 ASR、场景检测、静音检测生成素材信号",
+    action: "查看工具目录",
     endpoint: "integrations"
   },
   {
     id: "analyze",
     icon: Search,
     title: "爆款拆解",
-    body: "把参考爆款转成自动剪辑 decision JSON，后续接转写和场景检测",
+    body: "只拆爆款方法：开头、节奏、评论引导、留存结构，输出剪辑 decision JSON",
     action: "生成拆解计划",
     endpoint: "auto-plan"
   },
@@ -123,7 +123,7 @@ const capabilities: Array<{
     id: "edit",
     icon: Scissors,
     title: "自动剪辑",
-    body: "真实跑 FFmpeg，生成测试素材、裁三段、合成 rough cut 和剪映计划",
+    body: "读取分析 JSON 或模拟素材，真实调用 FFmpeg 裁剪、合并并输出剪映计划",
     action: "立即模拟剪辑",
     endpoint: "auto-simulate"
   },
@@ -160,14 +160,14 @@ const stageCopy: Record<WorkflowStage, { headline: string; description: string; 
     proof: ["B站公开排行榜", "确定性评分", "LLM 可选", "诚实降级"]
   },
   collect: {
-    headline: "素材和数据工具接入目录",
-    description: "这个阶段不假装已经下载全网素材，而是列出当前项目可接的成熟工具和配置位：yt-dlp 负责公开视频导入，Exa/Firecrawl/TikHub 负责搜索和热点，Whisper/faster-whisper 负责转写。",
-    proof: ["yt-dlp", "Exa/Firecrawl", "TikHub", "Whisper"]
+    headline: "联网素材导入与信号分析",
+    description: "这个阶段负责把合法参考素材落到本地 workspace，并把视频转成可剪辑信号：字幕/ASR、场景切点、静音/有声段、Auto-Editor 预览。工具目录按钮会显示后续 Exa、Firecrawl、TikHub 的配置位。",
+    proof: ["yt-dlp", "faster-whisper", "PySceneDetect", "Auto-Editor"]
   },
   analyze: {
-    headline: "爆款逻辑到剪辑计划",
-    description: "当前可生成结构化自动剪辑计划。后续真实转写、镜头检测和静音检测接入后，会用这些信号选择片段，而不是随机裁剪。",
-    proof: ["参考链接", "三段结构", "decision JSON", "剪辑信号"]
+    headline: "爆款拆解到剪辑计划",
+    description: "这里只拆方法，不搬运内容。根据参考标题/链接和风格要求生成结构化 decision JSON，后续粗剪、剪映草稿和 Remotion 包装都可以接这个计划。",
+    proof: ["参考链接", "开头节奏", "decision JSON", "创作边界"]
   },
   script: {
     headline: "仿创作脚本工厂",
@@ -219,6 +219,11 @@ const defaultForm = {
   materialCollection: "爆款参考素材",
   materialQuality: "720p",
   materialAnalysisPath: "workspace/input/references",
+  materialTranscriptionMode: "auto",
+  whisperModel: "tiny",
+  whisperLanguage: "zh",
+  sceneBackend: "auto",
+  autoEditorEnabled: true,
   roughCutAnalysisPath: "workspace/drafts",
   publishSourcePath: "workspace/output",
   materialNeeds: "口播素材、屏幕录制、爆款参考、可商用 B-roll",
@@ -241,6 +246,8 @@ export default function Home() {
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [renderAnalysisBusy, setRenderAnalysisBusy] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
+  const [scriptPlanBusy, setScriptPlanBusy] = useState(false);
+  const [remotionBusy, setRemotionBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [result, setResult] = useState<unknown>(null);
@@ -352,7 +359,7 @@ export default function Home() {
     const data = await response.json();
     setResult(data);
     if (!response.ok) {
-      throw new Error(data.error ?? "请求失败");
+      throw new Error(data.task?.error ?? data.error ?? "请求失败");
     }
     setMessage(okMessage);
     return data;
@@ -418,6 +425,69 @@ export default function Home() {
     setMessage(`文案脚本已生成：${draft.titles[0] ?? form.scriptTopic}`);
   }
 
+  async function createPlanFromScript() {
+    if (!scriptDraft) {
+      setMessage("先生成文案脚本，再转自动剪辑计划");
+      return;
+    }
+
+    setScriptPlanBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost(
+        "/api/auto/plan",
+        scriptDraftToAutoPlanPayload(scriptDraft, form),
+        "脚本已转成自动剪辑 decision JSON"
+      );
+      setResult(data.task?.result ?? data);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "脚本转剪辑计划失败");
+    } finally {
+      setScriptPlanBusy(false);
+    }
+  }
+
+  async function renderScriptPackage() {
+    if (!scriptDraft) {
+      setMessage("先生成文案脚本，再渲染 Remotion 包装视频");
+      return;
+    }
+
+    setRemotionBusy(true);
+    setMessage("");
+    try {
+      const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
+      const data = await runPost("/api/remotion/render", {
+        title: scriptDraft.titles[0] ?? form.scriptTopic,
+        hook: scriptDraft.hook,
+        beats: scriptDraft.beats,
+        tags: scriptDraft.tags,
+        bgm: scriptDraft.bgm,
+        platform,
+        aspectRatio: form.bilibili && !form.douyin && !form.kuaishou ? "16:9" : "9:16"
+      }, "Remotion 包装视频已启动渲染");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id, 900000);
+      if (!final) {
+        throw new Error("Remotion 渲染任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "Remotion 渲染失败");
+      }
+      setResult(final.result ?? data);
+      setMessage("Remotion 包装视频已生成");
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Remotion 渲染请求失败");
+    } finally {
+      setRemotionBusy(false);
+    }
+  }
+
   async function importReferenceMaterial() {
     setMaterialBusy(true);
     setMessage("");
@@ -452,14 +522,29 @@ export default function Home() {
       const analysisInput = materialAnalysisPayload(form.materialAnalysisPath);
       const data = await runPost("/api/materials/analyze", {
         ...analysisInput,
+        transcriptionMode: form.materialTranscriptionMode,
+        whisperModel: form.whisperModel,
+        whisperLanguage: form.whisperLanguage || undefined,
+        sceneBackend: form.sceneBackend,
+        autoEditorEnabled: form.autoEditorEnabled,
         sceneThreshold: 0.3,
         maxScenes: 40,
         silenceNoiseDb: -35,
         silenceMinDurationSec: 0.8,
         minClipMs: 1500,
         targetClipMs: 6000
-      }, "素材分析已完成，已生成 transcript/scene/candidate clips JSON");
-      setResult(data.task?.result ?? data);
+      }, "素材分析已启动，右侧任务面板会显示 ASR/场景/静音检测进度");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id, 900000);
+      if (!final) {
+        throw new Error("素材分析任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "素材分析任务失败");
+      }
+      setResult(final.result ?? data);
+      setMessage("素材分析已完成，已生成 transcript/scene/candidate clips JSON");
       await refreshTasks();
       await refreshWorkspaceAssets();
     } catch (error) {
@@ -533,6 +618,7 @@ export default function Home() {
             const Icon = item.icon;
             return (
               <button
+                aria-pressed={activeStage === item.id}
                 className={activeStage === item.id ? "feature-item active" : "feature-item"}
                 key={item.id}
                 onClick={() => {
@@ -596,9 +682,13 @@ export default function Home() {
             materialBusy={materialBusy}
             analysisBusy={analysisBusy}
             renderAnalysisBusy={renderAnalysisBusy}
+            scriptPlanBusy={scriptPlanBusy}
+            remotionBusy={remotionBusy}
             variantBusy={variantBusy}
             onImportMaterial={importReferenceMaterial}
             onAnalyzeMaterial={analyzeReferenceMaterial}
+            onCreatePlanFromScript={createPlanFromScript}
+            onRenderScriptPackage={renderScriptPackage}
             onRenderFromAnalysis={renderFromAnalysis}
             onGeneratePlatformVariants={generatePlatformVariants}
           />
@@ -662,9 +752,13 @@ function StageWorkspace({
   materialBusy,
   analysisBusy,
   renderAnalysisBusy,
+  scriptPlanBusy,
+  remotionBusy,
   variantBusy,
   onImportMaterial,
   onAnalyzeMaterial,
+  onCreatePlanFromScript,
+  onRenderScriptPackage,
   onRenderFromAnalysis,
   onGeneratePlatformVariants
 }: {
@@ -682,13 +776,18 @@ function StageWorkspace({
   materialBusy: boolean;
   analysisBusy: boolean;
   renderAnalysisBusy: boolean;
+  scriptPlanBusy: boolean;
+  remotionBusy: boolean;
   variantBusy: boolean;
   onImportMaterial: () => void;
   onAnalyzeMaterial: () => void;
+  onCreatePlanFromScript: () => void;
+  onRenderScriptPackage: () => void;
   onRenderFromAnalysis: () => void;
   onGeneratePlatformVariants: () => void;
 }) {
   const copy = stageCopy[activeStage];
+  const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
 
   return (
     <section className="stage-workspace">
@@ -697,6 +796,7 @@ function StageWorkspace({
           <p>{activeStage.toUpperCase()}</p>
           <h2>{copy.headline}</h2>
           <span>{copy.description}</span>
+          <strong className="stage-command">当前主动作：{stage.action}</strong>
         </div>
         <div className="stage-proof">
           {copy.proof.map((item) => <span key={item}>{item}</span>)}
@@ -725,7 +825,17 @@ function StageWorkspace({
         />
       ) : null}
       {activeStage === "analyze" ? <AnalyzePanel form={form} update={update} /> : null}
-      {activeStage === "script" ? <ScriptPanel form={form} update={update} draft={scriptDraft} /> : null}
+      {activeStage === "script" ? (
+        <ScriptPanel
+          form={form}
+          update={update}
+          draft={scriptDraft}
+          scriptPlanBusy={scriptPlanBusy}
+          remotionBusy={remotionBusy}
+          onCreatePlanFromScript={onCreatePlanFromScript}
+          onRenderScriptPackage={onRenderScriptPackage}
+        />
+      ) : null}
       {activeStage === "edit" ? (
         <EditPanel
           form={form}
@@ -900,12 +1010,44 @@ function CollectPanel({ form, update, assets, materialBusy, analysisBusy, onImpo
           <span>读取最新 manifest 或本地视频，输出字幕片段、场景变化和候选切点 analysis JSON</span>
         </div>
         <Field label="素材目录 / manifest / 视频路径" value={form.materialAnalysisPath} onChange={(value) => update("materialAnalysisPath", value)} />
+        <div className="form-grid">
+          <label className="field">
+            <span>转写模式</span>
+            <select value={form.materialTranscriptionMode} onChange={(event) => update("materialTranscriptionMode", event.target.value)}>
+              <option value="auto">字幕优先，缺字幕用 faster-whisper</option>
+              <option value="subtitle-only">只读字幕文件</option>
+              <option value="faster-whisper">强制 faster-whisper</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Whisper 模型</span>
+            <select value={form.whisperModel} onChange={(event) => update("whisperModel", event.target.value)}>
+              <option value="tiny">tiny 快速验证</option>
+              <option value="base">base</option>
+              <option value="small">small</option>
+              <option value="medium">medium</option>
+            </select>
+          </label>
+          <Field label="语言" value={form.whisperLanguage} onChange={(value) => update("whisperLanguage", value)} />
+          <label className="field">
+            <span>场景检测</span>
+            <select value={form.sceneBackend} onChange={(event) => update("sceneBackend", event.target.value)}>
+              <option value="auto">PySceneDetect 优先，失败回退 FFmpeg</option>
+              <option value="pyscenedetect">强制 PySceneDetect</option>
+              <option value="ffmpeg">FFmpeg scene 基线</option>
+            </select>
+          </label>
+        </div>
+        <label className="toggle-row">
+          <input checked={form.autoEditorEnabled} onChange={(event) => update("autoEditorEnabled", event.target.checked)} type="checkbox" />
+          <span>运行 Auto-Editor 预览信号</span>
+        </label>
         <div className="material-import-actions">
           <button className="primary-button" disabled={analysisBusy} onClick={onAnalyzeMaterial} type="button">
             {analysisBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
             分析素材
           </button>
-          <small>当前基线：读取 yt-dlp 字幕文件 + FFmpeg scene detect。没有视频时仍会分析 manifest；有视频时生成候选剪辑段。</small>
+          <small>当前链路：字幕文件优先；缺字幕时可用 py312 faster-whisper 本地 ASR；PySceneDetect/FFmpeg 做场景检测，Auto-Editor 预览跳剪潜力。</small>
         </div>
       </section>
       <AssetQuickList
@@ -935,7 +1077,21 @@ function AnalyzePanel({ form, update }: FormPanelProps) {
   );
 }
 
-function ScriptPanel({ form, update, draft }: FormPanelProps & { draft: ScriptDraft | null }) {
+function ScriptPanel({
+  form,
+  update,
+  draft,
+  scriptPlanBusy,
+  remotionBusy,
+  onCreatePlanFromScript,
+  onRenderScriptPackage
+}: FormPanelProps & {
+  draft: ScriptDraft | null;
+  scriptPlanBusy: boolean;
+  remotionBusy: boolean;
+  onCreatePlanFromScript: () => void;
+  onRenderScriptPackage: () => void;
+}) {
   return (
     <div className="stage-layout script-layout">
       <section className="stage-form-card">
@@ -966,6 +1122,20 @@ function ScriptPanel({ form, update, draft }: FormPanelProps & { draft: ScriptDr
           <p className="script-bgm"><strong>配乐：</strong>{draft.bgm}</p>
           <p className="script-tags">{draft.tags.map((tag) => <span key={tag}>{tag.startsWith("#") ? tag : `#${tag}`}</span>)}</p>
           {draft.platformTips ? <p className="script-tips"><strong>平台适配：</strong>{draft.platformTips}</p> : null}
+          <div className="material-import-actions">
+            <button className="primary-button" disabled={scriptPlanBusy} onClick={onCreatePlanFromScript} type="button">
+              {scriptPlanBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
+              转自动剪辑计划
+            </button>
+            <small>按分镜节拍生成 /api/auto/plan 的 scenes 和 decision JSON，落到 workspace/drafts。</small>
+          </div>
+          <div className="material-import-actions">
+            <button className="primary-button" disabled={remotionBusy} onClick={onRenderScriptPackage} type="button">
+              {remotionBusy ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+              渲染包装视频
+            </button>
+            <small>调用 Remotion 生成带标题、钩子、分镜字幕和进度条的 MP4，输出到 workspace/output/remotion。</small>
+          </div>
         </section>
       ) : (
         <section className="script-preview">
@@ -1344,6 +1514,61 @@ function materialAnalysisPayload(value: string) {
     return { videoPath: trimmed };
   }
   return { materialDir: trimmed };
+}
+
+function scriptDraftToAutoPlanPayload(draft: ScriptDraft, form: CreatorForm) {
+  const title = draft.titles[0] ?? form.scriptTopic;
+  const script = [
+    `开场钩子：${draft.hook}`,
+    ...draft.beats.map((beat) => `${beat.time} 画面:${beat.shot} 口播:${beat.voiceover} 字幕:${beat.caption}`),
+    `配乐：${draft.bgm}`,
+    `平台适配：${draft.platformTips}`
+  ].filter(Boolean).join("\n");
+
+  return {
+    projectTitle: title,
+    script,
+    materialDir: "workspace/input",
+    instructions: [
+      "把文案分镜转成可执行自动剪辑 decision JSON。",
+      "按每个 beat 寻找匹配素材，优先保留强钩子、清晰演示、结尾行动号召。",
+      `目标人群：${form.audience}`,
+      `素材需求：${form.materialNeeds}`,
+      `话题标签：${draft.tags.join(" ")}`
+    ].join("\n"),
+    scenes: draft.beats.map((beat, index) => ({
+      id: `beat-${String(index + 1).padStart(2, "0")}`,
+      title: `${beat.time} ${beat.caption || beat.shot}`.slice(0, 48),
+      keywords: sceneKeywords(beat),
+      targetDurationMs: beatDurationMs(beat.time)
+    })),
+    style: {
+      cutPace: "tight",
+      colorLook: "clean high-retention social video",
+      subtitleStyle: "large high-contrast captions",
+      aspectRatio: form.bilibili && !form.douyin && !form.kuaishou ? "16:9" : "9:16"
+    }
+  };
+}
+
+function beatDurationMs(time: string) {
+  const match = time.match(/(\d+(?:\.\d+)?)\s*[-~至到]\s*(\d+(?:\.\d+)?)/);
+  if (!match) {
+    return 6000;
+  }
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const duration = Math.max(1, end - start);
+  return Math.round(duration * 1000);
+}
+
+function sceneKeywords(beat: ScriptDraft["beats"][number]) {
+  const text = `${beat.shot} ${beat.voiceover} ${beat.caption}`;
+  const words = text
+    .split(/[^\u4e00-\u9fa5a-zA-Z0-9]+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 2);
+  return [...new Set(words)].slice(0, 8);
 }
 
 function splitLines(value: string) {
