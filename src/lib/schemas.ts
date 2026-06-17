@@ -215,6 +215,19 @@ export const scriptGenerateSchema = z.object({
   references: z.array(z.string().min(1)).default([])
 });
 
+export const fullChainSchema = z.object({
+  topic: z.string().min(1),
+  platform: z.enum(["douyin", "bilibili", "kuaishou"]).default("douyin"),
+  audience: z.string().min(1).optional(),
+  durationSec: z.coerce.number().int().positive().max(600).default(45),
+  references: z.array(z.string().min(1)).default([]),
+  aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
+  variantTargets: z
+    .array(z.enum(["douyin", "kuaishou", "bilibili", "square"]))
+    .default(["douyin", "kuaishou", "bilibili", "square"]),
+  variantMode: z.enum(["crop", "fit"]).default("crop")
+});
+
 export const materialImportSchema = z.object({
   url: z.string().url(),
   collectionName: z.string().min(1).max(80).optional(),
