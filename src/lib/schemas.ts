@@ -228,6 +228,14 @@ export const fullChainSchema = z.object({
   variantMode: z.enum(["crop", "fit"]).default("crop")
 });
 
+export const publishDryRunSchema = z.object({
+  platform: z.enum(["douyin", "kuaishou", "bilibili"]).default("douyin"),
+  videoPath: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  tags: z.array(z.string().min(1)).default([])
+});
+
 export const materialImportSchema = z.object({
   url: z.string().url(),
   collectionName: z.string().min(1).max(80).optional(),

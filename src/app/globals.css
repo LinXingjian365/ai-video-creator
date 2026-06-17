@@ -1132,3 +1132,54 @@ summary {
   gap: 4px;
   color: var(--ink);
 }
+
+.publish-dryrun-result {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+}
+
+.publish-dryrun-result.ok {
+  border-color: var(--accent);
+}
+
+.publish-dryrun-result.blocked {
+  border-color: var(--danger);
+}
+
+.publish-dryrun-result ul {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.publish-dryrun-result li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.publish-dryrun-result .check-label {
+  min-width: 72px;
+  font-weight: 700;
+}
+
+.publish-dryrun-result .check-detail {
+  color: var(--muted);
+}
+
+.publish-dryrun-result .check-pass .check-label {
+  color: var(--accent-dark);
+}
+
+.publish-dryrun-result .check-warn .check-label {
+  color: var(--amber);
+}
+
+.publish-dryrun-result .check-fail .check-label {
+  color: var(--danger);
+}

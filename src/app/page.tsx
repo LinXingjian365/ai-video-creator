@@ -25,6 +25,7 @@ import {
 import type { IntelligenceReport } from "@/lib/trend/types";
 import type { ScriptDraft } from "@/lib/script/generate";
 import type { FullChainResult } from "@/lib/full-chain";
+import type { PublishDryRunResult } from "@/lib/publish/dry-run";
 
 type TaskStatus = "pending" | "processing" | "completed" | "failed";
 type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict";
@@ -227,6 +228,8 @@ const defaultForm = {
   autoEditorEnabled: true,
   roughCutAnalysisPath: "workspace/drafts",
   publishSourcePath: "workspace/output",
+  publishDryRunPlatform: "douyin",
+  publishDryRunTitle: "99%的人不知道的3个剪映神操作",
   materialNeeds: "口播素材、屏幕录制、爆款参考、可商用 B-roll",
   campaignGoal: "涨粉、完播、引流、转化",
   competitorStyle: "高密度干货 + 前3秒强反差 + 大字幕",
@@ -260,6 +263,8 @@ export default function Home() {
   const [topN, setTopN] = useState(20);
   const [scriptDraft, setScriptDraft] = useState<ScriptDraft | null>(null);
   const [fullChainResult, setFullChainResult] = useState<FullChainResult | null>(null);
+  const [publishDryRunBusy, setPublishDryRunBusy] = useState(false);
+  const [publishDryRunResult, setPublishDryRunResult] = useState<PublishDryRunResult | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -535,6 +540,40 @@ export default function Home() {
     }
   }
 
+  async function runPublishDryRun() {
+    if (!form.publishSourcePath.trim() || !form.publishDryRunTitle.trim()) {
+      setMessage("先填成片路径(选具体 MP4)和发布标题，再做 dry-run 校验");
+      return;
+    }
+
+    setPublishDryRunBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/dry-run", {
+        platform: form.publishDryRunPlatform,
+        videoPath: form.publishSourcePath,
+        title: form.publishDryRunTitle,
+        tags: scriptDraft?.tags ?? []
+      }, "发布 dry-run 校验完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("dry-run 任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "dry-run 失败");
+      }
+      setPublishDryRunResult(final.result as PublishDryRunResult);
+      setResult(final.result ?? data);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "dry-run 请求失败");
+    } finally {
+      setPublishDryRunBusy(false);
+    }
+  }
+
   async function importReferenceMaterial() {
     setMaterialBusy(true);
     setMessage("");
@@ -741,6 +780,9 @@ export default function Home() {
             onRunFullChain={runFullChainAction}
             onRenderFromAnalysis={renderFromAnalysis}
             onGeneratePlatformVariants={generatePlatformVariants}
+            publishDryRunBusy={publishDryRunBusy}
+            publishDryRunResult={publishDryRunResult}
+            onPublishDryRun={runPublishDryRun}
           />
 
           <footer className="form-actions">
@@ -813,7 +855,10 @@ function StageWorkspace({
   onRenderScriptPackage,
   onRunFullChain,
   onRenderFromAnalysis,
-  onGeneratePlatformVariants
+  onGeneratePlatformVariants,
+  publishDryRunBusy,
+  publishDryRunResult,
+  onPublishDryRun
 }: {
   activeStage: WorkflowStage;
   form: CreatorForm;
@@ -841,6 +886,9 @@ function StageWorkspace({
   onRunFullChain: () => void;
   onRenderFromAnalysis: () => void;
   onGeneratePlatformVariants: () => void;
+  publishDryRunBusy: boolean;
+  publishDryRunResult: PublishDryRunResult | null;
+  onPublishDryRun: () => void;
 }) {
   const copy = stageCopy[activeStage];
   const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
@@ -910,6 +958,9 @@ function StageWorkspace({
           assets={workspaceAssets?.assets ?? []}
           variantBusy={variantBusy}
           onGeneratePlatformVariants={onGeneratePlatformVariants}
+          publishDryRunBusy={publishDryRunBusy}
+          publishDryRunResult={publishDryRunResult}
+          onPublishDryRun={onPublishDryRun}
           update={update}
         />
       ) : null}
@@ -1278,10 +1329,13 @@ function EditPanel({ form, update, assets, renderAnalysisBusy, onRenderFromAnaly
   );
 }
 
-function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVariants }: FormPanelProps & {
+function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVariants, publishDryRunBusy, publishDryRunResult, onPublishDryRun }: FormPanelProps & {
   assets: WorkspaceAsset[];
   variantBusy: boolean;
   onGeneratePlatformVariants: () => void;
+  publishDryRunBusy: boolean;
+  publishDryRunResult: PublishDryRunResult | null;
+  onPublishDryRun: () => void;
 }) {
   const outputVideos = assets
     .filter((asset) => asset.kind === "video" && asset.role === "output")
@@ -1315,6 +1369,43 @@ function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVar
         onUse={(asset) => update("publishSourcePath", asset.relativePath)}
         title="最近输出视频"
       />
+      <section className="stage-form-card compact">
+        <div className="form-card-title">
+          <strong>发布前 dry-run 校验</strong>
+          <span>对成片做本地校验：文件 / 视频流 / 标题长度 / 标签数 / 画幅 / 时长，并预览发布载荷。不真发。</span>
+        </div>
+        <label className="field">
+          <span>目标平台</span>
+          <select value={form.publishDryRunPlatform} onChange={(event) => update("publishDryRunPlatform", event.target.value)}>
+            <option value="douyin">抖音</option>
+            <option value="kuaishou">快手</option>
+            <option value="bilibili">B站</option>
+          </select>
+        </label>
+        <Field label="成片路径（选具体 MP4，可用上方“作为源视频”填入）" value={form.publishSourcePath} onChange={(value) => update("publishSourcePath", value)} />
+        <Field label="发布标题" value={form.publishDryRunTitle} onChange={(value) => update("publishDryRunTitle", value)} />
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={publishDryRunBusy} onClick={onPublishDryRun} type="button">
+            {publishDryRunBusy ? <Loader2 className="spin" size={18} /> : <CheckCircle2 size={18} />}
+            dry-run 校验
+          </button>
+          <small>调 /api/publish/dry-run：标签取自最近生成的脚本草稿。校验通过后才适合接真实发布 API。</small>
+        </div>
+        {publishDryRunResult ? (
+          <div className={`publish-dryrun-result ${publishDryRunResult.willPublish ? "ok" : "blocked"}`}>
+            <strong>{publishDryRunResult.platformLabel} · {publishDryRunResult.willPublish ? "可发布" : "有阻断项，先修复"}</strong>
+            <ul>
+              {publishDryRunResult.checks.map((check) => (
+                <li key={check.label} className={`check-${check.status}`}>
+                  <span className="check-label">{check.label}</span>
+                  <span className="check-detail">{check.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <small>{publishDryRunResult.note}</small>
+          </div>
+        ) : null}
+      </section>
       <section className="publish-board">
         <StageCard icon={Megaphone} title="抖音" body="9:16、强开头、标题短、评论引导。" />
         <StageCard icon={Megaphone} title="快手" body="9:16、人设强、真实生活场景。" />
