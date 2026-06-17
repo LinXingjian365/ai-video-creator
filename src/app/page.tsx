@@ -260,6 +260,7 @@ export default function Home() {
   const [workspaceAssets, setWorkspaceAssets] = useState<WorkspaceAssetIndex | null>(null);
   const [trendReport, setTrendReport] = useState<IntelligenceReport | null>(null);
   const [trendCategory, setTrendCategory] = useState("all");
+  const [trendPlatform, setTrendPlatform] = useState("bilibili");
   const [topN, setTopN] = useState(20);
   const [scriptDraft, setScriptDraft] = useState<ScriptDraft | null>(null);
   const [fullChainResult, setFullChainResult] = useState<FullChainResult | null>(null);
@@ -377,7 +378,7 @@ export default function Home() {
     const response = await fetch("/api/trend/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ platform: "bilibili", category: trendCategory, topN })
+      body: JSON.stringify({ platform: trendPlatform, category: trendCategory, topN })
     });
     const data = await response.json();
     setResult(data);
@@ -759,6 +760,8 @@ export default function Home() {
             update={update}
             trendCategory={trendCategory}
             onTrendCategoryChange={setTrendCategory}
+            trendPlatform={trendPlatform}
+            onTrendPlatformChange={setTrendPlatform}
             topN={topN}
             onTopNChange={setTopN}
             trendReport={trendReport}
@@ -835,6 +838,8 @@ function StageWorkspace({
   update,
   trendCategory,
   onTrendCategoryChange,
+  trendPlatform,
+  onTrendPlatformChange,
   topN,
   onTopNChange,
   trendReport,
@@ -865,6 +870,8 @@ function StageWorkspace({
   update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
   trendCategory: string;
   onTrendCategoryChange: (value: string) => void;
+  trendPlatform: string;
+  onTrendPlatformChange: (value: string) => void;
   topN: number;
   onTopNChange: (value: number) => void;
   trendReport: IntelligenceReport | null;
@@ -911,6 +918,8 @@ function StageWorkspace({
         <TrendIntelligencePanel
           category={trendCategory}
           onCategoryChange={onTrendCategoryChange}
+          platform={trendPlatform}
+          onPlatformChange={onTrendPlatformChange}
           topN={topN}
           onTopNChange={onTopNChange}
           report={trendReport}
@@ -972,12 +981,16 @@ function StageWorkspace({
 function TrendIntelligencePanel({
   category,
   onCategoryChange,
+  platform,
+  onPlatformChange,
   topN,
   onTopNChange,
   report
 }: {
   category: string;
   onCategoryChange: (value: string) => void;
+  platform: string;
+  onPlatformChange: (value: string) => void;
   topN: number;
   onTopNChange: (value: number) => void;
   report: IntelligenceReport | null;
@@ -985,6 +998,14 @@ function TrendIntelligencePanel({
   return (
     <div className="stage-layout trend-layout">
       <section className="trend-controls">
+        <label className="field">
+          <span>平台</span>
+          <select value={platform} onChange={(event) => onPlatformChange(event.target.value)}>
+            <option value="bilibili">B站（真实榜单）</option>
+            <option value="youtube">YouTube（需 YOUTUBE_API_KEY）</option>
+            <option value="douyin">抖音（需第三方数据源）</option>
+          </select>
+        </label>
         <label className="field">
           <span>B站分区</span>
           <select value={category} onChange={(event) => onCategoryChange(event.target.value)}>

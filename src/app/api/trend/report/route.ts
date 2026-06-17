@@ -4,7 +4,8 @@ import { tryCreateLLMClient } from "@/lib/llm/client";
 import { trendReportSchema } from "@/lib/schemas";
 import { appendTaskLog, completeTask, createTask, failTask, updateTask } from "@/lib/tasks";
 import { buildReport } from "@/lib/trend/report";
-import { bilibiliSource } from "@/lib/trend/sources/bilibili";
+import { getTrendSource } from "@/lib/trend/sources/registry";
+import type { Platform } from "@/lib/trend/types";
 
 export const runtime = "nodejs";
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
 
   const { platform, category, topN } = parsed.data;
   const task = createTask("trend-report", `Trend report ${platform}/${category} top${topN}`);
-  const finalTask = await runReport(task.id, category, topN);
+  const finalTask = await runReport(task.id, platform, category, topN);
 
   return NextResponse.json(
     { task: finalTask },
@@ -46,15 +47,15 @@ export async function POST(request: Request) {
   );
 }
 
-async function runReport(taskId: string, category: string, topN: number) {
+async function runReport(taskId: string, platform: Platform, category: string, topN: number) {
   try {
     updateTask(taskId, { status: "processing", progress: 10 });
     const client = tryCreateLLMClient();
     const report = await withTaskTimeout(
       buildReport({
-        platform: "bilibili",
+        platform,
         category,
-        source: bilibiliSource,
+        source: getTrendSource(platform),
         client,
         topN,
         nowMs: Date.now(),
