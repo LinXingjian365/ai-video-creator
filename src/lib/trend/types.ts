@@ -3,11 +3,11 @@ export type Platform = "bilibili" | "douyin" | "youtube";
 export interface TrendMetrics {
   views: number;
   likes: number;
-  coins?: number;       // B站特有
+  coins?: number;
   favorites: number;
   shares: number;
   comments: number;
-  danmaku?: number;     // B站特有
+  danmaku?: number;
 }
 
 export interface TrendItem {
@@ -20,7 +20,7 @@ export interface TrendItem {
   tags: string[];
   url: string;
   thumbnail: string;
-  publishedAt: string;  // ISO 8601
+  publishedAt: string;
   durationSec: number;
   metrics: TrendMetrics;
 }
@@ -39,8 +39,8 @@ export interface SignalSet {
 
 export interface ScoredItem extends TrendItem {
   signals: SignalSet;
-  potentialScore: number;  // 0-100
-  confidence: number;      // 0-100, 数据支撑强度(非"会火概率")
+  potentialScore: number;
+  confidence: number;
 }
 
 export interface TopicCard {
@@ -51,7 +51,7 @@ export interface TopicCard {
 }
 
 export interface ReportItem extends ScoredItem {
-  viralLogic: string;      // 来自 LLM, 降级时为空串
+  viralLogic: string;
 }
 
 export interface IntelligenceReport {

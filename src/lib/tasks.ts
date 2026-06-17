@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { workspaceRoot } from "@/lib/paths";
 
-export type TaskType = "info" | "clip" | "merge" | "split" | "jianying-plan" | "jianying-draft" | "auto-plan" | "auto-render" | "auto-simulate" | "creator-suite" | "trend-report";
+export type TaskType = "info" | "clip" | "merge" | "split" | "video-variants" | "jianying-plan" | "jianying-draft" | "auto-plan" | "auto-render" | "auto-simulate" | "creator-suite" | "trend-report" | "material-import" | "material-analysis";
 export type TaskStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface TaskRecord {
@@ -28,7 +28,20 @@ function loadTasks(): Map<string, TaskRecord> {
   try {
     const raw = fs.readFileSync(STATE_FILE, "utf8");
     const records = JSON.parse(raw) as TaskRecord[];
-    return new Map(records.map((record) => [record.id, record]));
+    return new Map(records.map((record) => {
+      if (record.status === "pending" || record.status === "processing") {
+        const updated = new Date().toISOString();
+        return [record.id, {
+          ...record,
+          status: "failed",
+          updatedAt: updated,
+          completedAt: updated,
+          error: record.error ?? "Task was interrupted by a server restart."
+        }];
+      }
+
+      return [record.id, record];
+    }));
   } catch {
     return new Map();
   }

@@ -1,20 +1,22 @@
 import { spawnSync } from "node:child_process";
 import { NextResponse } from "next/server";
 import { creatorToolkit, requiredEnvVars } from "@/lib/creator-toolkit";
+import { getYtDlpInvocation } from "@/lib/materials/yt-dlp";
 
 export const runtime = "nodejs";
 
-const commandChecks = [
-  { id: "node", command: "node", args: ["--version"], stage: "base" },
-  { id: "npm", command: "npm", args: ["--version"], stage: "base" },
-  { id: "python", command: "python", args: ["--version"], stage: "python" },
-  { id: "uv", command: "uv", args: ["--version"], stage: "python" },
-  { id: "yt-dlp", command: "yt-dlp", args: ["--version"], stage: "download" },
-  { id: "ffmpeg", command: "ffmpeg", args: ["-version"], stage: "edit" },
-  { id: "n8n", command: "n8n", args: ["--version"], stage: "orchestrate" }
-];
-
 export async function GET() {
+  const ytDlp = getYtDlpInvocation();
+  const commandChecks = [
+    { id: "node", command: "node", args: ["--version"], stage: "base" },
+    { id: "npm", command: "npm", args: ["--version"], stage: "base" },
+    { id: "python", command: "python", args: ["--version"], stage: "python" },
+    { id: "uv", command: "uv", args: ["--version"], stage: "python" },
+    { id: "yt-dlp", command: ytDlp.command, args: [...ytDlp.prefixArgs, "--version"], stage: "download" },
+    { id: "ffmpeg", command: "ffmpeg", args: ["-version"], stage: "edit" },
+    { id: "n8n", command: "n8n", args: ["--version"], stage: "orchestrate" }
+  ];
+
   const commands = commandChecks.map((check) => {
     const result = spawnSync(check.command, check.args, {
       encoding: "utf8",
@@ -36,15 +38,13 @@ export async function GET() {
     hint: envHint(name)
   }));
 
-  const llmProvider = (process.env.LLM_PROVIDER ?? "openai").toLowerCase();
-  const llmKeyName = llmProvider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+  const llmProvider = (process.env.LLM_PROVIDER ?? "deepseek").toLowerCase();
+  const llmConfig = llmProviderConfig(llmProvider);
   const llm = {
     provider: llmProvider,
-    keyName: llmKeyName,
-    ok: Boolean(process.env[llmKeyName]),
-    hint: llmProvider === "anthropic"
-      ? "热点情报 LLM 分析(Claude provider):在 .env 配置 ANTHROPIC_API_KEY(+ 可选 ANTHROPIC_BASE_URL)"
-      : "热点情报 LLM 分析(GPT provider,默认):在 .env 配置 OPENAI_API_KEY + OPENAI_BASE_URL(指向你的网关)"
+    keyName: llmConfig.keyName,
+    ok: Boolean(process.env[llmConfig.keyName]),
+    hint: llmConfig.hint
   };
 
   const stages = creatorToolkit.reduce<Record<string, { total: number; core: number; readyHints: string[] }>>((acc, tool) => {
@@ -62,19 +62,56 @@ export async function GET() {
     llm,
     stages,
     nextSteps: [
-      "Install missing local commands first: python, uv, yt-dlp, ffmpeg, n8n.",
-      "Add API keys to .env.local only after you decide which data providers to use.",
-      "Run a dry-run publish before any real platform upload.",
-      "After credentials are configured, use one known reference video and one owned raw clip for the first full-chain test."
+      "Install missing local commands first: python, uv, yt-dlp, ffmpeg, and n8n.",
+      "For trend intelligence, configure LLM_PROVIDER plus the matching provider key such as DEEPSEEK_API_KEY, ARK_API_KEY, ANTHROPIC_API_KEY, or GPT_GATEWAY_API_KEY.",
+      "Use dry-run publishing before any real platform upload.",
+      "After credentials are configured, test one Bilibili category report before expanding to Douyin/Kuaishou."
     ]
   });
+}
+
+function llmProviderConfig(provider: string) {
+  if (provider === "deepseek") {
+    return {
+      keyName: "DEEPSEEK_API_KEY",
+      hint: "DeepSeek OpenAI-compatible mode. Configure DEEPSEEK_API_KEY, optional DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, DEEPSEEK_THINKING, and DEEPSEEK_REASONING_EFFORT."
+    };
+  }
+  if (provider === "anthropic" || provider === "claude-gateway") {
+    return {
+      keyName: "ANTHROPIC_API_KEY",
+      hint: "Anthropic-compatible mode. Configure ANTHROPIC_API_KEY, optional ANTHROPIC_BASE_URL, and ANTHROPIC_MODEL. Claude gateways can use this shape."
+    };
+  }
+  if (provider === "doubao-ark" || provider === "ark") {
+    return {
+      keyName: "ARK_API_KEY",
+      hint: "Doubao Ark OpenAI-compatible mode. Configure ARK_API_KEY, ARK_BASE_URL, and ARK_MODEL."
+    };
+  }
+  if (provider === "gpt-gateway") {
+    return {
+      keyName: "GPT_GATEWAY_API_KEY",
+      hint: "GPT gateway OpenAI-compatible mode. Configure GPT_GATEWAY_API_KEY, GPT_GATEWAY_BASE_URL, and GPT_GATEWAY_MODEL."
+    };
+  }
+
+  return {
+    keyName: "OPENAI_API_KEY",
+    hint: "OpenAI-compatible mode. Configure OPENAI_API_KEY, OPENAI_BASE_URL, and OPENAI_MODEL. bmapi-style gateways can use this shape."
+  };
 }
 
 function envHint(name: string) {
   const hints: Record<string, string> = {
     FIRECRAWL_API_KEY: "Web search/scrape provider for trend and source collection.",
+    EXA_API_KEY: "Neural search provider for trend and source discovery.",
     TIKHUB_API_KEY: "Unified social data provider for Douyin/Kuaishou/Bilibili/TikTok style data.",
-    DASHSCOPE_API_KEY: "ASR/OCR/vision provider for social-post-extractor workflows.",
+    BILI_COOKIE: "Optional Bilibili browser cookie. Helps when public ranking APIs return risk-control codes such as -352.",
+    YTDLP_BINARY: "Optional absolute path to yt-dlp. On Windows the app defaults to python -m yt_dlp when empty.",
+    YTDLP_COOKIES_PATH: "Optional cookies.txt path for yt-dlp when importing authorized reference videos from platforms that require login.",
+    YTDLP_TIMEOUT_MS: "Optional yt-dlp process timeout. Default is 120000ms.",
+    DASHSCOPE_API_KEY: "ASR/OCR/vision provider for extractor workflows.",
     POSTIZ_URL: "Self-hosted or hosted Postiz API base URL.",
     POSTIZ_API_KEY: "Postiz API token for scheduled publishing and analytics.",
     N8N_WEBHOOK_URL: "n8n webhook for scheduled automation."

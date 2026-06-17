@@ -19,15 +19,17 @@
 
 目标：从真实参考视频到结构化剪辑决策。
 
-- 接 yt-dlp：导入视频、封面、字幕、元数据。
-- 接 faster-whisper：生成字幕和时间戳。
-- 接 PySceneDetect：镜头边界和缩略图。
-- 接 Auto-Editor：静音段、口播停顿、快剪建议。
+- 接 yt-dlp：导入视频、封面、字幕、元数据。状态：API/UI 已接入，本机 `python -m yt_dlp` 已验证可用；公开视频导入可生成 manifest。
+- 接 faster-whisper：生成字幕和时间戳。状态：下一步增强；当前可先读取 yt-dlp 字幕文件。
+- 接 PySceneDetect：镜头边界和缩略图。状态：下一步增强；当前已接 FFmpeg scene detect 基线。
+- 接静音检测/Auto-Editor：静音段、口播停顿、快剪建议。状态：已接 FFmpeg silencedetect 基线，Auto-Editor 待增强。
 - 统一生成 `workspace/drafts/*-analysis.json`。
+- 从 `material-analysis-*.json` 驱动 `/api/auto/render` 自动粗剪。状态：已接入，支持传具体 JSON 或 `workspace/drafts` 目录自动取最新。
 
 验收：
 
-- 给一个本地视频或公开视频链接，能生成转写、场景列表、候选切点。
+- 给一个本地视频或公开视频链接，能生成转写、场景列表、静音/有声段、候选切点。状态：本地视频 + 字幕文件/FFmpeg 场景和静音基线已可生成 `material-analysis-*.json`。
+- 给一个 `material-analysis-*.json`，能生成 rough cut MP4 和 JianYing plan JSON。状态：已接入 `/api/auto/render` 和“自动剪辑”UI 按钮。
 
 ## P2：接入热点和选题
 
@@ -48,7 +50,7 @@
 - 新增 Remotion 子项目。
 - 建字幕组件、标题卡、步骤卡、数据卡、片尾关注组件。
 - 从自动剪辑决策 JSON 生成 Remotion props。
-- 输出 9:16、16:9、1:1 多平台版本。
+- 输出 9:16、16:9、1:1 多平台版本。状态：已接 FFmpeg 平台版本导出，Remotion 包装层待增强。
 
 验收：
 
@@ -78,6 +80,7 @@
 验收：
 
 - 发布包包含视频、标题、简介、标签、封面、发布时间建议。
+- 发布前可生成抖音/快手/B站/方版视频文件。状态：已接 `/api/video/variants` 和 UI 入口。
 - 真发前必须人工确认。
 - 发布后回流播放、完播、点赞、评论、涨粉等指标。
 

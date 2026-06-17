@@ -2,7 +2,6 @@ import { z } from "zod";
 
 const codec = z.string().min(1).optional();
 const quality = z.enum(["ultrafast", "fast", "medium", "slow", "veryslow"]).optional();
-const optionalNumber = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().optional());
 const optionalPositiveInt = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().positive().optional());
 const optionalPositiveNumber = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().positive().optional());
 
@@ -88,6 +87,14 @@ export const splitVideoSchema = z.object({
   message: "Provide durationSeconds, maxSize, or segmentCount for the selected split mode."
 });
 
+export const platformVariantsSchema = z.object({
+  inputPath: z.string().min(1),
+  outputDir: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
+  targets: z.array(z.enum(["douyin", "kuaishou", "bilibili", "square"])).default(["douyin", "kuaishou", "bilibili", "square"]),
+  mode: z.enum(["crop", "fit"]).default("crop")
+});
+
 export const jianyingPlanSchema = z.object({
   title: z.string().min(1),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).default("16:9"),
@@ -158,6 +165,7 @@ export const automaticClipSchema = z.object({
 export const automaticRenderSchema = z.object({
   projectTitle: z.string().min(1).default("Auto render"),
   planPath: z.string().min(1).optional(),
+  analysisPath: z.string().min(1).optional(),
   inputPath: z.string().min(1).optional(),
   materialDir: z.string().min(1).default("workspace/input"),
   outputPath: z.string().min(1).optional(),
@@ -167,7 +175,7 @@ export const automaticRenderSchema = z.object({
 
 export const automaticSimulationSchema = z.object({
   projectTitle: z.string().min(1).default("模拟自动剪辑"),
-  instructions: z.string().min(1).default("做一个紧凑的口播短视频，剪掉前后冗余，保留三个高信息密度片段，生成可编辑剪映草稿计划。"),
+  instructions: z.string().min(1).default("生成一条紧凑的口播短视频，裁掉前后冗余，保留三个高信息密度片段，并输出可编辑剪映草稿计划。"),
   outputPath: z.string().min(1).optional()
 });
 
@@ -197,4 +205,34 @@ export const trendReportSchema = z.object({
   platform: z.enum(["bilibili"]).default("bilibili"),
   category: z.string().min(1).default("all"),
   topN: z.coerce.number().int().min(1).max(50).default(20)
+});
+
+export const materialImportSchema = z.object({
+  url: z.string().url(),
+  collectionName: z.string().min(1).max(80).optional(),
+  outputDir: z.string().min(1).optional(),
+  quality: z.enum(["best", "1080p", "720p", "480p", "audio", "metadata"]).default("720p"),
+  allowPlaylist: z.coerce.boolean().default(false),
+  writeSubtitles: z.coerce.boolean().default(true),
+  writeAutoSubtitles: z.coerce.boolean().default(true),
+  subtitleLanguages: z.array(z.string().min(1)).default(["zh-Hans", "zh", "en"]),
+  cookiesPath: z.string().min(1).optional(),
+  timeoutMs: z.coerce.number().int().min(10000).max(3_600_000).optional()
+});
+
+export const materialAnalysisSchema = z.object({
+  manifestPath: z.string().min(1).optional(),
+  materialDir: z.string().min(1).optional(),
+  videoPath: z.string().min(1).optional(),
+  outputPath: z.string().min(1).optional(),
+  sceneThreshold: z.coerce.number().min(0.05).max(0.95).default(0.3),
+  maxScenes: z.coerce.number().int().min(0).max(200).default(40),
+  silenceNoiseDb: z.coerce.number().min(-80).max(-10).default(-35),
+  silenceMinDurationSec: z.coerce.number().min(0.2).max(10).default(0.8),
+  minClipMs: z.coerce.number().int().min(500).max(60_000).default(1500),
+  targetClipMs: z.coerce.number().int().min(1000).max(300_000).default(6000),
+  timeoutMs: z.coerce.number().int().min(10000).max(600_000).optional()
+}).refine((value) => Boolean(value.manifestPath || value.materialDir || value.videoPath), {
+  message: "Provide manifestPath, materialDir, or videoPath.",
+  path: ["manifestPath"]
 });

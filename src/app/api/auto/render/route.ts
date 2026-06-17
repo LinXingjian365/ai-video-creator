@@ -15,9 +15,8 @@ export async function POST(request: Request) {
   const payload = parsed.data;
   const task = createTask("auto-render", `Auto render ${payload.projectTitle}`);
 
-  void runRender(task.id, payload);
-
-  return NextResponse.json({ task });
+  const finalTask = await runRender(task.id, payload);
+  return NextResponse.json({ task: finalTask });
 }
 
 async function runRender(taskId: string, payload: ReturnType<typeof automaticRenderSchema.parse>) {
@@ -27,8 +26,8 @@ async function runRender(taskId: string, payload: ReturnType<typeof automaticRen
       onProgress: (progress) => updateTask(taskId, { progress }),
       onLog: (message) => appendTaskLog(taskId, message)
     });
-    completeTask(taskId, result);
+    return completeTask(taskId, result);
   } catch (error) {
-    failTask(taskId, error);
+    return failTask(taskId, error);
   }
 }

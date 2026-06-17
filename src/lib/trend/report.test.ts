@@ -38,6 +38,23 @@ describe("buildReport", () => {
     expect(r.aiStatus).toBe("failed");
     expect(r.items).toHaveLength(2);
   });
+  it("LLM 卡住 → 超时降级 aiStatus=failed, 保留真实榜单", async () => {
+    const client: LLMClient = { complete: () => new Promise(() => undefined) };
+    const logs: string[] = [];
+    const r = await buildReport({
+      platform: "bilibili",
+      category: "all",
+      source,
+      client,
+      topN: 10,
+      nowMs: NOW,
+      llmTimeoutMs: 5,
+      onLog: (message) => logs.push(message)
+    });
+    expect(r.aiStatus).toBe("failed");
+    expect(r.items).toHaveLength(2);
+    expect(logs.at(-1)).toContain("timed out");
+  });
   it("无 client → 降级仅榜单", async () => {
     const r = await buildReport({ platform: "bilibili", category: "all", source, client: null, topN: 10, nowMs: NOW });
     expect(r.aiStatus).toBe("failed");

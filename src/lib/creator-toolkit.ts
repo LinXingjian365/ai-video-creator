@@ -26,6 +26,30 @@ export interface CreatorTool {
 
 export const creatorToolkit: CreatorTool[] = [
   {
+    id: "deepseek",
+    name: "DeepSeek API",
+    stage: "analyze",
+    priority: "core",
+    source: "DeepSeek OpenAI-compatible API",
+    url: "https://api-docs.deepseek.com/zh-cn/",
+    env: ["DEEPSEEK_API_KEY"],
+    why: "Current default LLM provider for trend explanation, topic cards and planning prompts. It uses an OpenAI-compatible Chat Completions shape.",
+    integrationPlan: ["trend intelligence analysis", "viral logic explanation", "topic card generation", "future script/planning prompts"],
+    notes: ["Set LLM_PROVIDER=deepseek.", "Default base URL is https://api.deepseek.com.", "Use environment variables; never hardcode API keys."]
+  },
+  {
+    id: "llm-gateway-profiles",
+    name: "LLM gateway profiles",
+    stage: "analyze",
+    priority: "recommended",
+    source: "OpenAI-compatible / Anthropic-compatible gateways",
+    url: "https://api-docs.deepseek.com/zh-cn/",
+    env: ["ARK_API_KEY", "ANTHROPIC_API_KEY", "GPT_GATEWAY_API_KEY"],
+    why: "Keeps Doubao Ark, Claude gateways and GPT gateways pluggable behind one LLMClient interface.",
+    integrationPlan: ["LLM_PROVIDER=doubao-ark", "LLM_PROVIDER=claude-gateway", "LLM_PROVIDER=gpt-gateway"],
+    notes: ["Ark/GPT gateways use Chat Completions.", "Claude gateways use the Anthropic messages shape.", "Keep provider-specific keys in .env.local."]
+  },
+  {
     id: "yt-dlp",
     name: "yt-dlp",
     stage: "download",
@@ -34,8 +58,9 @@ export const creatorToolkit: CreatorTool[] = [
     url: "https://github.com/yt-dlp/yt-dlp",
     install: "python -m pip install -U yt-dlp",
     why: "High-star, actively maintained audio/video downloader and metadata extractor for many sites.",
-    integrationPlan: ["reference video metadata", "authorized download/import", "subtitle-first transcript extraction"],
-    notes: ["Use only for content you are allowed to download or analyze.", "Some platforms require cookies or official access."]
+    env: ["YTDLP_COOKIES_PATH"],
+    integrationPlan: ["reference video metadata", "authorized download/import", "subtitle-first transcript extraction", "/api/materials/import"],
+    notes: ["Use only for content you are allowed to download or analyze.", "Some platforms require cookies or official access.", "The local API saves media, thumbnail, subtitles, info.json, and manifest.json under workspace/input/references."]
   },
   {
     id: "firecrawl",
@@ -49,6 +74,18 @@ export const creatorToolkit: CreatorTool[] = [
     why: "Mature web search/scrape/crawl API for turning web pages into clean Markdown or structured data.",
     integrationPlan: ["trend source collection", "article/source grounding", "competitor page extraction"],
     notes: ["AGPL if self-hosted; hosted API needs key."]
+  },
+  {
+    id: "bilibili-public-ranking",
+    name: "Bilibili Public Ranking Source",
+    stage: "trend",
+    priority: "core",
+    source: "Bilibili public web-interface APIs",
+    url: "https://api.bilibili.com",
+    env: ["BILI_COOKIE"],
+    why: "First built-in real trend source. Uses Bilibili ranking and popular APIs for live high-traffic video signals.",
+    integrationPlan: ["Bilibili category ranking", "popular feed fallback", "real metrics for viral scoring"],
+    notes: ["BILI_COOKIE is optional but recommended when Bilibili returns risk-control codes such as -352.", "Do not bypass platform rules or scrape at high volume."]
   },
   {
     id: "tikhub",

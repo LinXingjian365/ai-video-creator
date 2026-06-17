@@ -24,16 +24,17 @@ flowchart LR
 
 | 阶段 | 推荐成熟工具 | 用途 | 当前项目状态 | 生产化条件 |
 |---|---|---|---|---|
-| 热点搜索 | TikHub API、Exa、Firecrawl | 抖音/快手/B站/网页热点、标题、链接、评论、搜索结果 | 已有 `.env.example` 配置位和集成目录 | 配置 API Key，补真实采集 route |
-| 网页/素材采集 | Firecrawl、Exa、yt-dlp | 抓网页、搜资料、下载公开视频素材/字幕/封面 | 已规划为素材入口 | 安装 yt-dlp，处理 cookies 和版权规则 |
-| 爆款拆解 | LLM planner、PySceneDetect、OpenTimelineIO | 分析开头、节奏、镜头、结构、时间线 | 已有 `creator-suite` 和 `auto-plan` 结构化计划 | 接真实参考视频和转写结果 |
+| 热点搜索 | Bilibili public ranking、TikHub API、Exa、Firecrawl | B站真实榜单、抖音/快手/B站/网页热点、标题、链接、评论、搜索结果 | 已落地 B站公开排行榜与热门 fallback；其他源已有配置位和集成目录 | 配置 `BILI_COOKIE` 可降低 B站风控；继续补 TikHub/Exa/Firecrawl 真实采集 route |
+| 网页/素材采集 | Firecrawl、Exa、yt-dlp | 抓网页、搜资料、导入公开视频素材/字幕/封面/元数据 | 已接 `/api/materials/import`，会生成素材 manifest | 安装 yt-dlp，按需配置 `YTDLP_COOKIES_PATH`，遵守版权和平台规则 |
+| 爆款拆解 | LLM planner、FFmpeg scene/silence detect、PySceneDetect、OpenTimelineIO | 分析开头、节奏、镜头、结构、时间线 | 已有 `creator-suite`、`auto-plan` 和 `/api/materials/analyze` 基线，含场景和静音/有声段信号 | 接 faster-whisper/PySceneDetect 增强真实转写和镜头检测 |
+| AI 模型网关 | DeepSeek、Doubao Ark、Claude gateway、GPT gateway | 爆火逻辑解释、选题卡、脚本/计划生成 | DeepSeek 已作为默认 LLM provider 接入；Ark/Claude/GPT gateway 已预留 env 和 client 分支 | 配置对应 API key 后逐个跑真实连通测试 |
 | 语音转写 | faster-whisper、OpenAI Whisper、WhisperX | 生成字幕、字级时间戳、口播切点 | 已在工具目录推荐，未接真实 ASR | 安装 Python/模型或配置云 ASR |
-| 场景检测 | PySceneDetect | 镜头边界、场景缩略图、自动分段 | 已推荐，未接真实执行 | 安装 `scenedetect[opencv]` |
-| 静音快剪 | Auto-Editor | 自动去停顿、口播快剪 | 已推荐，未接真实执行 | 安装 `auto-editor` 并加 review 阈值 |
-| 本地粗剪 | FFmpeg、fluent-ffmpeg | info、clip、merge、split、rough cut | 已内置并通过 UI 验证 | 继续补复杂滤镜和字幕烧录 |
+| 场景检测 | FFmpeg scene detect、PySceneDetect | 镜头边界、场景缩略图、自动分段 | 已接 FFmpeg 基线；PySceneDetect 待增强 | 安装 `scenedetect[opencv]` 后切换/增强 |
+| 静音快剪 | FFmpeg silencedetect、Auto-Editor | 自动去停顿、口播快剪 | 已接 FFmpeg 静音检测基线；Auto-Editor 待增强 | 安装 `auto-editor` 并加 review 阈值 |
+| 本地粗剪 | FFmpeg、fluent-ffmpeg | info、clip、merge、split、rough cut、多比例导出 | 已内置并通过 UI 验证；可读取 `material-analysis-*.json` candidate clips 自动粗剪；已接平台版本导出 | 继续补复杂滤镜和字幕烧录 |
 | 图文包装 | Remotion | React 组件化字幕、标题卡、数据卡、片尾 | 已推荐，未建 Remotion 子项目 | 建 `remotion/` package 和模板 |
 | 可编辑草稿 | JianYing MCP | 生成剪映可编辑草稿、轨道、字幕、转场 | 已生成 JianYing plan JSON | 配置 JianYing MCP 并把 plan 映射到真实 MCP 调用 |
-| 发布矩阵 | social-auto-upload、Postiz、n8n | 抖音/快手/B站/多平台发布、排程 | 已有 env 配置位和发布矩阵计划 | 配置账号、登录态、dry-run、发布审核 |
+| 发布矩阵 | FFmpeg variants、social-auto-upload、Postiz、n8n | 抖音/快手/B站/多平台发布、排程 | 已有 env 配置位、发布矩阵计划和平台视频版本导出 | 配置账号、登录态、dry-run、发布审核 |
 | 自动编排 | n8n | 把采集、剪辑、发布、复盘串成工作流 | 已有 `N8N_WEBHOOK_URL` 配置位 | 创建 n8n 工作流并接 webhook |
 | 数据复盘 | 平台 analytics、Postiz、TikHub | 30 分钟/24 小时数据回流和下一轮决策 | 已有复盘策略生成 | 接真实平台数据源 |
 
@@ -43,7 +44,7 @@ flowchart LR
 |---|---|---|---|
 | FFmpeg | https://ffmpeg.org/ | 视频处理事实标准，稳定、跨平台 | 已内置为本地核心能力 |
 | fluent-ffmpeg | https://github.com/fluent-ffmpeg/node-fluent-ffmpeg | Node FFmpeg 包装层，适合 Next API 调用 | 已内置 |
-| yt-dlp | https://github.com/yt-dlp/yt-dlp | 高活跃视频下载工具，适合参考素材导入 | 下一阶段接入 |
+| yt-dlp | https://github.com/yt-dlp/yt-dlp | 高活跃视频下载工具，适合参考素材导入 | 已接 API route，负责素材、封面、字幕、info.json、manifest |
 | OpenAI Whisper | https://github.com/openai/whisper | 通用语音识别基础工具 | 推荐作为 ASR 标准 |
 | faster-whisper | https://github.com/SYSTRAN/faster-whisper | Whisper 高性能实现 | 推荐本地优先 |
 | PySceneDetect | https://github.com/Breakthrough/PySceneDetect | 成熟场景检测工具 | 推荐接入镜头分割 |
@@ -54,6 +55,7 @@ flowchart LR
 | n8n | https://github.com/n8n-io/n8n | 成熟自动化编排平台 | 推荐做全链路工作流 |
 | Postiz | https://github.com/gitroomhq/postiz-app | 开源社媒排程与分析平台 | 推荐做发布/排程候选 |
 | social-auto-upload | https://github.com/dreammis/social-auto-upload | 面向国内平台的自动上传工具 | 推荐做抖音/快手/B站发布候选 |
+| Bilibili web-interface | https://api.bilibili.com | B站公开 Web API，可提供分区排行榜和热门视频信号 | 已接入 S1 Trend Intelligence，带请求超时、重试和热门 fallback |
 
 ## 当前项目已落地模块
 
@@ -62,18 +64,21 @@ flowchart LR
 - `src/lib/creator-toolkit.ts`：全链路工具目录。
 - `src/lib/creator-suite.ts`：热点、选题、脚本、素材、蓝图、发布、复盘计划。
 - `src/lib/auto-plan.ts`：自动剪辑决策 JSON。
-- `src/lib/auto-render.ts`：按计划裁剪、合并，输出粗剪视频和剪映计划。
+- `src/lib/auto-render.ts`：按计划或素材分析 candidate clips 裁剪、合并，输出粗剪视频和剪映计划。
+- `src/lib/platform-variants.ts`：把粗剪视频导出为抖音/快手 9:16、B站 16:9 和 1:1 方版。
 - `src/lib/integrations.ts`：成熟工具集成目录。
+- `src/lib/trend/*`：B站真实趋势源、确定性评分、可选 LLM 爆火逻辑分析。
+- `src/lib/llm/client.ts`：DeepSeek 默认 LLM 客户端，兼容 Doubao Ark、Claude gateway、GPT gateway 扩展。
+- `src/lib/materials/yt-dlp.ts`：公开视频参考素材导入、字幕/封面/metadata 保存、manifest 生成。
+- `src/lib/materials/analysis.ts`：读取 manifest/视频，解析字幕，FFmpeg 场景检测和静音检测，生成候选切点。
 - `src/app/page.tsx`：可点击的本地 Web 控制台。
 
 ## 当前项目未完全落地模块
 
 这些不是忘了，而是需要外部账号、API、二进制工具或平台登录态：
 
-- 真实热点数据抓取。
-- 真实 yt-dlp 参考视频导入。
 - 真实 ASR/OCR 批处理。
-- PySceneDetect/Auto-Editor 子进程封装。
+- PySceneDetect/Auto-Editor 子进程增强封装。
 - Remotion 子项目和模板渲染。
 - JianYing MCP 真实调用。
 - social-auto-upload/Postiz 真实发布 dry-run。

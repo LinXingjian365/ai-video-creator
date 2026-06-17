@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { clipVideo, mergeVideos } from "@/lib/ffmpeg";
-import { defaultDraftPath, defaultOutputPath, resolveLocalPath } from "@/lib/paths";
+import type { MaterialAnalysis } from "@/lib/materials/analysis";
+import { defaultDraftPath, defaultOutputPath, draftsRoot, resolveLocalPath } from "@/lib/paths";
 import { automaticClipSchema, automaticRenderSchema } from "@/lib/schemas";
 
 type AutomaticClip = z.infer<typeof automaticClipSchema>;
@@ -17,7 +18,8 @@ export interface AutoRenderCallbacks {
 
 export async function renderAutomaticCut(input: AutomaticRenderInput, callbacks: AutoRenderCallbacks = {}) {
   const plan = input.planPath ? await readJson(resolveLocalPath(input.planPath)) : null;
-  const clips = await resolveClips(input, plan);
+  const analysis = input.analysisPath ? await readJson(await resolveAnalysisPath(input.analysisPath)) : null;
+  const clips = await resolveClips(input, plan, analysis);
   const outputPath = resolveLocalPath(input.outputPath ?? defaultOutputPath(`${slug(input.projectTitle)}-${Date.now()}-rough-cut.mp4`));
   const tempDir = defaultOutputPath(`tmp-${slug(input.projectTitle)}-${Date.now()}`);
   await fs.mkdir(tempDir, { recursive: true });
@@ -77,9 +79,13 @@ export async function renderAutomaticCut(input: AutomaticRenderInput, callbacks:
   };
 }
 
-async function resolveClips(input: AutomaticRenderInput, plan: unknown): Promise<AutomaticClip[]> {
+async function resolveClips(input: AutomaticRenderInput, plan: unknown, analysis: unknown): Promise<AutomaticClip[]> {
   if (input.clips?.length) {
     return input.clips;
+  }
+
+  if (analysis) {
+    return clipsFromMaterialAnalysis(analysis);
   }
 
   const firstInput = input.inputPath ?? await findFirstVideo(input.materialDir);
@@ -97,6 +103,92 @@ async function resolveClips(input: AutomaticRenderInput, plan: unknown): Promise
       label: `auto-scene-${String(index + 1).padStart(2, "0")}`
     };
   });
+}
+
+export function clipsFromMaterialAnalysis(analysis: unknown): AutomaticClip[] {
+  if (!isMaterialAnalysis(analysis)) {
+    throw new Error("analysisPath must point to a material-analysis JSON file.");
+  }
+
+  const inputPath = analysis.media.primaryVideoPath;
+  if (!inputPath) {
+    throw new Error("Material analysis has no primary video path. Analyze a local video before rendering.");
+  }
+
+  const clips = analysis.candidates
+    .slice(0, 12)
+    .map((candidate) => automaticClipSchema.parse({
+      inputPath,
+      startMs: candidate.startMs,
+      endMs: candidate.endMs,
+      label: `${candidate.id}: ${candidate.source}`
+    }));
+
+  if (clips.length === 0) {
+    throw new Error("Material analysis has no candidate clips to render.");
+  }
+
+  return clips;
+}
+
+async function resolveAnalysisPath(value: string) {
+  const target = resolveLocalPath(value);
+  let stat;
+  try {
+    stat = await fs.stat(target);
+  } catch {
+    throw new Error(`Analysis path not found: ${target}`);
+  }
+
+  if (stat.isFile()) {
+    return target;
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`Analysis path must be a file or directory: ${target}`);
+  }
+
+  const latest = await findNewestAnalysis(target);
+  if (!latest) {
+    throw new Error(`No material-analysis-*.json found in ${target}`);
+  }
+  return latest;
+}
+
+async function findNewestAnalysis(rootDir: string = draftsRoot): Promise<string | undefined> {
+  const files: Array<{ path: string; mtimeMs: number }> = [];
+
+  async function walk(dir: string) {
+    let entries: Array<import("node:fs").Dirent>;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile() && /^material-analysis-.+\.json$/i.test(entry.name)) {
+        const stat = await fs.stat(fullPath);
+        files.push({ path: fullPath, mtimeMs: stat.mtimeMs });
+      }
+    }
+  }
+
+  await walk(rootDir);
+  return files.sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.path;
+}
+
+function isMaterialAnalysis(value: unknown): value is MaterialAnalysis {
+  const candidate = value as MaterialAnalysis | undefined;
+  return Boolean(
+    candidate &&
+    candidate.schema === "ai-video-assistant.material-analysis.v1" &&
+    Array.isArray(candidate.candidates) &&
+    candidate.media &&
+    typeof candidate.media === "object"
+  );
 }
 
 async function findFirstVideo(materialDir: string) {
