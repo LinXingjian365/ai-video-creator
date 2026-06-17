@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { IntelligenceReport } from "@/lib/trend/types";
 import type { ScriptDraft } from "@/lib/script/generate";
+import type { FullChainResult } from "@/lib/full-chain";
 
 type TaskStatus = "pending" | "processing" | "completed" | "failed";
 type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict";
@@ -248,6 +249,7 @@ export default function Home() {
   const [variantBusy, setVariantBusy] = useState(false);
   const [scriptPlanBusy, setScriptPlanBusy] = useState(false);
   const [remotionBusy, setRemotionBusy] = useState(false);
+  const [fullChainBusy, setFullChainBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [result, setResult] = useState<unknown>(null);
@@ -257,6 +259,7 @@ export default function Home() {
   const [trendCategory, setTrendCategory] = useState("all");
   const [topN, setTopN] = useState(20);
   const [scriptDraft, setScriptDraft] = useState<ScriptDraft | null>(null);
+  const [fullChainResult, setFullChainResult] = useState<FullChainResult | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -488,6 +491,50 @@ export default function Home() {
     }
   }
 
+  async function runFullChainAction() {
+    if (!form.scriptTopic.trim()) {
+      setMessage("先填写选题，再一键全链路");
+      return;
+    }
+
+    setFullChainBusy(true);
+    setMessage("");
+    try {
+      const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
+      const variantTargets = (["douyin", "kuaishou", "bilibili"] as const).filter((id) => form[id]);
+      const data = await runPost("/api/full-chain", {
+        topic: form.scriptTopic,
+        platform,
+        audience: form.audience || undefined,
+        references: form.references.split("\n").map((line) => line.trim()).filter(Boolean),
+        aspectRatio: platform === "bilibili" ? "16:9" : "9:16",
+        ...(variantTargets.length > 0 ? { variantTargets } : {})
+      }, "一键全链路已启动：脚本 → Remotion 成片 → 多平台变体");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id, 1_200_000);
+      if (!final) {
+        throw new Error("全链路任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "全链路失败");
+      }
+      const chain = final.result as FullChainResult | undefined;
+      if (chain?.draft) {
+        setScriptDraft(chain.draft);
+      }
+      setFullChainResult(chain ?? null);
+      setResult(final.result ?? data);
+      setMessage(`一键全链路完成：${chain?.variants.variants.length ?? 0} 个平台成片已落盘`);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "全链路请求失败");
+    } finally {
+      setFullChainBusy(false);
+    }
+  }
+
   async function importReferenceMaterial() {
     setMaterialBusy(true);
     setMessage("");
@@ -684,11 +731,14 @@ export default function Home() {
             renderAnalysisBusy={renderAnalysisBusy}
             scriptPlanBusy={scriptPlanBusy}
             remotionBusy={remotionBusy}
+            fullChainBusy={fullChainBusy}
+            fullChainResult={fullChainResult}
             variantBusy={variantBusy}
             onImportMaterial={importReferenceMaterial}
             onAnalyzeMaterial={analyzeReferenceMaterial}
             onCreatePlanFromScript={createPlanFromScript}
             onRenderScriptPackage={renderScriptPackage}
+            onRunFullChain={runFullChainAction}
             onRenderFromAnalysis={renderFromAnalysis}
             onGeneratePlatformVariants={generatePlatformVariants}
           />
@@ -754,11 +804,14 @@ function StageWorkspace({
   renderAnalysisBusy,
   scriptPlanBusy,
   remotionBusy,
+  fullChainBusy,
+  fullChainResult,
   variantBusy,
   onImportMaterial,
   onAnalyzeMaterial,
   onCreatePlanFromScript,
   onRenderScriptPackage,
+  onRunFullChain,
   onRenderFromAnalysis,
   onGeneratePlatformVariants
 }: {
@@ -778,11 +831,14 @@ function StageWorkspace({
   renderAnalysisBusy: boolean;
   scriptPlanBusy: boolean;
   remotionBusy: boolean;
+  fullChainBusy: boolean;
+  fullChainResult: FullChainResult | null;
   variantBusy: boolean;
   onImportMaterial: () => void;
   onAnalyzeMaterial: () => void;
   onCreatePlanFromScript: () => void;
   onRenderScriptPackage: () => void;
+  onRunFullChain: () => void;
   onRenderFromAnalysis: () => void;
   onGeneratePlatformVariants: () => void;
 }) {
@@ -832,8 +888,11 @@ function StageWorkspace({
           draft={scriptDraft}
           scriptPlanBusy={scriptPlanBusy}
           remotionBusy={remotionBusy}
+          fullChainBusy={fullChainBusy}
+          fullChainResult={fullChainResult}
           onCreatePlanFromScript={onCreatePlanFromScript}
           onRenderScriptPackage={onRenderScriptPackage}
+          onRunFullChain={onRunFullChain}
         />
       ) : null}
       {activeStage === "edit" ? (
@@ -1083,14 +1142,20 @@ function ScriptPanel({
   draft,
   scriptPlanBusy,
   remotionBusy,
+  fullChainBusy,
+  fullChainResult,
   onCreatePlanFromScript,
-  onRenderScriptPackage
+  onRenderScriptPackage,
+  onRunFullChain
 }: FormPanelProps & {
   draft: ScriptDraft | null;
   scriptPlanBusy: boolean;
   remotionBusy: boolean;
+  fullChainBusy: boolean;
+  fullChainResult: FullChainResult | null;
   onCreatePlanFromScript: () => void;
   onRenderScriptPackage: () => void;
+  onRunFullChain: () => void;
 }) {
   return (
     <div className="stage-layout script-layout">
@@ -1099,6 +1164,24 @@ function ScriptPanel({
         <Field label="目标人群" value={form.audience} onChange={(value) => update("audience", value)} />
         <Field label="参考爆款（只借鉴方法，每行一个）" multiline value={form.references} onChange={(value) => update("references", value)} />
         <small className="hint">点上方“生成脚本方案”调用 /api/script/generate，由 LLM 产出可直接开拍的分镜脚本。未配置 LLM key 时会明确报错，不出假模板。</small>
+        <div className="material-import-actions full-chain-action">
+          <button className="primary-button" disabled={fullChainBusy} onClick={onRunFullChain} type="button">
+            {fullChainBusy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
+            一键全链路：选题 → 成片 → 多平台
+          </button>
+          <small>调 /api/full-chain：LLM 生成脚本 → Remotion 渲染成片 → FFmpeg 输出抖音/快手/B站多平台变体，一步到位。耗时约 2-4 分钟。</small>
+        </div>
+        {fullChainResult ? (
+          <div className="full-chain-result">
+            <strong>全链路产出：{fullChainResult.draft.titles[0] ?? fullChainResult.topic}</strong>
+            <p className="hint">成片：{fullChainResult.packageVideoPath}</p>
+            <ul>
+              {fullChainResult.variants.variants.map((variant) => (
+                <li key={variant.id}>{variant.label} · {variant.width}×{variant.height}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
       {draft ? (
         <section className="script-result">

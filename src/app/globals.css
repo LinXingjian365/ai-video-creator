@@ -1097,3 +1097,38 @@ summary {
     width: 100%;
   }
 }
+
+.full-chain-action {
+  border-top: 1px dashed var(--line);
+  padding-top: 14px;
+  margin-top: 4px;
+}
+
+.full-chain-action button {
+  background: linear-gradient(90deg, var(--accent), #41b8b1);
+}
+
+.full-chain-result {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--panel-strong);
+}
+
+.full-chain-result strong {
+  color: var(--accent-dark);
+}
+
+.full-chain-result .hint {
+  word-break: break-all;
+  margin: 8px 0 12px;
+}
+
+.full-chain-result ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: var(--ink);
+}
