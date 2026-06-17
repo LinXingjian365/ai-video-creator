@@ -23,10 +23,11 @@ import {
   XCircle
 } from "lucide-react";
 import type { IntelligenceReport } from "@/lib/trend/types";
+import type { ScriptDraft } from "@/lib/script/generate";
 
 type TaskStatus = "pending" | "processing" | "completed" | "failed";
 type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict";
-type StageEndpoint = "trend-report" | "integrations" | "auto-plan" | "auto-simulate" | "creator-suite" | "readiness";
+type StageEndpoint = "trend-report" | "script-generate" | "integrations" | "auto-plan" | "auto-simulate" | "creator-suite" | "readiness";
 
 interface TaskRecord {
   id: string;
@@ -116,7 +117,7 @@ const capabilities: Array<{
     title: "文案脚本",
     body: "根据赛道、人群、参考视频生成钩子、脚本节拍和字幕风格",
     action: "生成脚本方案",
-    endpoint: "creator-suite"
+    endpoint: "script-generate"
   },
   {
     id: "edit",
@@ -223,6 +224,7 @@ const defaultForm = {
   materialNeeds: "口播素材、屏幕录制、爆款参考、可商用 B-roll",
   campaignGoal: "涨粉、完播、引流、转化",
   competitorStyle: "高密度干货 + 前3秒强反差 + 大字幕",
+  scriptTopic: "在AI里抛硬币，正面概率真的是50%吗？",
   webSearchEnabled: "true",
   douyin: true,
   kuaishou: true,
@@ -247,6 +249,7 @@ export default function Home() {
   const [trendReport, setTrendReport] = useState<IntelligenceReport | null>(null);
   const [trendCategory, setTrendCategory] = useState("all");
   const [topN, setTopN] = useState(20);
+  const [scriptDraft, setScriptDraft] = useState<ScriptDraft | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -299,6 +302,8 @@ export default function Home() {
     try {
       if (activeCapability.endpoint === "trend-report") {
         await generateTrendReport();
+      } else if (activeCapability.endpoint === "script-generate") {
+        await generateScript();
       } else if (activeCapability.endpoint === "integrations") {
         await runGet("/api/integrations", "集成目录已加载");
       } else if (activeCapability.endpoint === "readiness") {
@@ -381,6 +386,36 @@ export default function Home() {
     setMessage(report.aiStatus === "ok"
       ? "热点情报已生成，包含 AI 爆火逻辑分析"
       : "热点情报已生成：LLM 未配置或分析失败，仅展示真实榜单和客观评分");
+  }
+
+  async function generateScript() {
+    const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
+    const references = form.references.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const response = await fetch("/api/script/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: form.scriptTopic, platform, audience: form.audience, references })
+    });
+    const data = await response.json();
+    setResult(data);
+    if (!response.ok) {
+      throw new Error(data.task?.error ?? data.error ?? "文案脚本请求失败");
+    }
+
+    const final = data.task?.status === "completed" || data.task?.status === "failed"
+      ? data.task as TaskRecord
+      : await pollTaskUntilDone(data.task.id);
+    if (!final) {
+      throw new Error("文案脚本任务超时");
+    }
+    if (final.status === "failed") {
+      throw new Error(final.error ?? "文案脚本任务失败");
+    }
+
+    const draft = final.result as ScriptDraft;
+    setScriptDraft(draft);
+    setResult(draft);
+    setMessage(`文案脚本已生成：${draft.titles[0] ?? form.scriptTopic}`);
   }
 
   async function importReferenceMaterial() {
@@ -555,6 +590,7 @@ export default function Home() {
             topN={topN}
             onTopNChange={setTopN}
             trendReport={trendReport}
+            scriptDraft={scriptDraft}
             readiness={readiness}
             workspaceAssets={workspaceAssets}
             materialBusy={materialBusy}
@@ -620,6 +656,7 @@ function StageWorkspace({
   topN,
   onTopNChange,
   trendReport,
+  scriptDraft,
   readiness,
   workspaceAssets,
   materialBusy,
@@ -639,6 +676,7 @@ function StageWorkspace({
   topN: number;
   onTopNChange: (value: number) => void;
   trendReport: IntelligenceReport | null;
+  scriptDraft: ScriptDraft | null;
   readiness: Readiness | null;
   workspaceAssets: WorkspaceAssetIndex | null;
   materialBusy: boolean;
@@ -687,7 +725,7 @@ function StageWorkspace({
         />
       ) : null}
       {activeStage === "analyze" ? <AnalyzePanel form={form} update={update} /> : null}
-      {activeStage === "script" ? <ScriptPanel form={form} update={update} /> : null}
+      {activeStage === "script" ? <ScriptPanel form={form} update={update} draft={scriptDraft} /> : null}
       {activeStage === "edit" ? (
         <EditPanel
           form={form}
@@ -897,24 +935,49 @@ function AnalyzePanel({ form, update }: FormPanelProps) {
   );
 }
 
-function ScriptPanel({ form, update }: FormPanelProps) {
+function ScriptPanel({ form, update, draft }: FormPanelProps & { draft: ScriptDraft | null }) {
   return (
     <div className="stage-layout script-layout">
       <section className="stage-form-card">
-        <Field label="行业赛道" value={form.niche} onChange={(value) => update("niche", value)} />
+        <Field label="选题（来自热点选题卡或自己写）" multiline value={form.scriptTopic} onChange={(value) => update("scriptTopic", value)} />
         <Field label="目标人群" value={form.audience} onChange={(value) => update("audience", value)} />
-        <Field label="核心人设/产品" value={form.persona} onChange={(value) => update("persona", value)} />
-        <Field label="热点关键词" multiline value={form.keywords} onChange={(value) => update("keywords", value)} />
+        <Field label="参考爆款（只借鉴方法，每行一个）" multiline value={form.references} onChange={(value) => update("references", value)} />
+        <small className="hint">点上方“生成脚本方案”调用 /api/script/generate，由 LLM 产出可直接开拍的分镜脚本。未配置 LLM key 时会明确报错，不出假模板。</small>
       </section>
-      <section className="script-preview">
-        <strong>真实输出</strong>
-        <ol>
-          <li>标题和前 3 秒钩子。</li>
-          <li>分段脚本和字幕样式。</li>
-          <li>素材清单和镜头用途。</li>
-          <li>结尾互动或转化动作。</li>
-        </ol>
-      </section>
+      {draft ? (
+        <section className="script-result">
+          <div className="script-titles">
+            <strong>候选标题</strong>
+            <ul>{draft.titles.map((title) => <li key={title}>{title}</li>)}</ul>
+          </div>
+          <p className="script-hook"><strong>开场钩子：</strong>{draft.hook}</p>
+          <ol className="script-beats">
+            {draft.beats.map((beat, index) => (
+              <li key={index} className="script-beat">
+                <span className="beat-time">{beat.time}</span>
+                <div className="beat-body">
+                  <p><strong>画面：</strong>{beat.shot}</p>
+                  <p><strong>口播：</strong>{beat.voiceover}</p>
+                  <p><strong>字幕：</strong>{beat.caption}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="script-bgm"><strong>配乐：</strong>{draft.bgm}</p>
+          <p className="script-tags">{draft.tags.map((tag) => <span key={tag}>{tag.startsWith("#") ? tag : `#${tag}`}</span>)}</p>
+          {draft.platformTips ? <p className="script-tips"><strong>平台适配：</strong>{draft.platformTips}</p> : null}
+        </section>
+      ) : (
+        <section className="script-preview">
+          <strong>真实输出（点“生成脚本方案”后显示）</strong>
+          <ol>
+            <li>候选标题和前 3 秒钩子。</li>
+            <li>分镜节拍：时间 / 画面 / 口播 / 字幕。</li>
+            <li>配乐建议和话题标签。</li>
+            <li>平台适配建议。</li>
+          </ol>
+        </section>
+      )}
     </div>
   );
 }

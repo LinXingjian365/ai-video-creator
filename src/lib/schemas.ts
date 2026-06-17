@@ -207,6 +207,14 @@ export const trendReportSchema = z.object({
   topN: z.coerce.number().int().min(1).max(50).default(20)
 });
 
+export const scriptGenerateSchema = z.object({
+  topic: z.string().min(1),
+  platform: z.enum(["douyin", "bilibili", "kuaishou"]).default("douyin"),
+  audience: z.string().min(1).optional(),
+  durationSec: z.coerce.number().int().positive().max(600).default(45),
+  references: z.array(z.string().min(1)).default([])
+});
+
 export const materialImportSchema = z.object({
   url: z.string().url(),
   collectionName: z.string().min(1).max(80).optional(),

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { workspaceRoot } from "@/lib/paths";
 
-export type TaskType = "info" | "clip" | "merge" | "split" | "video-variants" | "jianying-plan" | "jianying-draft" | "auto-plan" | "auto-render" | "auto-simulate" | "creator-suite" | "trend-report" | "material-import" | "material-analysis";
+export type TaskType = "info" | "clip" | "merge" | "split" | "video-variants" | "jianying-plan" | "jianying-draft" | "auto-plan" | "auto-render" | "auto-simulate" | "creator-suite" | "trend-report" | "script-generate" | "material-import" | "material-analysis";
 export type TaskStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface TaskRecord {
