@@ -13,6 +13,7 @@ export interface ScriptPackageProps {
   tags?: string[];
   bgm?: string;
   platform?: string;
+  durationSec?: number;
 }
 
 const fallbackProps: ScriptPackageProps = {
