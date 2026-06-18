@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validationErrorResponse } from "@/lib/api";
-import { buildN8nWorkflowBlueprint, triggerN8nOrchestration } from "@/lib/orchestration/n8n";
+import { buildN8nWorkflowBlueprint, exportN8nWorkflowFile, triggerN8nOrchestration } from "@/lib/orchestration/n8n";
 import { n8nOrchestrationSchema } from "@/lib/schemas";
 import { appendTaskLog, completeTask, createTask, failTask, type TaskRecord, updateTask } from "@/lib/tasks";
 
@@ -31,6 +31,10 @@ async function runN8n(taskId: string, input: ReturnType<typeof n8nOrchestrationS
     updateTask(taskId, { status: "processing", progress: 35 });
     appendTaskLog(taskId, "Build n8n full-chain workflow payload.");
     const result = await triggerN8nOrchestration(input);
+    if (input.exportWorkflow) {
+      appendTaskLog(taskId, "Export n8n importable workflow JSON.");
+      result.workflowExport = await exportN8nWorkflowFile(input);
+    }
     appendTaskLog(taskId, result.sent ? "n8n webhook sent." : result.message);
     return completeTask(taskId, result);
   } catch (error) {

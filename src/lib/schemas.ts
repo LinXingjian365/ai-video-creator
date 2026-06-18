@@ -313,7 +313,8 @@ export const n8nOrchestrationSchema = z.object({
   videoPath: z.string().min(1).optional(),
   queueItemId: z.string().min(1).optional(),
   analyticsWindow: z.enum(["30m", "24h", "7d", "custom"]).default("30m"),
-  manualConfirm: z.string().optional()
+  manualConfirm: z.string().optional(),
+  exportWorkflow: z.coerce.boolean().default(false)
 });
 
 export const materialImportSchema = z.object({

@@ -504,7 +504,7 @@ Postiz adapter 依据官方 Public API：`Authorization` header、`POST /public/
 
 ### POST `/api/orchestration/n8n`
 
-生成或触发全链路 n8n webhook。默认 `mode` 为 `dry-run`，只返回 payload 预览；只有在 `mode: "webhook"`、配置 `N8N_WEBHOOK_URL`，且 `manualConfirm` 为 `CONFIRM_N8N_WEBHOOK` 时才会 POST 到 n8n。payload 不包含 API key。
+生成或触发全链路 n8n webhook。默认 `mode` 为 `dry-run`，只返回 payload 预览；只有在 `mode: "webhook"`、配置 `N8N_WEBHOOK_URL`，且 `manualConfirm` 为 `CONFIRM_N8N_WEBHOOK` 时才会 POST 到 n8n。payload 不包含 API key。传入 `exportWorkflow: true` 时，会额外生成可导入 n8n 的 workflow JSON 到 `workspace/drafts/n8n-workflow-*.json`。
 
 ```json
 {
@@ -517,7 +517,8 @@ Postiz adapter 依据官方 Public API：`Authorization` header、`POST /public/
   "durationSec": 45,
   "references": ["https://example.com/reference"],
   "videoPath": "workspace/output/publish/demo-douyin.mp4",
-  "analyticsWindow": "30m"
+  "analyticsWindow": "30m",
+  "exportWorkflow": true
 }
 ```
 

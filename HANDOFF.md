@@ -162,14 +162,21 @@ src/
 - `github-repo-and-credential-gotcha.md` â€” GitHub å‡­è¯è¸©å‘è®°å½•
 - `MEMORY.md` â€” æ‰€æœ‰è®°å¿†çš„ç´¢å¼•
 
-## Codex ¸üĞÂ: n8n ×Ô¶¯±àÅÅÒÑ½ÓÈë
+## Codex æ›´æ–°: n8n è‡ªåŠ¨ç¼–æ’å·²æ¥å…¥
 
-ÒÑÍê³É£º
-- `src/lib/orchestration/n8n.ts`£ºÉú³É n8n workflow blueprint ºÍÈ«Á´Â· payload£»Ä¬ÈÏ dry-run£»webhook Ä£Ê½ĞèÒª `CONFIRM_N8N_WEBHOOK`¡£
-- `src/app/api/orchestration/n8n/route.ts`£º`GET` ·µ»ØÅäÖÃ×´Ì¬/À¶Í¼£¬`POST` ´´½¨ `n8n-orchestration` ÈÎÎñ²¢Éú³É payload »ò´¥·¢ webhook¡£
-- `src/app/page.tsx`£ºÔËÓª¸´ÅÌÃæ°åĞÂÔö n8n ±àÅÅ¿¨Æ¬£¬°´Å¥¿Éµã»÷Éú³É payload »ò´¥·¢ webhook¡£
-- `.env.example`£ºÔö¼Ó `APP_BASE_URL`¡¢`N8N_WEBHOOK_URL`¡¢`N8N_WEBHOOK_SECRET`¡£
+å·²å®Œæˆï¼š
+- `src/lib/orchestration/n8n.ts`ï¼šç”Ÿæˆ n8n workflow blueprint å’Œå…¨é“¾è·¯ payloadï¼›é»˜è®¤ dry-runï¼›webhook æ¨¡å¼éœ€è¦ `CONFIRM_N8N_WEBHOOK`ã€‚
+- `src/app/api/orchestration/n8n/route.ts`ï¼š`GET` è¿”å›é…ç½®çŠ¶æ€/è“å›¾ï¼Œ`POST` åˆ›å»º `n8n-orchestration` ä»»åŠ¡å¹¶ç”Ÿæˆ payload æˆ–è§¦å‘ webhookã€‚
+- `src/app/page.tsx`ï¼šè¿è¥å¤ç›˜é¢æ¿æ–°å¢ n8n ç¼–æ’å¡ç‰‡ï¼ŒæŒ‰é’®å¯ç‚¹å‡»ç”Ÿæˆ payload æˆ–è§¦å‘ webhookã€‚
+- `.env.example`ï¼šå¢åŠ  `APP_BASE_URL`ã€`N8N_WEBHOOK_URL`ã€`N8N_WEBHOOK_SECRET`ã€‚
 
-ÏÂÒ»²½£º
-- ÔÚÕæÊµ n8n Àïµ¼Èë/´î½¨ workflow£¬ÅäÖÃ¶¨Ê±´¥·¢¡¢Ê§°ÜÖØÊÔºÍ¶Ô±¾µØ `APP_BASE_URL` µÄ»Øµ÷¡£
-- ÅäÖÃÕæÊµ Postiz/social-auto-upload µÇÂ¼Ì¬ºó£¬ÏÈ´´½¨ Postiz draft£¬²»Ö±½ÓÕæ·¢¡£
+## Codex æ›´æ–°: n8n workflow JSON å¯¼å‡º
+
+å·²å®Œæˆï¼š
+- `src/lib/orchestration/n8n.ts`ï¼šæ–°å¢ `buildN8nImportableWorkflow()` å’Œ `exportN8nWorkflowFile()`ï¼Œç”Ÿæˆä¸å« credentials/API key çš„ n8n workflow JSONã€‚
+- `/api/orchestration/n8n`ï¼šè¯·æ±‚é‡Œä¼  `exportWorkflow: true` ä¼šå†™å…¥ `workspace/drafts/n8n-workflow-*.json` å¹¶åœ¨ä»»åŠ¡ç»“æœè¿”å›è·¯å¾„ã€‚
+- `src/app/page.tsx`ï¼šè¿è¥å¤ç›˜é¢æ¿æ–°å¢â€œå¯¼å‡º workflow JSONâ€æŒ‰é’®ã€‚
+
+ä¸‹ä¸€æ­¥ï¼š
+- æŠŠå¯¼å‡ºçš„ JSON å¯¼å…¥çœŸå® n8n å®ä¾‹ï¼Œè°ƒé€šå®šæ—¶è§¦å‘ã€å¤±è´¥é‡è¯•ã€approved é˜Ÿåˆ— id æ˜ å°„å’Œ analytics æ•°æ®æºæ˜ å°„ã€‚
+- é…ç½®çœŸå® Postiz/social-auto-upload ç™»å½•æ€åï¼Œå…ˆåˆ›å»º Postiz draftï¼Œä¸ç›´æ¥çœŸå‘ã€‚

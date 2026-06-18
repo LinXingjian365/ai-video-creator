@@ -779,7 +779,7 @@ export default function Home() {
     }
   }
 
-  async function triggerN8n(mode: "dry-run" | "webhook") {
+  async function triggerN8n(mode: "dry-run" | "webhook", exportWorkflow = false) {
     if (!form.scriptTopic.trim()) {
       setMessage("先填写选题，再生成 n8n 全链路编排。");
       return;
@@ -801,8 +801,9 @@ export default function Home() {
         videoPath: form.publishSourcePath.trim() || undefined,
         queueItemId: approvedItem?.id,
         analyticsWindow: form.analyticsWindow,
-        manualConfirm: form.n8nManualConfirm || undefined
-      }, mode === "webhook" ? "n8n webhook 触发流程已完成" : "n8n 编排 payload 已生成");
+        manualConfirm: form.n8nManualConfirm || undefined,
+        exportWorkflow
+      }, exportWorkflow ? "n8n workflow JSON 已导出" : mode === "webhook" ? "n8n webhook 触发流程已完成" : "n8n 编排 payload 已生成");
       const final = data.task?.status === "completed" || data.task?.status === "failed"
         ? data.task as TaskRecord
         : await pollTaskUntilDone(data.task.id);
@@ -1160,7 +1161,7 @@ function StageWorkspace({
   onApprovePublishQueue: (id: string) => void;
   onDispatchPublishQueue: (id: string) => void;
   onImportAnalytics: () => void;
-  onTriggerN8n: (mode: "dry-run" | "webhook") => void;
+  onTriggerN8n: (mode: "dry-run" | "webhook", exportWorkflow?: boolean) => void;
 }) {
   const copy = stageCopy[activeStage];
   const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
@@ -1882,7 +1883,7 @@ function ReviewPanel({
   n8nBusy: boolean;
   n8nResult: N8nOrchestrationResult | null;
   onImportAnalytics: () => void;
-  onTriggerN8n: (mode: "dry-run" | "webhook") => void;
+  onTriggerN8n: (mode: "dry-run" | "webhook", exportWorkflow?: boolean) => void;
   readiness: Readiness | null;
   update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
 }) {
@@ -1911,6 +1912,10 @@ function ReviewPanel({
             {n8nBusy ? <Loader2 className="spin" size={16} /> : <Rocket size={16} />}
             触发 n8n webhook
           </button>
+          <button className="secondary-button" disabled={n8nBusy} onClick={() => onTriggerN8n("dry-run", true)} type="button">
+            {n8nBusy ? <Loader2 className="spin" size={16} /> : <FileJson size={16} />}
+            导出 workflow JSON
+          </button>
           <small>触发 webhook 需要填写 CONFIRM_N8N_WEBHOOK；payload 不包含任何 API key。</small>
         </div>
         {n8nResult ? (
@@ -1918,6 +1923,7 @@ function ReviewPanel({
             <strong>{n8nResult.status} · {n8nResult.sent ? "webhook 已发送" : "预览/拦截"}</strong>
             <small>{n8nResult.message}</small>
             {n8nResult.endpoint ? <code>{n8nResult.endpoint}</code> : null}
+            {n8nResult.workflowExport ? <code>{n8nResult.workflowExport.workflowPath}</code> : null}
             <small>{n8nResult.payload.steps.length} steps / run {n8nResult.payload.runId.slice(0, 8)}</small>
           </div>
         ) : null}

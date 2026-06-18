@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildN8nImportableWorkflow,
   buildN8nWorkflowBlueprint,
   buildN8nWorkflowPayload,
+  exportN8nWorkflowFile,
   N8N_CONFIRM_TEXT,
   triggerN8nOrchestration
 } from "@/lib/orchestration/n8n";
@@ -91,5 +93,39 @@ describe("n8n orchestration", () => {
     const blueprint = buildN8nWorkflowBlueprint("http://localhost:3000/");
     expect(blueprint.nodes.some((node) => node.type === "manualApproval")).toBe(true);
     expect(blueprint.nodes.map((node) => node.target).filter(Boolean)).toContain("http://localhost:3000/api/publish/dispatch");
+  });
+
+  it("builds an importable n8n workflow scaffold without credentials", () => {
+    const workflow = buildN8nImportableWorkflow(
+      { topic: "AI video topic", platform: "douyin", category: "tech" },
+      {
+        APP_BASE_URL: "http://127.0.0.1:5182",
+        N8N_WEBHOOK_SECRET: "do-not-include"
+      }
+    );
+
+    expect(workflow.nodes.map((node) => node.type)).toEqual(expect.arrayContaining([
+      "n8n-nodes-base.scheduleTrigger",
+      "n8n-nodes-base.webhook",
+      "n8n-nodes-base.httpRequest",
+      "n8n-nodes-base.stickyNote"
+    ]));
+    expect(workflow.connections["01 Trend report"].main[0][0].node).toBe("02 Generate script");
+    expect(workflow.nodes.find((node) => node.name === "05 Dispatch approved draft")?.disabled).toBe(true);
+    expect(JSON.stringify(workflow)).not.toContain("do-not-include");
+  });
+
+  it("exports the n8n workflow scaffold to drafts", async () => {
+    const result = await exportN8nWorkflowFile(
+      { topic: "AI video topic", platform: "bilibili", category: "tech" },
+      {
+        env: { APP_BASE_URL: "http://127.0.0.1:5182" },
+        now: () => new Date("2026-06-18T00:00:00.000Z")
+      }
+    );
+
+    expect(result.workflowPath).toBe("workspace/drafts/n8n-workflow-bilibili-2026-06-18T00-00-00-000Z.json");
+    expect(result.workflow.nodes.length).toBeGreaterThanOrEqual(8);
+    expect(result.importNotes.join("\n")).toContain("No credentials");
   });
 });
