@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, interpolate, OffthreadVideo, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { activeCueIndex, buildCaptionCues, chunkCaptionCues, cuesFromTimings } from "./captions";
 
 export interface ScriptPackageProps {
@@ -16,6 +16,7 @@ export interface ScriptPackageProps {
   platform?: string;
   durationSec?: number;
   subtitleCues?: Array<{ text: string; startSec: number; endSec: number }>;
+  broll?: Array<{ src: string; startSec: number; endSec: number; clipStartSec?: number }>;
 }
 
 const fallbackProps: ScriptPackageProps = {
@@ -60,8 +61,32 @@ export const ScriptPackage: React.FC<Partial<ScriptPackageProps>> = (props) => {
       })
     : 0;
 
+  const broll = merged.broll ?? [];
+  const hasBroll = broll.length > 0;
+
   return (
-    <AbsoluteFill style={styles.root}>
+    <AbsoluteFill style={hasBroll ? styles.rootBroll : styles.root}>
+      {hasBroll
+        ? broll.map((clip, index) => {
+            const from = Math.round(clip.startSec * fps);
+            const duration = Math.max(1, Math.round((clip.endSec - clip.startSec) * fps));
+            const src = /^[a-z]+:\/\//i.test(clip.src) ? clip.src : staticFile(clip.src);
+            return (
+              <Sequence key={index} from={from} durationInFrames={duration} layout="none">
+                <AbsoluteFill>
+                  <OffthreadVideo
+                    src={src}
+                    muted
+                    trimBefore={Math.round((clip.clipStartSec ?? 0) * fps)}
+                    style={styles.brollVideo}
+                  />
+                </AbsoluteFill>
+              </Sequence>
+            );
+          })
+        : null}
+      {hasBroll ? <AbsoluteFill style={styles.scrim} /> : null}
+
       <div style={styles.topBar}>
         <span style={styles.platform}>{merged.platform ?? "short-video"}</span>
         <span style={styles.time}>{Math.floor(frame / fps)}s</span>
@@ -109,6 +134,20 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#f5fbf8",
     fontFamily: "Arial, 'Microsoft YaHei', sans-serif",
     overflow: "hidden"
+  },
+  rootBroll: {
+    background: "#05100f",
+    color: "#f5fbf8",
+    fontFamily: "Arial, 'Microsoft YaHei', sans-serif",
+    overflow: "hidden"
+  },
+  brollVideo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover"
+  },
+  scrim: {
+    background: "linear-gradient(180deg, rgba(4,14,16,0.62) 0%, rgba(4,14,16,0.38) 38%, rgba(4,14,16,0.72) 100%)"
   },
   topBar: {
     position: "absolute",

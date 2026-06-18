@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
+import { stageBrollAssets } from "@/lib/broll";
 import { outputRoot, resolveLocalPath } from "@/lib/paths";
 import type { ScriptPackageProps } from "@/remotion/ScriptPackage";
 
@@ -26,10 +27,23 @@ export async function renderScriptPackage(input: RemotionRenderInput): Promise<R
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const entryPoint = path.join(process.cwd(), "src", "remotion", "index.ts");
+
+  // 本地 B-roll 必须暂存进 publicDir 供 staticFile 解析(compositor 不收 file://);bundle 会把它拷进产物。
+  let stagingDir: string | undefined;
+  let broll = input.broll;
+  if (input.broll && input.broll.length > 0) {
+    stagingDir = path.join(outputRoot, "remotion-public", `${Date.now()}-broll`);
+    broll = await stageBrollAssets(input.broll, stagingDir);
+  }
+
   const bundleLocation = await bundle({
     entryPoint,
+    publicDir: stagingDir,
     webpackOverride: (config) => config
   });
+  if (stagingDir) {
+    await fs.rm(stagingDir, { recursive: true, force: true });
+  }
   const inputProps = {
     title: input.title,
     hook: input.hook,
@@ -38,7 +52,8 @@ export async function renderScriptPackage(input: RemotionRenderInput): Promise<R
     bgm: input.bgm,
     platform: input.platform,
     durationSec: input.durationSec,
-    subtitleCues: input.subtitleCues
+    subtitleCues: input.subtitleCues,
+    broll
   };
   const composition = await selectComposition({
     serveUrl: bundleLocation,
