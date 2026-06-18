@@ -1,23 +1,25 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**接手时间**:2026-06-18  
-**上一会话**:Claude Code (Opus 4.8)  
-**分支**:`feat/s1-trend-intelligence` (29 commits, 领先 origin 5 commits, **未 push**)
+**最后更新**:2026-06-18(Claude Opus 4.8 收尾会话)  
+**分支**:`feat/s1-trend-intelligence` — 44 commits,所有改动**已提交,未 push**  
+**状态**:✅ production build 绿 / 194 tests 绿(33 files) / typecheck 绿
+
+> **如果上一轮 session 跑过 push**,先 `git log --oneline origin/feat/s1-trend-intelligence..HEAD` 确认 delta。
 
 ---
 
 ## 项目一句话
 
-本地 AI 视频创作控制台：B站热点抓取 → LLM 脚本生成 → TTS 配音 → Remotion 成片渲染 → 多平台变体 → 剪映草稿。Next.js 15 App Router, 全 TypeScript。
+本地 AI 视频创作控制台:B站/抖音/快手/YouTube 热点抓取 → Exa/Firecrawl 网页事实 → LLM 脚本生成(带引用) → TTS 配音 → Remotion 成片(B-roll + 烧录字幕 + BGM 自动选曲) → 多平台变体 → 发布队列(人工确认) → 数据回流。Next.js 15 App Router,35 个 API 路由,全 TypeScript。
 
 ## 快速启动
 
 ```bash
 cd "A:/AI视频生成剪辑助手"
-# 确保 .env.local 存在且含 DEEPSEEK_API_KEY
-npm run dev    # 默认 high port, 浏览器打开 http://127.0.0.1:<port>
-npm run build  # 构建前必须先停 dev, 否则 .next 冲突报 PageNotFoundError 假失败
-npx vitest run # 123 tests, 21 files
+# 确保 .env.local 存在且含 DEEPSEEK_API_KEY、TIKHUB_API_KEY 等(见 .env.example)
+npm run dev    # 默认 high port, 浏览器开 http://127.0.0.1:<port>
+npm run build  # 构建前必须先停 dev + rm -rf .next, 否则 PageNotFoundError 假失败
+npx vitest run # 194 tests, 33 files
 ```
 
 ## 当前状态
@@ -25,21 +27,22 @@ npx vitest run # 123 tests, 21 files
 | 项 | 状态 |
 |---|---|
 | production build | ✅ 绿 |
-| 测试 (123) | ✅ 全绿 |
+| 测试 (194 in 33 files) | ✅ 全绿 |
 | typecheck | ✅ 绿 |
-| B-roll 素材合成 | ✅ 已实现+实测 |
+| B-roll 素材合成 | ✅ stageBrollAssets 暂存 publicDir + staticFile |
 | AI 配音 (TTS) | ✅ edge-tts / SAPI 双引擎 |
-| 字幕烧录 (配音时间轴) | ✅ 长句分段轮播 |
-| 一键全链路 | ✅ |
-| 发布 dry-run | ✅ |
-| 多平台热点源 | ✅ B站真实 + YouTube/抖音(自托管TTD)/快手(TikHub) + Exa/Firecrawl 网页证据 |
-| UI 重设计 | ✅ Midnight Neon 暗夜霓虹 |
+| 字幕烧录 (配音时间轴) | ✅ edge-tts SRT 真实时间 + 长句分段轮播 |
+| 一键全链路 | ✅ 选题→脚本→配音→成片→变体 |
+| 多平台热点源 | ✅ B站真实 + 抖音(TTD自托管/TikHub) + 快手(TikHub) + YouTube(Data API v3) |
+| 网页事实证据 | ✅ Exa + Firecrawl 双源,自动喂进 LLM 脚本 prompt |
+| UI 重设计 | ✅ Midnight Neon(暗夜霓虹) |
 | BGM 混音 | ✅ FFmpeg 渲染后混音(无配音/配音双路径) |
-| BGM 智能选曲 | ✅ 本地库扫描 + mood 关键词匹配(零依赖,无 API) |
-| 平台发布脚手架 | ✅ 本地队列 + adapter 状态 + 人工确认闸门 |
-| 真实发布 adapter 草案 | ✅ Postiz draft / social-auto-upload command preview / live 开关 |
-| 数据回流 | ✅ 本地 analytics ledger + 30m/24h/7d 快照建议 |
-| **真实账号联调 / n8n 自动编排** | **← 下一项** |
+| BGM 智能选曲 | ✅ 本地库 + LLM mood 匹配(零 API) |
+| 发布脚手架 | ✅ 队列 + adapter 体检 + preflight + dispatch + 人工确认闸门 |
+| 数据回流 | ✅ analytics ledger + 30m/24h/7d 快照建议 |
+| n8n 编排 | ✅ payload 生成 + webhook 触发 + workflow JSON 导出 |
+| TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub) |
+| **下一项** | 真实联调:起 Postiz/n8n/TTD docker → 配 integration → 真实 draft/定时任务 |
 
 ## 关键技术细节
 
@@ -70,27 +73,34 @@ npx vitest run # 123 tests, 21 files
 ```
 src/
   app/                  # Next.js App Router
-    page.tsx            # 单页控制台 (1827行, 包含所有面板组件)
+    page.tsx            # 单页控制台 (2781 行, 所有面板组件内联)
     globals.css         # Midnight Neon 设计系统
     layout.tsx          # 字体挂载 (next/font/local)
-    fonts/              # 自托管 woff2 文件
-    api/                # 27 个 API 路由
-  lib/
+    fonts/              # 自托管 Sora + IBM Plex Mono woff2
+    api/                # 35 个 API 路由
+  lib/                  # 47 个 .ts(不含 .test.ts)
     broll.ts            # B-roll planner + stageBrollAssets
-    audio-mix.ts        # BGM / narration+BGM FFmpeg mix layer
-    remotion-render.ts  # Remotion 渲染入口 + publicDir 暂存逻辑
-    narrated-render.ts  # 配音成片 (TTS → Remotion → narration/BGM 混音)
-    tts/synthesize.ts   # TTS 合成 (edge-tts/SAPI 可插拔)
+    audio-mix.ts        # BGM / narration+BGM FFmpeg mix
+    bgm/library.ts      # 本地 BGM 库扫描 + LLM mood 匹配选曲
+    remotion-render.ts  # Remotion 渲染入口 + publicDir 暂存
+    narrated-render.ts  # 配音成片 (TTS → Remotion → 混音)
+    tts/synthesize.ts   # TTS (edge-tts/SAPI 可插拔)
     full-chain.ts       # 一键全链路编排
     llm/client.ts       # LLM 客户端 (DeepSeek 默认)
+    script/generate.ts  # 脚本生成 + 网页证据引用 + citedSources
+    trend/sources/      # bilibili/douyin(→TTD or TikHub)/kuaishou/youtube/tiktok-downloader/tikhub
+    trend/research.ts   # TikHub 关键词搜索/详情/评论(竞品研究)
+    trend/evidence.ts   # Exa + Firecrawl 网页证据搜索(自动选 provider)
     publish/adapters.ts # social-auto-upload/Postiz/manual adapter 状态
-    publish/queue.ts    # 本地待发布队列 + 人工确认闸门
-    publish/dispatch.ts # approved 队列项 → Postiz 草稿/命令预览
-    analytics/ledger.ts # 平台数据快照、信号计算、下一步动作建议
+    publish/queue.ts    # 待发布队列 + 人工确认闸门
+    publish/preflight.ts# 发布账号联调体检(POSTIZ key + integrations probe)
+    publish/dispatch.ts # approved 队列项 → Postiz draft / 命令预览
+    analytics/ledger.ts # 平台数据快照 + 信号 + 建议
+    orchestration/n8n.ts# n8n payload + webhook + workflow JSON 导出
   remotion/
-    ScriptPackage.tsx   # Remotion 组件 (B-roll + 字幕 + 无配音/配音双模式)
+    ScriptPackage.tsx   # 组件 (B-roll + 字幕 + 无配音/配音双模式)
     captions.ts         # 字幕引擎 (真实时间轴 + 长句分段)
-    Root.tsx            # Remotion Composition 注册
+    Root.tsx            # Composition 注册
 ```
 
 ## 已完成: BGM 混音 (优先级②)
@@ -139,9 +149,15 @@ src/
 - Postiz live 只创建 `type:"draft"`，不调用 `now` 真发。
 - social-auto-upload 只生成命令预览，不执行外部上传命令。
 
-## 下一步: 真实账号联调 / n8n 自动编排
+## 下一步:真实账号联调(代码全就绪,等用户配 docker + key)
 
-目标：配置真实 Postiz/social-auto-upload 登录态后做一次草稿联调；同时建立 n8n webhook，把“热点 → 脚本 → 成片 → 队列 → 复盘导入”串成定时任务。
+代码层面 n8n payload / Postiz dispatch / TTD adapter / BGM 选曲 全部已写完,剩下纯 ops:
+
+1. **n8n 自托管**:`docker-compose.yml` 在 `docs/FREE_ALTERNATIVES.md`,起容器 → UI 点"导出 workflow JSON" → n8n 后台 import → 调通定时触发。
+2. **Postiz 自托管**:`docker-compose.yml` 在 `docs/FREE_ALTERNATIVES.md`,起容器 → 配 douyin/kuaishou/bilibili integration ID → `.env.local` 填 `POSTIZ_API_KEY` + `POSTIZ_INTEGRATION_ID_*` + `PUBLISH_LIVE_ENABLED=true` → `/api/publish/dispatch` 走真实 draft API。
+3. **TTD 容器**:`docker pull joeanamier/tiktok-downloader && docker run -d -p 5555:5555 joeanamier/tiktok-downloader` → `.env.local` 写 `TTD_BASE_URL=http://127.0.0.1:5555` → 抖音热榜自动走 TTD(不再 402)。
+4. **KS-Downloader adapter**:快手版本(JoeanAmier 姊妹项目),代码层照搬 `tiktok-downloader.ts` 即可加。
+5. **BGM 库填充**:把 CC0 mp3 按 mood 落进 `workspace/input/audio/<uplifting|calm|tech|cinematic|warm|dark|funny>/`,LLM 选曲就有真匹配。
 
 ## Git 注意事项
 
@@ -152,7 +168,7 @@ src/
   git config --local credential.helper manager
   # 或直接用个人 access token
   ```
-- 当前有 5 个未推送 commits, **建议在 BGM 混音完成后一起 push**。
+- 当前 44 commits 全部未推送(2026-06-18 收尾)。push 命令:`git push -u origin feat/s1-trend-intelligence`,失败先看 [GitHub 凭证坑](C:/Users/Administrator/.claude/projects/A--AI--------/memory/github-repo-and-credential-gotcha.md)。
 
 ## 记忆文件
 
