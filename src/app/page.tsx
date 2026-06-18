@@ -93,7 +93,7 @@ const capabilities: Array<{
     id: "trend",
     icon: Flame,
     title: "热点趋势",
-    body: "真实抓取 B站分区排行榜，按互动和速度打分，LLM 只解释不编数据",
+    body: "B站榜单 · 打分 · 解读",
     action: "生成热点情报",
     endpoint: "trend-report"
   },
@@ -101,7 +101,7 @@ const capabilities: Array<{
     id: "collect",
     icon: Network,
     title: "联网素材",
-    body: "导入公开视频参考素材，并用 ASR、场景检测、静音检测生成素材信号",
+    body: "导入 · ASR · 场景信号",
     action: "查看工具目录",
     endpoint: "integrations"
   },
@@ -109,7 +109,7 @@ const capabilities: Array<{
     id: "analyze",
     icon: Search,
     title: "爆款拆解",
-    body: "只拆爆款方法：开头、节奏、评论引导、留存结构，输出剪辑 decision JSON",
+    body: "方法 → decision JSON",
     action: "生成拆解计划",
     endpoint: "auto-plan"
   },
@@ -117,7 +117,7 @@ const capabilities: Array<{
     id: "script",
     icon: Sparkles,
     title: "文案脚本",
-    body: "根据赛道、人群、参考视频生成钩子、脚本节拍和字幕风格",
+    body: "钩子 · 分镜 · 字幕",
     action: "生成脚本方案",
     endpoint: "script-generate"
   },
@@ -125,7 +125,7 @@ const capabilities: Array<{
     id: "edit",
     icon: Scissors,
     title: "自动剪辑",
-    body: "读取分析 JSON 或模拟素材，真实调用 FFmpeg 裁剪、合并并输出剪映计划",
+    body: "FFmpeg 裁剪合并 · 剪映",
     action: "立即模拟剪辑",
     endpoint: "auto-simulate"
   },
@@ -133,7 +133,7 @@ const capabilities: Array<{
     id: "publish",
     icon: UploadCloud,
     title: "发布矩阵",
-    body: "生成抖音、快手、B站发布包，真发前只做 dry-run 和人工确认",
+    body: "多平台包 · dry-run",
     action: "生成发布包",
     endpoint: "creator-suite"
   },
@@ -141,7 +141,7 @@ const capabilities: Array<{
     id: "review",
     icon: BarChart3,
     title: "运营复盘",
-    body: "检查本地命令、API Key、LLM 网关、剪映和发布工具是否就绪",
+    body: "命令 · Key · 网关体检",
     action: "检查环境",
     endpoint: "readiness"
   },
@@ -149,7 +149,7 @@ const capabilities: Array<{
     id: "predict",
     icon: Rocket,
     title: "爆火预测",
-    body: "基于真实榜单和确定性评分估算潜力，避免凭空给概率",
+    body: "潜力分 · 置信度",
     action: "计算爆款指数",
     endpoint: "trend-report"
   }
@@ -158,42 +158,42 @@ const capabilities: Array<{
 const stageCopy: Record<WorkflowStage, { headline: string; description: string; proof: string[] }> = {
   trend: {
     headline: "B站真实热点情报",
-    description: "选择分区后调用 `/api/trend/report`，先抓 B站公开排行榜，再用本地 scorer 计算潜力分和置信度。没有 LLM Key 时会明确降级为仅榜单，不伪装成 AI 成功。",
-    proof: ["B站公开排行榜", "确定性评分", "LLM 可选", "诚实降级"]
+    description: "抓 B站公开榜单，本地算潜力分与置信度；无 LLM Key 时只出榜单，不伪装 AI 分析。",
+    proof: ["B站公开榜单", "确定性评分", "LLM 可选", "诚实降级"]
   },
   collect: {
-    headline: "联网素材导入与信号分析",
-    description: "这个阶段负责把合法参考素材落到本地 workspace，并把视频转成可剪辑信号：字幕/ASR、场景切点、静音/有声段、Auto-Editor 预览。工具目录按钮会显示后续 Exa、Firecrawl、TikHub 的配置位。",
+    headline: "素材导入与信号分析",
+    description: "把合法参考素材落到本地 workspace，再转成可剪辑信号:字幕/ASR、场景切点、静音段。",
     proof: ["yt-dlp", "faster-whisper", "PySceneDetect", "Auto-Editor"]
   },
   analyze: {
     headline: "爆款拆解到剪辑计划",
-    description: "这里只拆方法，不搬运内容。根据参考标题/链接和风格要求生成结构化 decision JSON，后续粗剪、剪映草稿和 Remotion 包装都可以接这个计划。",
+    description: "只拆方法不搬运:从参考标题/链接生成结构化 decision JSON，供粗剪与草稿复用。",
     proof: ["参考链接", "开头节奏", "decision JSON", "创作边界"]
   },
   script: {
     headline: "仿创作脚本工厂",
-    description: "根据赛道、人群、参考视频和运营目标生成可执行脚本、钩子、字幕风格和素材清单。这里是创作指导，不直接搬运原视频。",
+    description: "按赛道、人群、参考视频生成可执行脚本、钩子、字幕风格和素材清单。",
     proof: ["钩子", "脚本节拍", "素材需求", "转化结尾"]
   },
   edit: {
-    headline: "本地 FFmpeg 自动剪辑闭环",
-    description: "现在已经能真实生成测试素材、裁剪片段、合并 rough cut，并输出 JianYing plan JSON。真实素材入库后复用同一条渲染链。",
+    headline: "本地 FFmpeg 自动剪辑",
+    description: "真实生成测试素材、裁剪片段、合并 rough cut，并输出剪映 plan JSON。",
     proof: ["FFmpeg", "clip", "merge", "JianYing plan"]
   },
   publish: {
     headline: "多平台发布包",
-    description: "生成标题、标签、比例、发布时间和平台差异策略。真正上传要等 social-auto-upload/Postiz/n8n 配置完成，并且必须先 dry-run。",
+    description: "生成标题、标签、比例和平台策略;真发前必须 dry-run，绝不静默上传。",
     proof: ["抖音", "快手", "B站", "dry-run"]
   },
   review: {
     headline: "全链路环境体检",
-    description: "检查本机命令、API Key、LLM provider、发布和编排工具。缺什么直接显示，不用假装已经接通。",
+    description: "检查本机命令、API Key、LLM provider 与编排工具，缺什么直接显示。",
     proof: ["本地命令", "API Key", "LLM 网关", "下一步"]
   },
   predict: {
-    headline: "用真实榜单做爆款潜力判断",
-    description: "这不是玄学概率。潜力分来自互动率和播放速度，置信度来自数据完整度和新鲜度。AI 只负责解释共性套路和生成可模仿选题卡。",
+    headline: "用真实榜单做潜力判断",
+    description: "潜力分来自互动率和播放速度，置信度看数据完整度;AI 只负责解释套路。",
     proof: ["潜力分", "置信度", "共性套路", "选题卡"]
   }
 };
@@ -742,9 +742,9 @@ export default function Home() {
       <section className="workbench">
         <header className="topbar hero-bar">
           <div>
-            <p>抖音、快手、B站全链路工作台</p>
-            <h1>先用真实热点和流量信号做判断，再让 AI 写、找、剪、发</h1>
-            <span>当前第一优先级是 S1 Trend Intelligence：B站真实排行榜 + 确定性打分 + DeepSeek 可选分析。后续保留豆包 Ark、Claude 中转站、GPT 中转站接入位，不把未接通能力伪装成已完成。</span>
+            <p>抖音 · 快手 · B站 创作控制台</p>
+            <h1>真实热点驱动，AI 写 · 找 · 剪 · 发一条龙</h1>
+            <span>B站真实榜单 + 确定性打分 + DeepSeek 解读；能力未接通时诚实降级，不伪装成功。</span>
           </div>
           <button className="icon-button" onClick={refreshTasks} title="刷新任务" type="button">
             <Clock3 size={18} />
@@ -758,10 +758,9 @@ export default function Home() {
             void runStageAction();
           }}
         >
-          <WorkflowActionPanel activeStage={activeStage} busy={busy} onRun={runStageAction} />
-
           <StageWorkspace
             activeStage={activeStage}
+            busy={busy}
             form={form}
             update={update}
             trendCategory={trendCategory}
@@ -795,13 +794,7 @@ export default function Home() {
           />
 
           <footer className="form-actions">
-            <p>{message || "选择左侧模块，当前按钮会执行对应真实 API 或配置检查。"}</p>
-            <div className="action-buttons">
-              <button className="primary-button" disabled={busy} type="submit">
-                {busy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
-                {activeCapability.action}
-              </button>
-            </div>
+            <p>{message || "选择左侧模块开始。"}</p>
           </footer>
         </form>
       </section>
@@ -811,35 +804,9 @@ export default function Home() {
   );
 }
 
-function WorkflowActionPanel({
-  activeStage,
-  busy,
-  onRun
-}: {
-  activeStage: WorkflowStage;
-  busy: boolean;
-  onRun: () => void;
-}) {
-  const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
-  const Icon = stage.icon;
-
-  return (
-    <section className="workflow-action-panel">
-      <Icon size={22} />
-      <div>
-        <strong>{stage.title}</strong>
-        <p>{stage.body}</p>
-      </div>
-      <button className="primary-button" disabled={busy} onClick={onRun} type="button">
-        {busy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
-        {stage.action}
-      </button>
-    </section>
-  );
-}
-
 function StageWorkspace({
   activeStage,
+  busy,
   form,
   update,
   trendCategory,
@@ -872,6 +839,7 @@ function StageWorkspace({
   onPublishDryRun
 }: {
   activeStage: WorkflowStage;
+  busy: boolean;
   form: CreatorForm;
   update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
   trendCategory: string;
@@ -913,10 +881,15 @@ function StageWorkspace({
           <p>{activeStage.toUpperCase()}</p>
           <h2>{copy.headline}</h2>
           <span>{copy.description}</span>
-          <strong className="stage-command">当前主动作：{stage.action}</strong>
+          <div className="stage-proof">
+            {copy.proof.map((item) => <span key={item}>{item}</span>)}
+          </div>
         </div>
-        <div className="stage-proof">
-          {copy.proof.map((item) => <span key={item}>{item}</span>)}
+        <div className="stage-action">
+          <button className="primary-button" disabled={busy} type="submit">
+            {busy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
+            {stage.action}
+          </button>
         </div>
       </div>
 
@@ -1030,7 +1003,7 @@ function TrendIntelligencePanel({
             onChange={(event) => onTopNChange(Number(event.target.value))}
           />
         </label>
-        <small>真实数据来自 B站公开排行榜。潜力分由互动率和播放速度计算，置信度表示数据支撑强度，不是凭空承诺“必火”。</small>
+        <small>潜力分 = 互动率 × 播放速度，置信度 = 数据支撑强度;不承诺“必火”。</small>
       </section>
 
       {!report ? (
@@ -1109,9 +1082,9 @@ function CollectPanel({ form, update, assets, materialBusy, analysisBusy, onImpo
   return (
     <div className="stage-layout collect-layout">
       <section className="tool-grid">
-        <StageCard icon={Search} title="搜索与热点" body="Exa、Firecrawl、TikHub 负责找热点、标题、评论、参考链接。当前按钮会返回集成目录。" />
-        <StageCard icon={DownloadCloud} title="视频素材导入" body="已接 /api/materials/import：用 yt-dlp 把可合法使用的视频、封面、字幕和元数据入库到 workspace/input/references。" />
-        <StageCard icon={FileJson} title="素材目录" body="统一落盘到 references、raw、broll、audio，后续转写和剪辑都从这里读取。" />
+        <StageCard icon={Search} title="搜索与热点" body="Exa、Firecrawl、TikHub 找热点、标题、参考链接。" />
+        <StageCard icon={DownloadCloud} title="视频素材导入" body="yt-dlp 把可合法使用的视频、字幕、元数据入库。" />
+        <StageCard icon={FileJson} title="素材目录" body="统一落盘 references / raw / broll / audio。" />
       </section>
 
       <section className="stage-form-card material-import-card">
@@ -1137,7 +1110,7 @@ function CollectPanel({ form, update, assets, materialBusy, analysisBusy, onImpo
             {materialBusy ? <Loader2 className="spin" size={18} /> : <DownloadCloud size={18} />}
             导入参考素材
           </button>
-          <small>只导入你有权下载或分析的内容。需要登录态的平台可在 .env.local 配置 YTDLP_COOKIES_PATH。</small>
+          <small>只导入你有权使用的内容;登录态平台可配 YTDLP_COOKIES_PATH。</small>
         </div>
       </section>
 
@@ -1184,7 +1157,7 @@ function CollectPanel({ form, update, assets, materialBusy, analysisBusy, onImpo
             {analysisBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
             分析素材
           </button>
-          <small>当前链路：字幕文件优先；缺字幕时可用 py312 faster-whisper 本地 ASR；PySceneDetect/FFmpeg 做场景检测，Auto-Editor 预览跳剪潜力。</small>
+          <small>字幕优先，缺字幕走本地 faster-whisper ASR;场景检测 + 跳剪预览。</small>
         </div>
       </section>
       <AssetQuickList
@@ -1241,7 +1214,7 @@ function ScriptPanel({
         <Field label="选题（来自热点选题卡或自己写）" multiline value={form.scriptTopic} onChange={(value) => update("scriptTopic", value)} />
         <Field label="目标人群" value={form.audience} onChange={(value) => update("audience", value)} />
         <Field label="参考爆款（只借鉴方法，每行一个）" multiline value={form.references} onChange={(value) => update("references", value)} />
-        <small className="hint">点上方“生成脚本方案”调用 /api/script/generate，由 LLM 产出可直接开拍的分镜脚本。未配置 LLM key 时会明确报错，不出假模板。</small>
+        <small className="hint">LLM 产出可直接开拍的分镜脚本;未配 key 会明确报错，不出假模板。</small>
         <div className="full-chain-config">
           <label className="toggle-row">
             <input checked={form.narrated} onChange={(event) => update("narrated", event.target.checked)} type="checkbox" />
@@ -1262,7 +1235,7 @@ function ScriptPanel({
             {fullChainBusy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
             {form.narrated ? "一键全链路：选题 → AI 配音成片 → 多平台" : "一键全链路：选题 → 成片 → 多平台"}
           </button>
-          <small>调 /api/full-chain：LLM 生成脚本 →{form.narrated ? " AI 配音 +" : ""} Remotion 渲染成片 → FFmpeg 输出抖音/快手/B站多平台变体，一步到位。耗时约 2-4 分钟{form.narrated ? "（配音版略长）" : ""}。</small>
+          <small>脚本 →{form.narrated ? " AI 配音 +" : ""} Remotion 成片 → 抖音/快手/B站多平台变体，一步到位(约 2-4 分钟{form.narrated ? "，配音版略长" : ""})。</small>
         </div>
         {fullChainResult ? (
           <div className="full-chain-result">
@@ -1306,14 +1279,14 @@ function ScriptPanel({
               {scriptPlanBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
               转自动剪辑计划
             </button>
-            <small>按分镜节拍生成 /api/auto/plan 的 scenes 和 decision JSON，落到 workspace/drafts。</small>
+            <small>按分镜生成 decision JSON，落到 workspace/drafts。</small>
           </div>
           <div className="material-import-actions">
             <button className="primary-button" disabled={remotionBusy} onClick={onRenderScriptPackage} type="button">
               {remotionBusy ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
               渲染包装视频
             </button>
-            <small>调用 Remotion 生成带标题、钩子、分镜字幕和进度条的 MP4，输出到 workspace/output/remotion。</small>
+            <small>Remotion 渲染带字幕和进度条的成片 MP4。</small>
           </div>
         </section>
       ) : (
@@ -1357,7 +1330,7 @@ function EditPanel({ form, update, assets, renderAnalysisBusy, onRenderFromAnaly
             {renderAnalysisBusy ? <Loader2 className="spin" size={18} /> : <Scissors size={18} />}
             用分析结果粗剪
           </button>
-          <small>默认读取 workspace/drafts 里最新的 material-analysis-*.json；也可以填具体 JSON 路径。</small>
+          <small>默认读最新 material-analysis JSON，也可填具体路径。</small>
         </div>
       </section>
       <section className="stage-form-card compact">
@@ -1404,7 +1377,7 @@ function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVar
             {variantBusy ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />}
             生成平台版本
           </button>
-          <small>源路径可填具体 MP4，也可填 workspace/output 目录，系统会自动取最新视频。</small>
+          <small>可填具体 MP4 或 output 目录(自动取最新)。</small>
         </div>
       </section>
       <AssetQuickList
@@ -1434,7 +1407,7 @@ function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVar
             {publishDryRunBusy ? <Loader2 className="spin" size={18} /> : <CheckCircle2 size={18} />}
             dry-run 校验
           </button>
-          <small>调 /api/publish/dry-run：标签取自最近生成的脚本草稿。校验通过后才适合接真实发布 API。</small>
+          <small>标签取自最近草稿;校验通过才适合接真实发布 API。</small>
         </div>
         {publishDryRunResult ? (
           <div className={`publish-dryrun-result ${publishDryRunResult.willPublish ? "ok" : "blocked"}`}>
@@ -1514,7 +1487,7 @@ function AssetQuickList({
     <section className="stage-form-card asset-quick-list">
       <div className="form-card-title">
         <strong>{title}</strong>
-        <span>来自 workspace 的真实文件，点击后会填入对应路径。</span>
+        <span>workspace 真实文件，点击填入路径。</span>
       </div>
       {assets.length === 0 ? (
         <small>{empty}</small>
