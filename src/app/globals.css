@@ -1498,6 +1498,108 @@ pre {
   }
 }
 
+/* ---------- 侧栏分组 + 序号 ---------- */
+.nav-group {
+  margin: 12px 6px 2px;
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.nav-group:first-child {
+  margin-top: 0;
+}
+
+.feature-index {
+  flex: 0 0 auto;
+  width: 18px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--faint);
+}
+
+.feature-item.active .feature-index {
+  color: var(--cyan);
+}
+
+/* ---------- 可折叠面板(体检 / JSON) ---------- */
+.panel-fold {
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-fold > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 15px 20px;
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  transition: color 150ms ease;
+}
+
+.panel-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-fold > summary:hover {
+  color: var(--cyan);
+}
+
+.panel-fold > summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--faint);
+  transition: transform 160ms ease;
+}
+
+.panel-fold[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.fold-count {
+  letter-spacing: 0;
+  color: var(--ink-soft);
+}
+
+.panel-fold .readiness-grid,
+.panel-fold > pre {
+  margin: 0 20px 16px;
+}
+
+/* ---------- 任务列表头 ---------- */
+.task-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.task-list-head span {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.task-list-head small {
+  color: var(--faint);
+  font-family: var(--ff-mono);
+  font-size: 11px;
+}
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 1240px) {
   .console-shell {

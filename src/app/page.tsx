@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import {
   BarChart3,
   CheckCircle2,
@@ -707,25 +707,30 @@ export default function Home() {
         </div>
 
         <div className="feature-list">
-          {capabilities.map((item) => {
+          {capabilities.map((item, index) => {
             const Icon = item.icon;
+            const pipeline = index < 6;
             return (
-              <button
-                aria-pressed={activeStage === item.id}
-                className={activeStage === item.id ? "feature-item active" : "feature-item"}
-                key={item.id}
-                onClick={() => {
-                  setActiveStage(item.id);
-                  setMessage("");
-                }}
-                type="button"
-              >
-                <Icon size={18} />
-                <div>
-                  <strong>{item.title}</strong>
-                  <small>{item.body}</small>
-                </div>
-              </button>
+              <Fragment key={item.id}>
+                {index === 0 ? <div className="nav-group">创作主线</div> : null}
+                {index === 6 ? <div className="nav-group">辅助</div> : null}
+                <button
+                  aria-pressed={activeStage === item.id}
+                  className={activeStage === item.id ? "feature-item active" : "feature-item"}
+                  onClick={() => {
+                    setActiveStage(item.id);
+                    setMessage("");
+                  }}
+                  type="button"
+                >
+                  <span className="feature-index">{pipeline ? String(index + 1).padStart(2, "0") : "··"}</span>
+                  <Icon size={18} />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <small>{item.body}</small>
+                  </div>
+                </button>
+              </Fragment>
             );
           })}
         </div>
@@ -1567,7 +1572,7 @@ function TaskPanel({
 }) {
   const recentAssets = workspaceAssets?.assets
     .filter((asset) => ["video", "material-analysis", "jianying-plan", "manifest"].includes(asset.kind))
-    .slice(0, 8) ?? [];
+    .slice(0, 5) ?? [];
 
   return (
     <aside className="task-panel">
@@ -1580,16 +1585,20 @@ function TaskPanel({
       </div>
 
       {readiness ? (
-        <section className="result-box readiness-box">
-          <strong>全链路配置体检</strong>
+        <details className="panel-fold readiness-box">
+          <summary>
+            环境就绪
+            <span className="fold-count">
+              {[...readiness.commands, ...readiness.env, ...(readiness.llm ? [readiness.llm] : [])].filter((c) => c.ok).length}
+              /{readiness.commands.length + readiness.env.length + (readiness.llm ? 1 : 0)}
+            </span>
+          </summary>
           <div className="readiness-grid">
             {readiness.commands.map((item) => (
               <span className={item.ok ? "pill ok" : "pill missing"} key={item.id}>
                 {item.ok ? "OK" : "MISS"} {item.id}
               </span>
             ))}
-          </div>
-          <div className="readiness-grid">
             {readiness.env.map((item) => (
               <span className={item.ok ? "pill ok" : "pill missing"} key={item.name}>
                 {item.ok ? "OK" : "KEY"} {item.name}
@@ -1601,14 +1610,14 @@ function TaskPanel({
               </span>
             ) : null}
           </div>
-        </section>
+        </details>
       ) : null}
 
       {result ? (
-        <section className="result-box">
-          <strong>最新结果</strong>
+        <details className="panel-fold">
+          <summary>最新结果 JSON</summary>
           <pre>{JSON.stringify(result, null, 2)}</pre>
-        </section>
+        </details>
       ) : null}
 
       <section className="result-box asset-summary">
@@ -1635,12 +1644,18 @@ function TaskPanel({
       </section>
 
       <div className="task-list">
+        {tasks.length > 0 ? (
+          <div className="task-list-head">
+            <span>最近任务</span>
+            <small>共 {tasks.length} 条</small>
+          </div>
+        ) : null}
         {tasks.length === 0 ? (
           <div className="empty-state">
             <FileJson size={28} />
             <span>暂无任务</span>
           </div>
-        ) : tasks.map((task) => (
+        ) : tasks.slice(0, 6).map((task) => (
           <article className="task-card" key={task.id}>
             <div className="task-head">
               <StatusIcon status={task.status} />
