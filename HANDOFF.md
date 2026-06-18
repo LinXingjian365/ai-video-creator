@@ -32,7 +32,7 @@ npx vitest run # 123 tests, 21 files
 | 字幕烧录 (配音时间轴) | ✅ 长句分段轮播 |
 | 一键全链路 | ✅ |
 | 发布 dry-run | ✅ |
-| 多平台热点源 | ✅ B站真实 + YouTube/抖音/快手(TikHub) + Exa/Firecrawl 网页证据 |
+| 多平台热点源 | ✅ B站真实 + YouTube/抖音(自托管TTD)/快手(TikHub) + Exa/Firecrawl 网页证据 |
 | UI 重设计 | ✅ Midnight Neon 暗夜霓虹 |
 | BGM 混音 | ✅ FFmpeg 渲染后混音(无配音/配音双路径) |
 | BGM 智能选曲 | ✅ 本地库扫描 + mood 关键词匹配(零依赖,无 API) |
@@ -269,12 +269,21 @@ key 已落 `.env.local`,实测覆盖:
 
 **关键发现**: Postiz 本身就是 MIT Apache 2.0,$29/月只是 postiz.com 托管费;TikHub 原作者(Evil0ctal)的项目也是开源的,他停更跑去做商业版 TikHub 了,**JoeanAmier 这套是直接替代品**——Docker 一行起,5555 端口 REST API,显式支持 `/douyin/search` `/douyin/hot` `/douyin/comment` 等端点。
 
-下一步优先级 (按"成本×价值×实现难度"):
-1. **n8n 自托管** (难度低,价值高) — 已有导出 JSON,起 Docker 5 分钟搞定
-2. ~~**BGM 本地库** (难度低,价值中)~~ ✅ **已实现 commit 87e5ce1**
-3. **Postiz 自托管** (难度中,价值高) — 三容器 docker-compose,半小时搭起,真实发布闭环
-4. **TikTokDownloader 自托管** (难度中,价值高) — Docker 一行,需手动维护抖音 Cookie 防风控
-5. **KS-Downloader** (难度中,价值中) — 重度用快手时优先级才升
+下一步优先级:
+1. **n8n 自托管** — docker-compose 在 `docs/FREE_ALTERNATIVES.md`,起容器 → 导入项目生成的 workflow JSON → 跑定时任务
+2. ~~**BGM 本地库**~~ ✅ (87e5ce1)
+3. **Postiz 自托管** — docker-compose 在 `docs/FREE_ALTERNATIVES.md`,起容器 → 配 platform integration → dispatcher 调真实 draft API
+4. ~~**TikTokDownloader adapter**~~ ✅ (8eaa7ce) ⬅ 刚提交
+5. **KS-Downloader adapter** — 快手免费替代(TikTokDownloader 的姊妹项目),同 TTD adapter 模式
+
+## Claude 更新: TikTokDownloader self-host adapter (commit 8eaa7ce)
+
+已完成:
+- `src/lib/trend/sources/tiktok-downloader.ts`: self-host adapter,跟 TikHub adapter 完全一致的接口形状(TrendSource模式),isTtdConfigured() 判定 auto-select,端点 TTDDouxinHotEndpoint 可配,HTTP POST JSON。
+- `src/lib/trend/sources/douyin.ts`: 改为动态路由:TTD_BASE_URL 存在 → TTD;否则 → TikHub。向后兼容 without code changes。
+- `src/lib/trend/sources/tiktok-downloader.test.ts`: 7 单测覆盖 happy path/HTTP 500透传/未配置诚实error/endpoint override/TTD_TOKEN/topN clamp。
+- `.env.example`: TTD_ENABLED/TTD_BASE_URL/TTD_DOUYIN_HOT_ENDPOINT/TTD_TOKEN。
+- 全量 194 测试绿。
 
 ## Claude 更新: BGM 本地库 + 自动选曲 (commit 87e5ce1)
 
