@@ -24,7 +24,7 @@ flowchart LR
 
 | 阶段 | 推荐成熟工具 | 用途 | 当前项目状态 | 生产化条件 |
 |---|---|---|---|---|
-| 热点搜索 | Bilibili public ranking、TikHub API、Exa、Firecrawl | B站真实榜单、抖音/快手/B站/网页热点、标题、链接、评论、搜索结果 | 已落地 B站公开排行榜与热门 fallback；已接 TikHub 抖音热榜、快手热榜 endpoint 和统一 TrendItem 归一化；Exa/Firecrawl 已有配置位和集成目录 | 配置 `BILI_COOKIE` 可降低 B站风控；配置 `TIKHUB_API_KEY` 后可跑抖音/快手真实热榜；继续补 Exa/Firecrawl 搜索 route |
+| 热点搜索 | Bilibili public ranking、TikHub API、Exa、Firecrawl | B站真实榜单、抖音/快手/B站/网页热点、标题、链接、评论、搜索结果 | 已落地 B站公开排行榜与热门 fallback；已接 TikHub 抖音/快手热榜、关键词搜索、单视频详情、评论样本和统一 TrendItem/素材候选归一化；Exa/Firecrawl 已有配置位和集成目录 | 配置 `BILI_COOKIE` 可降低 B站风控；配置 `TIKHUB_API_KEY` 后可跑抖音/快手真实热榜与竞品研究；继续补 Exa/Firecrawl 搜索 route |
 | 网页/素材采集 | Firecrawl、Exa、yt-dlp | 抓网页、搜资料、导入公开视频素材/字幕/封面/元数据 | 已接 `/api/materials/import`，py312 已安装 yt-dlp，会生成素材 manifest | 按需配置 `YTDLP_COOKIES_PATH`，遵守版权和平台规则 |
 | 爆款拆解 | LLM planner、FFmpeg scene/silence detect、PySceneDetect、OpenTimelineIO | 分析开头、节奏、镜头、结构、时间线 | 已有 `creator-suite`、`auto-plan` 和 `/api/materials/analyze`，含字幕/faster-whisper 可选 ASR、PySceneDetect/FFmpeg 场景和静音/有声段信号 | 下一步接 OpenTimelineIO |
 | AI 模型网关 | DeepSeek、Doubao Ark、Claude gateway、GPT gateway | 爆火逻辑解释、选题卡、脚本/计划生成 | DeepSeek 已作为默认 LLM provider 接入；Ark/Claude/GPT gateway 已预留 env 和 client 分支 | 配置对应 API key 后逐个跑真实连通测试 |
@@ -68,7 +68,7 @@ flowchart LR
 - `src/lib/auto-render.ts`：按计划或素材分析 candidate clips 裁剪、合并，输出粗剪视频和剪映计划。
 - `src/lib/platform-variants.ts`：把粗剪视频导出为抖音/快手 9:16、B站 16:9 和 1:1 方版。
 - `src/lib/integrations.ts`：成熟工具集成目录。
-- `src/lib/trend/*`：B站真实趋势源、确定性评分、可选 LLM 爆火逻辑分析。
+- `src/lib/trend/*`：B站真实趋势源、TikHub 抖音/快手热榜和竞品研究、确定性评分、可选 LLM 爆火逻辑分析。
 - `src/lib/llm/client.ts`：DeepSeek 默认 LLM 客户端，兼容 Doubao Ark、Claude gateway、GPT gateway 扩展。
 - `src/lib/materials/yt-dlp.ts`：公开视频参考素材导入、字幕/封面/metadata 保存、manifest 生成。
 - `src/lib/materials/analysis.ts`：读取 manifest/视频，解析字幕，FFmpeg 场景检测和静音检测，生成候选切点。

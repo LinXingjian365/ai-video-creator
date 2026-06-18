@@ -204,3 +204,16 @@ src/
 下一步：
 - 配置真实 `TIKHUB_API_KEY` 后，分别跑 `platform=douyin` 和 `platform=kuaishou` 的 `/api/trend/report`，确认真实响应字段是否需要补充映射。
 - 继续接 TikHub 搜索、评论、单视频详情，把“爆款链接/标题 -> 原视频信号 -> 素材候选”补成上游完整闭环。
+
+## Codex 更新: TikHub 竞品研究已接入
+
+已完成：
+- `src/lib/trend/research.ts`：新增 TikHub 研究层，支持抖音/快手关键词搜索、URL/ID 单视频详情、评论样本抓取、endpoint 调用记录、素材候选和下一步动作。
+- `src/app/api/trend/research/route.ts`：新增 `trend-research` 任务，失败时会明确返回缺 key 或 HTTP 错误，不伪装成功。
+- `src/app/page.tsx`：联网素材模块新增“TikHub 爆款研究”真实按钮，结果会回填素材导入链接和参考标题列表。
+- `.env.example`：补齐 TikHub 搜索、详情、评论 endpoint 覆盖项。
+- `docs/API.md` / `docs/FULL_CHAIN_TOOLCHAIN.md` / `docs/ROADMAP.md`：同步 API、工具链状态和剩余工作。
+
+下一步：
+- 配置真实 `TIKHUB_API_KEY` 后，用抖音/快手关键词和单视频链接各跑一次，按真实响应补充字段映射。
+- 继续接 Exa/Firecrawl 搜索 route，把网页事实依据、案例链接和平台热点合并进同一选题证据包。

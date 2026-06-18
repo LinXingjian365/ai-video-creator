@@ -207,6 +207,18 @@ export const trendReportSchema = z.object({
   topN: z.coerce.number().int().min(1).max(50).default(20)
 });
 
+export const tikhubResearchSchema = z.object({
+  platform: z.enum(["douyin", "kuaishou"]).default("douyin"),
+  query: z.string().min(1).optional(),
+  url: z.string().min(1).optional(),
+  itemId: z.string().min(1).optional(),
+  includeComments: z.coerce.boolean().default(true),
+  limit: z.coerce.number().int().min(1).max(20).default(10)
+}).refine((value) => Boolean(value.query || value.url || value.itemId), {
+  message: "Provide query, url, or itemId.",
+  path: ["query"]
+});
+
 export const scriptGenerateSchema = z.object({
   topic: z.string().min(1),
   platform: z.enum(["douyin", "bilibili", "kuaishou"]).default("douyin"),

@@ -233,6 +233,64 @@ TikHub 请求使用 `Authorization: Bearer <token>`，endpoint 可通过 `TIKHUB
 - 后续可切换 `LLM_PROVIDER=doubao-ark`、`claude-gateway`、`gpt-gateway`，分别使用 `ARK_*`、`ANTHROPIC_*`、`GPT_GATEWAY_*` 环境变量。
 - LLM 失败会降级为真实榜单和确定性评分，不会编造 AI 结果。
 
+### POST `/api/trend/research`
+
+用 TikHub 做抖音/快手竞品研究：关键词搜索、单视频详情、评论样本，并归一化成 `TrendItem`、素材候选和下一步动作。该接口创建 `trend-research` task，并在当前请求内返回最终 task。
+
+```json
+{
+  "platform": "douyin",
+  "query": "AI剪辑",
+  "url": "https://www.douyin.com/video/...",
+  "itemId": "7380000000000000000",
+  "includeComments": true,
+  "limit": 10
+}
+```
+
+`query`、`url`、`itemId` 至少传一个。`url` 可以是平台分享链接或分享文本；快手链接会按 TikHub 的 `share_text` 参数请求。
+
+TikHub endpoint 默认值：
+
+```text
+抖音搜索      /api/v1/douyin/app/v3/fetch_video_search_result
+抖音链接详情  /api/v1/hybrid/video_data
+抖音 ID 详情  /api/v1/douyin/app/v3/fetch_one_video
+抖音评论      /api/v1/douyin/app/v3/fetch_video_comments
+快手搜索      /api/v1/kuaishou/app/search_video_v2
+快手链接详情  /api/v1/kuaishou/app/fetch_one_video_by_url
+快手 ID 详情  /api/v1/kuaishou/app/fetch_one_video
+快手评论      /api/v1/kuaishou/app/fetch_one_video_comment
+```
+
+这些路径可用 `.env` 里的 `TIKHUB_ENDPOINT_DOUYIN_SEARCH`、`TIKHUB_ENDPOINT_DOUYIN_DETAIL_BY_URL`、`TIKHUB_ENDPOINT_DOUYIN_DETAIL_BY_ID`、`TIKHUB_ENDPOINT_DOUYIN_COMMENTS`、`TIKHUB_ENDPOINT_KUAISHOU_SEARCH`、`TIKHUB_ENDPOINT_KUAISHOU_DETAIL_BY_URL`、`TIKHUB_ENDPOINT_KUAISHOU_DETAIL_BY_ID`、`TIKHUB_ENDPOINT_KUAISHOU_COMMENTS` 覆盖。
+
+返回重点字段：
+
+```json
+{
+  "task": {
+    "status": "completed",
+    "result": {
+      "platform": "douyin",
+      "searchItems": [],
+      "detail": {},
+      "comments": [],
+      "materialCandidates": [
+        {
+          "title": "参考标题",
+          "url": "https://...",
+          "source": "search"
+        }
+      ],
+      "nextActions": []
+    }
+  }
+}
+```
+
+注意：该接口只做热点/结构研究和候选链接整理；素材导入仍需你确认有权使用，再走 `/api/materials/import`。
+
 ### POST `/api/materials/import`
 
 用 `yt-dlp` 导入你有权下载或分析的公开视频素材，落盘到 `workspace/input/references/<collection>`，并生成 `manifest.json`。会保存媒体文件、封面、字幕、自动字幕和 `info.json`。

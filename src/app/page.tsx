@@ -23,6 +23,7 @@ import {
   XCircle
 } from "lucide-react";
 import type { IntelligenceReport } from "@/lib/trend/types";
+import type { TikHubResearchReport } from "@/lib/trend/research";
 import type { ScriptDraft } from "@/lib/script/generate";
 import type { FullChainResult } from "@/lib/full-chain";
 import type { PublishDryRunResult } from "@/lib/publish/dry-run";
@@ -244,6 +245,11 @@ const defaultForm = {
   materialUrl: "https://www.bilibili.com/video/",
   materialCollection: "爆款参考素材",
   materialQuality: "720p",
+  researchPlatform: "douyin",
+  researchQuery: "AI剪辑",
+  researchUrl: "",
+  researchItemId: "",
+  researchIncludeComments: true,
   materialAnalysisPath: "workspace/input/references",
   materialTranscriptionMode: "auto",
   whisperModel: "tiny",
@@ -319,6 +325,8 @@ export default function Home() {
   const [publishQueue, setPublishQueue] = useState<PublishQueueItem[]>([]);
   const [publishAdapters, setPublishAdapters] = useState<PublishAdapterStatus[]>([]);
   const [analyticsSnapshots, setAnalyticsSnapshots] = useState<AnalyticsSnapshot[]>([]);
+  const [researchBusy, setResearchBusy] = useState(false);
+  const [researchReport, setResearchReport] = useState<TikHubResearchReport | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -885,6 +893,48 @@ export default function Home() {
     }
   }
 
+  async function runTikHubResearchAction() {
+    setResearchBusy(true);
+    setMessage("");
+    setResult(null);
+
+    try {
+      const data = await runPost("/api/trend/research", {
+        platform: form.researchPlatform,
+        query: form.researchQuery.trim() || undefined,
+        url: form.researchUrl.trim() || undefined,
+        itemId: form.researchItemId.trim() || undefined,
+        includeComments: form.researchIncludeComments,
+        limit: 10
+      }, "TikHub 爆款研究已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("TikHub 爆款研究任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "TikHub 爆款研究失败");
+      }
+
+      const report = final.result as TikHubResearchReport;
+      setResearchReport(report);
+      if (report.materialCandidates[0]?.url) {
+        update("materialUrl", report.materialCandidates[0].url);
+      }
+      if (report.materialCandidates.length) {
+        update("references", report.materialCandidates.map((candidate) => candidate.title || candidate.url).join("\n"));
+      }
+      setResult(report);
+      setMessage(`TikHub 研究完成：${report.searchItems.length} 个搜索结果、${report.comments.length} 条评论样本`);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "TikHub 爆款研究请求失败");
+    } finally {
+      setResearchBusy(false);
+    }
+  }
+
   async function analyzeReferenceMaterial() {
     setAnalysisBusy(true);
     setMessage("");
@@ -1066,6 +1116,9 @@ export default function Home() {
             fullChainResult={fullChainResult}
             variantBusy={variantBusy}
             onImportMaterial={importReferenceMaterial}
+            researchBusy={researchBusy}
+            researchReport={researchReport}
+            onRunTikHubResearch={runTikHubResearchAction}
             onAnalyzeMaterial={analyzeReferenceMaterial}
             onCreatePlanFromScript={createPlanFromScript}
             onRenderScriptPackage={renderScriptPackage}
@@ -1130,6 +1183,9 @@ function StageWorkspace({
   fullChainResult,
   variantBusy,
   onImportMaterial,
+  researchBusy,
+  researchReport,
+  onRunTikHubResearch,
   onAnalyzeMaterial,
   onCreatePlanFromScript,
   onRenderScriptPackage,
@@ -1181,6 +1237,9 @@ function StageWorkspace({
   fullChainResult: FullChainResult | null;
   variantBusy: boolean;
   onImportMaterial: () => void;
+  researchBusy: boolean;
+  researchReport: TikHubResearchReport | null;
+  onRunTikHubResearch: () => void;
   onAnalyzeMaterial: () => void;
   onCreatePlanFromScript: () => void;
   onRenderScriptPackage: () => void;
@@ -1249,8 +1308,11 @@ function StageWorkspace({
           assets={workspaceAssets?.assets ?? []}
           analysisBusy={analysisBusy}
           materialBusy={materialBusy}
+          researchBusy={researchBusy}
+          researchReport={researchReport}
           onAnalyzeMaterial={onAnalyzeMaterial}
           onImportMaterial={onImportMaterial}
+          onRunTikHubResearch={onRunTikHubResearch}
           update={update}
         />
       ) : null}
@@ -1431,12 +1493,26 @@ function TrendReport({ report }: { report: IntelligenceReport }) {
   );
 }
 
-function CollectPanel({ form, update, assets, materialBusy, analysisBusy, onImportMaterial, onAnalyzeMaterial }: FormPanelProps & {
+function CollectPanel({
+  form,
+  update,
+  assets,
+  materialBusy,
+  analysisBusy,
+  researchBusy,
+  researchReport,
+  onImportMaterial,
+  onAnalyzeMaterial,
+  onRunTikHubResearch
+}: FormPanelProps & {
   assets: WorkspaceAsset[];
   materialBusy: boolean;
   analysisBusy: boolean;
+  researchBusy: boolean;
+  researchReport: TikHubResearchReport | null;
   onImportMaterial: () => void;
   onAnalyzeMaterial: () => void;
+  onRunTikHubResearch: () => void;
 }) {
   const analyzableAssets = assets
     .filter((asset) => asset.role === "input" && (asset.kind === "manifest" || asset.kind === "video"))
@@ -1448,6 +1524,63 @@ function CollectPanel({ form, update, assets, materialBusy, analysisBusy, onImpo
         <StageCard icon={Search} title="搜索与热点" body="Exa、Firecrawl、TikHub 找热点、标题、参考链接。" />
         <StageCard icon={DownloadCloud} title="视频素材导入" body="yt-dlp 把可合法使用的视频、字幕、元数据入库。" />
         <StageCard icon={FileJson} title="素材目录" body="统一落盘 references / raw / broll / audio。" />
+      </section>
+
+      <section className="stage-form-card material-import-card research-card">
+        <div className="form-card-title">
+          <strong>TikHub 爆款研究</strong>
+          <span>关键词搜索、单视频详情和评论样本会回填参考素材候选。</span>
+        </div>
+        <div className="form-grid">
+          <label className="field">
+            <span>平台</span>
+            <select value={form.researchPlatform} onChange={(event) => update("researchPlatform", event.target.value)}>
+              <option value="douyin">抖音</option>
+              <option value="kuaishou">快手</option>
+            </select>
+          </label>
+          <Field label="关键词" value={form.researchQuery} onChange={(value) => update("researchQuery", value)} />
+          <Field label="爆款链接 / 分享文本" value={form.researchUrl} onChange={(value) => update("researchUrl", value)} />
+          <Field label="视频 ID" value={form.researchItemId} onChange={(value) => update("researchItemId", value)} />
+        </div>
+        <label className="toggle-row">
+          <input checked={form.researchIncludeComments} onChange={(event) => update("researchIncludeComments", event.target.checked)} type="checkbox" />
+          <span>抓取评论样本</span>
+        </label>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={researchBusy} onClick={onRunTikHubResearch} type="button">
+            {researchBusy ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+            研究爆款信号
+          </button>
+          <small>需要 TIKHUB_API_KEY；结果只用于结构参考和合规素材选择。</small>
+        </div>
+        {researchReport ? (
+          <div className="research-result">
+            <div className="research-stats">
+              <span>{researchReport.searchItems.length} 搜索结果</span>
+              <span>{researchReport.detail ? "1 个详情" : "无详情"}</span>
+              <span>{researchReport.comments.length} 评论样本</span>
+            </div>
+            {researchReport.materialCandidates.length ? (
+              <div className="research-candidates">
+                {researchReport.materialCandidates.slice(0, 5).map((candidate) => (
+                  <article className="research-candidate" key={`${candidate.source}-${candidate.url}`}>
+                    <strong>{candidate.title}</strong>
+                    <small>{candidate.source} / {candidate.reason}</small>
+                    <button className="secondary-button" onClick={() => update("materialUrl", candidate.url)} type="button">
+                      填入导入链接
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {researchReport.nextActions.length ? (
+              <ul className="research-actions">
+                {researchReport.nextActions.map((action) => <li key={action}>{action}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="stage-form-card material-import-card">
