@@ -331,6 +331,7 @@ export default function Home() {
   const [researchReport, setResearchReport] = useState<TikHubResearchReport | null>(null);
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const [evidenceReport, setEvidenceReport] = useState<EvidenceReport | null>(null);
+  const [bgmPickBusy, setBgmPickBusy] = useState(false);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -989,6 +990,44 @@ export default function Home() {
     }
   }
 
+  async function autoPickBgm() {
+    const mood = scriptDraft?.bgm?.trim() || form.scriptTopic.trim();
+    if (!mood) {
+      setMessage("先生成脚本(取 LLM 推荐的曲风)或填选题,再 AI 选曲");
+      return;
+    }
+    setBgmPickBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/bgm/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mood, fallbackFirst: true })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? "BGM 选曲失败");
+      }
+      if (data.libraryCount === 0) {
+        setMessage("BGM 库为空。把免费 mp3 放到 workspace/input/audio/<mood>/ 下(CC0 来源:pixabay.com/music、mixkit.co、freepd.com)");
+        setResult(data);
+        return;
+      }
+      if (data.pick?.relativePath) {
+        update("bgmPath", data.pick.relativePath);
+        setMessage(`AI 选曲:${data.pick.relativePath}(命中 ${data.score} 关键词:${data.matchedKeywords.join("/") || "fallback"})`);
+        setResult(data);
+      } else {
+        setMessage(`无匹配 BGM。${data.nextActions?.[0] ?? ""}`);
+        setResult(data);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "BGM 选曲请求失败");
+    } finally {
+      setBgmPickBusy(false);
+    }
+  }
+
   async function analyzeReferenceMaterial() {
     setAnalysisBusy(true);
     setMessage("");
@@ -1182,6 +1221,8 @@ export default function Home() {
             onRunFullChain={runFullChainAction}
             onRenderFromAnalysis={renderFromAnalysis}
             onGeneratePlatformVariants={generatePlatformVariants}
+            bgmPickBusy={bgmPickBusy}
+            onAutoPickBgm={autoPickBgm}
             publishDryRunBusy={publishDryRunBusy}
             publishQueueBusy={publishQueueBusy}
             publishApproveBusy={publishApproveBusy}
@@ -1252,6 +1293,8 @@ function StageWorkspace({
   onRunFullChain,
   onRenderFromAnalysis,
   onGeneratePlatformVariants,
+  bgmPickBusy,
+  onAutoPickBgm,
   publishDryRunBusy,
   publishQueueBusy,
   publishApproveBusy,
@@ -1309,6 +1352,8 @@ function StageWorkspace({
   onRunFullChain: () => void;
   onRenderFromAnalysis: () => void;
   onGeneratePlatformVariants: () => void;
+  bgmPickBusy: boolean;
+  onAutoPickBgm: () => void;
   publishDryRunBusy: boolean;
   publishQueueBusy: boolean;
   publishApproveBusy: boolean;
@@ -1393,9 +1438,11 @@ function StageWorkspace({
           fullChainBusy={fullChainBusy}
           fullChainResult={fullChainResult}
           evidenceCount={evidenceReport?.results.length ?? 0}
+          bgmPickBusy={bgmPickBusy}
           onCreatePlanFromScript={onCreatePlanFromScript}
           onRenderScriptPackage={onRenderScriptPackage}
           onRunFullChain={onRunFullChain}
+          onAutoPickBgm={onAutoPickBgm}
         />
       ) : null}
       {activeStage === "edit" ? (
@@ -1817,9 +1864,11 @@ function ScriptPanel({
   fullChainBusy,
   fullChainResult,
   evidenceCount,
+  bgmPickBusy,
   onCreatePlanFromScript,
   onRenderScriptPackage,
-  onRunFullChain
+  onRunFullChain,
+  onAutoPickBgm
 }: FormPanelProps & {
   draft: ScriptDraft | null;
   scriptPlanBusy: boolean;
@@ -1827,9 +1876,11 @@ function ScriptPanel({
   fullChainBusy: boolean;
   fullChainResult: FullChainResult | null;
   evidenceCount: number;
+  bgmPickBusy: boolean;
   onCreatePlanFromScript: () => void;
   onRenderScriptPackage: () => void;
   onRunFullChain: () => void;
+  onAutoPickBgm: () => void;
 }) {
   return (
     <div className="stage-layout script-layout">
@@ -1858,6 +1909,13 @@ function ScriptPanel({
             </label>
           ) : null}
           <Field label="BGM 音频路径（可选，本地 mp3/wav/m4a）" value={form.bgmPath} onChange={(value) => update("bgmPath", value)} />
+          <div className="material-import-actions">
+            <button className="secondary-button" disabled={bgmPickBusy} onClick={onAutoPickBgm} type="button">
+              {bgmPickBusy ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />}
+              AI 选曲(读 workspace/input/audio)
+            </button>
+            <small>按脚本 LLM 推荐曲风扫本地库匹配;库空时引导你下 CC0 mp3 到该目录。</small>
+          </div>
           <div className="form-grid">
             <label className="field">
               <span>BGM 音量</span>
