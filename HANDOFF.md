@@ -180,3 +180,15 @@ src/
 下一步：
 - 把导出的 JSON 导入真实 n8n 实例，调通定时触发、失败重试、approved 队列 id 映射和 analytics 数据源映射。
 - 配置真实 Postiz/social-auto-upload 登录态后，先创建 Postiz draft，不直接真发。
+
+## Codex 更新: 发布账号 preflight 已接入
+
+已完成：
+- `src/lib/publish/preflight.ts`：检查 Postiz API key、`POSTIZ_INTEGRATION_ID_*`、可选 `GET /public/v1/integrations` probe、social-auto-upload session/config 文件存在性；不返回 secret。
+- `src/app/api/publish/preflight/route.ts`：`GET` 直接返回体检报告，`POST` 创建 `publish-preflight` 任务并返回最终 task。
+- `src/app/page.tsx`：发布矩阵面板新增“发布账号联调体检”按钮，可点击跑实际后端检查并展示 blockers/nextActions。
+- `.env.example`：补齐 `SOCIAL_AUTO_UPLOAD_CONFIG`。
+
+下一步：
+- 在真实 Postiz/social-auto-upload 登录态配置好后，先跑 `/api/publish/preflight?probePostiz=true`，确认无 blocker，再批准一个队列项并用 `mode=draft` 做 Postiz 草稿烟测。
+- social-auto-upload 仍只生成命令预览；真正执行上传命令前要继续保留人工确认和 dry-run 默认。

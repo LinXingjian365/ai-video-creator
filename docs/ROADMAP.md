@@ -73,8 +73,8 @@
 
 目标：发布不是最后一步，数据回流驱动下一轮内容。
 
-- 接 social-auto-upload 做国内平台 dry-run。状态：已建立本地发布队列、adapter 状态检查和人工确认闸门；已生成 social-auto-upload 命令预览，仍不执行外部上传。
-- 接 Postiz 做多平台排程候选。状态：已接 Postiz Public API 草稿 adapter；默认只预览，`PUBLISH_LIVE_ENABLED=true` 时只创建 `draft`，不直接真发。
+- 接 social-auto-upload 做国内平台 dry-run。状态：已建立本地发布队列、adapter 状态检查、账号 preflight 和人工确认闸门；已检查 session/config 文件并生成 social-auto-upload 命令预览，仍不执行外部上传。
+- 接 Postiz 做多平台排程候选。状态：已接 Postiz Public API 草稿 adapter 和 integrations probe；默认只预览，`PUBLISH_LIVE_ENABLED=true` 时只创建 `draft`，不直接真发。
 - 接 n8n 编排采集、剪辑、发布、复盘工作流。状态：已接 `/api/orchestration/n8n`、Review UI 编排按钮、dry-run payload、确认后 webhook 触发和可导入 workflow JSON 导出；下一步在真实 n8n 实例里调试定时任务、失败重试和审批映射。
 - 建 30 分钟、24 小时、7 天复盘报告。状态：已接本地 analytics ledger、指标导入、信号计算和下一步动作建议。
 

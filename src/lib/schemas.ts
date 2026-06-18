@@ -279,6 +279,11 @@ export const publishDispatchSchema = z.object({
   manualConfirm: z.string().min(1)
 });
 
+export const publishPreflightSchema = z.object({
+  probePostiz: z.coerce.boolean().default(false),
+  platforms: z.array(z.enum(["douyin", "kuaishou", "bilibili"])).optional()
+});
+
 export const analyticsImportSchema = z.object({
   platform: z.enum(["douyin", "kuaishou", "bilibili"]).default("douyin"),
   postId: z.string().min(1).optional(),

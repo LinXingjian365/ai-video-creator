@@ -469,6 +469,27 @@ best | 1080p | 720p | 480p | audio | metadata
 
 Postiz adapter 依据官方 Public API：`Authorization` header、`POST /public/v1/posts`、`type: "draft"`。需要配置 `POSTIZ_API_KEY`、`POSTIZ_INTEGRATION_ID_<PLATFORM>` 和可选的 `POSTIZ_PLATFORM_TYPE_<PLATFORM>`。
 
+### GET `/api/publish/preflight`
+
+检查发布账号联调前置条件，不会上传、不发草稿、不执行外部命令。返回 Postiz API key 是否配置、各平台 `POSTIZ_INTEGRATION_ID_*` 是否缺失、`GET /public/v1/integrations` probe 状态、social-auto-upload session/config 文件是否存在、阻塞项和下一步动作。
+
+可选 query：
+- `probePostiz=true`：在有 `POSTIZ_API_KEY` 时调用 Postiz integrations 接口验证连通性。
+- `platforms=douyin&platforms=bilibili`：只检查指定平台；不传则检查抖音、快手、B站。
+
+### POST `/api/publish/preflight`
+
+创建 `publish-preflight` 任务并返回最终 task。请求体示例：
+
+```json
+{
+  "probePostiz": true,
+  "platforms": ["douyin", "kuaishou", "bilibili"]
+}
+```
+
+该接口只返回配置和连通性结果，不在响应中暴露 API key。
+
 ## 数据回流
 
 ### GET `/api/analytics/import`

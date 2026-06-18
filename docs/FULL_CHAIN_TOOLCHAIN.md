@@ -35,7 +35,7 @@ flowchart LR
 | 音频混音 | FFmpeg amix / AAC mux | 本地 BGM、AI 口播、音量平衡、循环补齐 | 已接 `src/lib/audio-mix.ts`；Remotion 无配音视频可混入 BGM，AI 配音视频可混合口播+BGM；UI 暴露 BGM/口播音量 | 下一步接免版权 BGM 库和自动选曲 |
 | 图文包装 | Remotion | React 组件化字幕、标题卡、数据卡、片尾 | 已建 `src/remotion` 模板和 `/api/remotion/render`，脚本包装 MP4 已实测输出，支持渲染后 BGM 混音 | 下一步把素材粗剪作为底层视频并叠加动态图文包装 |
 | 可编辑草稿 | JianYing MCP | 生成剪映可编辑草稿、轨道、字幕、转场 | 已生成 JianYing plan JSON | 配置 JianYing MCP 并把 plan 映射到真实 MCP 调用 |
-| 发布矩阵 | FFmpeg variants、social-auto-upload、Postiz、n8n | 抖音/快手/B站/多平台发布、排程 | 已有 env 配置位、发布矩阵计划、平台视频版本导出、本地发布队列、adapter 状态检查、人工确认闸门、Postiz draft adapter 和 social-auto-upload 命令预览 | 真实账号联调，继续默认 dry-run |
+| 发布矩阵 | FFmpeg variants、social-auto-upload、Postiz、n8n | 抖音/快手/B站/多平台发布、排程 | 已有 env 配置位、发布矩阵计划、平台视频版本导出、本地发布队列、adapter 状态检查、账号 preflight、人工确认闸门、Postiz draft adapter 和 social-auto-upload 命令预览 | 配置真实账号后跑 preflight，再继续默认 dry-run 草稿联调 |
 | 自动编排 | n8n | 把采集、剪辑、发布、复盘串成工作流 | 已有 `N8N_WEBHOOK_URL`/`N8N_WEBHOOK_SECRET`/`APP_BASE_URL` 配置位，已接 `/api/orchestration/n8n` dry-run payload、确认口令、webhook 触发和 `workspace/drafts/n8n-workflow-*.json` 导出，UI 可点击执行 | 导入真实 n8n 实例后调试定时任务、失败重试和审批映射 |
 | 数据复盘 | 平台 analytics、Postiz、TikHub | 30 分钟/24 小时数据回流和下一轮决策 | 已接本地 analytics ledger、指标导入、信号计算和下一步动作建议 | 接真实平台数据源自动同步 |
 

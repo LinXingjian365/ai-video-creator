@@ -29,6 +29,7 @@ import type { PublishDryRunResult } from "@/lib/publish/dry-run";
 import type { PublishAdapterStatus } from "@/lib/publish/adapters";
 import type { PublishQueueItem } from "@/lib/publish/queue";
 import type { PublishDispatchResult } from "@/lib/publish/dispatch";
+import type { PublishPreflightReport } from "@/lib/publish/preflight";
 import type { AnalyticsSnapshot } from "@/lib/analytics/ledger";
 import type { N8nOrchestrationResult } from "@/lib/orchestration/n8n";
 
@@ -303,10 +304,12 @@ export default function Home() {
   const [publishQueueBusy, setPublishQueueBusy] = useState(false);
   const [publishApproveBusy, setPublishApproveBusy] = useState(false);
   const [publishDispatchBusy, setPublishDispatchBusy] = useState(false);
+  const [publishPreflightBusy, setPublishPreflightBusy] = useState(false);
   const [analyticsBusy, setAnalyticsBusy] = useState(false);
   const [n8nBusy, setN8nBusy] = useState(false);
   const [publishDryRunResult, setPublishDryRunResult] = useState<PublishDryRunResult | null>(null);
   const [publishDispatchResult, setPublishDispatchResult] = useState<PublishDispatchResult | null>(null);
+  const [publishPreflightResult, setPublishPreflightResult] = useState<PublishPreflightReport | null>(null);
   const [n8nResult, setN8nResult] = useState<N8nOrchestrationResult | null>(null);
   const [publishQueue, setPublishQueue] = useState<PublishQueueItem[]>([]);
   const [publishAdapters, setPublishAdapters] = useState<PublishAdapterStatus[]>([]);
@@ -740,6 +743,35 @@ export default function Home() {
     }
   }
 
+  async function runPublishPreflight() {
+    setPublishPreflightBusy(true);
+    setMessage("");
+    try {
+      const platforms = (["douyin", "kuaishou", "bilibili"] as const).filter((id) => form[id]);
+      const data = await runPost("/api/publish/preflight", {
+        probePostiz: true,
+        platforms
+      }, "发布账号联调体检已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("发布账号联调体检任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "发布账号联调体检失败");
+      }
+      setPublishPreflightResult(final.result as PublishPreflightReport);
+      setResult(final.result ?? data);
+      await refreshTasks();
+      await refreshPublishQueue();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "发布账号联调体检请求失败");
+    } finally {
+      setPublishPreflightBusy(false);
+    }
+  }
+
   async function importAnalytics() {
     setAnalyticsBusy(true);
     setMessage("");
@@ -1039,8 +1071,10 @@ export default function Home() {
             publishQueueBusy={publishQueueBusy}
             publishApproveBusy={publishApproveBusy}
             publishDispatchBusy={publishDispatchBusy}
+            publishPreflightBusy={publishPreflightBusy}
             publishDryRunResult={publishDryRunResult}
             publishDispatchResult={publishDispatchResult}
+            publishPreflightResult={publishPreflightResult}
             publishQueue={publishQueue}
             publishAdapters={publishAdapters}
             analyticsBusy={analyticsBusy}
@@ -1051,6 +1085,7 @@ export default function Home() {
             onCreatePublishQueue={createPublishQueue}
             onApprovePublishQueue={approvePublishQueue}
             onDispatchPublishQueue={dispatchPublishQueue}
+            onRunPublishPreflight={runPublishPreflight}
             onImportAnalytics={importAnalytics}
             onTriggerN8n={triggerN8n}
           />
@@ -1100,8 +1135,10 @@ function StageWorkspace({
   publishQueueBusy,
   publishApproveBusy,
   publishDispatchBusy,
+  publishPreflightBusy,
   publishDryRunResult,
   publishDispatchResult,
+  publishPreflightResult,
   publishQueue,
   publishAdapters,
   analyticsBusy,
@@ -1112,6 +1149,7 @@ function StageWorkspace({
   onCreatePublishQueue,
   onApprovePublishQueue,
   onDispatchPublishQueue,
+  onRunPublishPreflight,
   onImportAnalytics,
   onTriggerN8n
 }: {
@@ -1148,8 +1186,10 @@ function StageWorkspace({
   publishQueueBusy: boolean;
   publishApproveBusy: boolean;
   publishDispatchBusy: boolean;
+  publishPreflightBusy: boolean;
   publishDryRunResult: PublishDryRunResult | null;
   publishDispatchResult: PublishDispatchResult | null;
+  publishPreflightResult: PublishPreflightReport | null;
   publishQueue: PublishQueueItem[];
   publishAdapters: PublishAdapterStatus[];
   analyticsBusy: boolean;
@@ -1160,6 +1200,7 @@ function StageWorkspace({
   onCreatePublishQueue: () => void;
   onApprovePublishQueue: (id: string) => void;
   onDispatchPublishQueue: (id: string) => void;
+  onRunPublishPreflight: () => void;
   onImportAnalytics: () => void;
   onTriggerN8n: (mode: "dry-run" | "webhook", exportWorkflow?: boolean) => void;
 }) {
@@ -1242,14 +1283,17 @@ function StageWorkspace({
           publishQueueBusy={publishQueueBusy}
           publishApproveBusy={publishApproveBusy}
           publishDispatchBusy={publishDispatchBusy}
+          publishPreflightBusy={publishPreflightBusy}
           publishDryRunResult={publishDryRunResult}
           publishDispatchResult={publishDispatchResult}
+          publishPreflightResult={publishPreflightResult}
           publishQueue={publishQueue}
           publishAdapters={publishAdapters}
           onPublishDryRun={onPublishDryRun}
           onCreatePublishQueue={onCreatePublishQueue}
           onApprovePublishQueue={onApprovePublishQueue}
           onDispatchPublishQueue={onDispatchPublishQueue}
+          onRunPublishPreflight={onRunPublishPreflight}
           update={update}
         />
       ) : null}
@@ -1699,14 +1743,17 @@ function PublishPanel({
   publishQueueBusy,
   publishApproveBusy,
   publishDispatchBusy,
+  publishPreflightBusy,
   publishDryRunResult,
   publishDispatchResult,
+  publishPreflightResult,
   publishQueue,
   publishAdapters,
   onPublishDryRun,
   onCreatePublishQueue,
   onApprovePublishQueue,
-  onDispatchPublishQueue
+  onDispatchPublishQueue,
+  onRunPublishPreflight
 }: FormPanelProps & {
   assets: WorkspaceAsset[];
   variantBusy: boolean;
@@ -1715,14 +1762,17 @@ function PublishPanel({
   publishQueueBusy: boolean;
   publishApproveBusy: boolean;
   publishDispatchBusy: boolean;
+  publishPreflightBusy: boolean;
   publishDryRunResult: PublishDryRunResult | null;
   publishDispatchResult: PublishDispatchResult | null;
+  publishPreflightResult: PublishPreflightReport | null;
   publishQueue: PublishQueueItem[];
   publishAdapters: PublishAdapterStatus[];
   onPublishDryRun: () => void;
   onCreatePublishQueue: () => void;
   onApprovePublishQueue: (id: string) => void;
   onDispatchPublishQueue: (id: string) => void;
+  onRunPublishPreflight: () => void;
 }) {
   const outputVideos = assets
     .filter((asset) => asset.kind === "video" && asset.role === "output")
@@ -1798,6 +1848,22 @@ function PublishPanel({
         ) : null}
       </section>
       <section className="stage-form-card compact publish-queue-card">
+        <div className="material-import-actions">
+          <button className="secondary-button" disabled={publishPreflightBusy} onClick={onRunPublishPreflight} type="button">
+            {publishPreflightBusy ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />}
+            发布账号联调体检
+          </button>
+          <small>检查 Postiz API、integration id、social-auto-upload 登录态目录；不会上传或发布。</small>
+        </div>
+        {publishPreflightResult ? (
+          <div className={`publish-dispatch-result ${publishPreflightResult.blockers.length === 0 ? "ok" : "blocked"}`}>
+            <strong>preflight · {publishPreflightResult.blockers.length === 0 ? "ready" : `${publishPreflightResult.blockers.length} blockers`}</strong>
+            <small>Postiz {publishPreflightResult.postiz.probeStatus} / integrations {publishPreflightResult.postiz.integrations.length}</small>
+            <small>social-auto-upload {publishPreflightResult.socialAutoUpload.configured ? "configured" : "missing"}</small>
+            {publishPreflightResult.blockers.slice(0, 3).map((blocker) => <code key={blocker}>{blocker}</code>)}
+            {publishPreflightResult.nextActions.slice(0, 2).map((action) => <small key={action}>{action}</small>)}
+          </div>
+        ) : null}
         <div className="form-card-title">
           <strong>平台 adapter 与人工确认闸门</strong>
           <span>真实发布前必须 dry-run 通过，再输入确认口令进入 approved 队列；上传 adapter 仍保持关闭。</span>
