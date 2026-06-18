@@ -32,7 +32,7 @@ npx vitest run # 123 tests, 21 files
 | 字幕烧录 (配音时间轴) | ✅ 长句分段轮播 |
 | 一键全链路 | ✅ |
 | 发布 dry-run | ✅ |
-| 多平台热点源 | ✅ (B站真实 + YouTube/抖音诚实降级) |
+| 多平台热点源 | ✅ B站真实 + YouTube/抖音/快手(TikHub) + Exa/Firecrawl 网页证据 |
 | UI 重设计 | ✅ Midnight Neon 暗夜霓虹 |
 | BGM 混音 | ✅ FFmpeg 渲染后混音(无配音/配音双路径) |
 | 平台发布脚手架 | ✅ 本地队列 + adapter 状态 + 人工确认闸门 |
@@ -217,3 +217,19 @@ src/
 下一步：
 - 配置真实 `TIKHUB_API_KEY` 后，用抖音/快手关键词和单视频链接各跑一次，按真实响应补充字段映射。
 - 继续接 Exa/Firecrawl 搜索 route，把网页事实依据、案例链接和平台热点合并进同一选题证据包。
+
+## Claude 更新: Exa / Firecrawl 网页证据搜索已接入 (commit a51b821)
+
+已完成:
+- `src/lib/trend/evidence.ts`: `runEvidenceSearch()` 双源适配; `auto` 模式按 `EXA_API_KEY` / `FIRECRAWL_API_KEY` 可用性自动选; 未配 key 抛明确错; endpoint/base/timeout 经 env 覆盖 (`EXA_BASE_URL`/`EXA_SEARCH_ENDPOINT`/`FIRECRAWL_BASE_URL`/`FIRECRAWL_SEARCH_ENDPOINT`/`EVIDENCE_TIMEOUT_MS`)。
+- `src/lib/trend/evidence.test.ts`: 7 单测覆盖 Exa happy / Firecrawl happy / 双 key 缺失 / explicit provider mismatch / 空 query / 空结果 nextAction / 上游 HTTP 错误透传。
+- `/api/trend/evidence`: POST 经 Zod 校验, 产 `trend-evidence` 任务, 失败 500、成功 200。
+- `evidenceSearchSchema` 加入 `src/lib/schemas.ts`; `trend-evidence` 加入 `TaskType`。
+- `src/app/page.tsx`: "联网素材"面板新增"网页事实证据搜索"卡, 复用 `researchQuery`, provider 选 `auto/exa/firecrawl`; 结果展示来源、链接、发布日期、摘要、`nextActions`。
+- `src/app/globals.css`: `.evidence-snippet` 样式。
+- 验收: typecheck / 全量 166 测试 / production build 全绿; dev `:5215` 烟测验证按钮 → API → 任务流水显示一致, 0 console 报错。
+
+下一步:
+- 把证据条目自动并入 `script/generate.ts` 生成的草稿引用 (新增可选 `evidence: EvidenceResult[]` 字段, 在 LLM prompt 里以 "fact sources" 形式喂入)。
+- 真实联调 Postiz / social-auto-upload 草稿(P5 验收剩余项)。
+- 真实 n8n 实例导入 `workspace/drafts/n8n-workflow-*.json` 跑定时任务。
