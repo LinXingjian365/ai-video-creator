@@ -35,7 +35,7 @@
 
 目标：输入账号方向，输出可验证的选题池。
 
-- 接 TikHub 或平台 MCP：搜索热点、竞品、评论、标题。状态：已接 TikHub 抖音热榜、快手热榜、关键词搜索、单视频详情和评论样本，统一归一化到 `TrendItem` 和素材候选后进入本地评分、DeepSeek 分析与素材导入 UI。
+- 接 TikHub 或平台 MCP：搜索热点、竞品、评论、标题。状态：已接 TikHub 抖音热榜、快手热榜、关键词搜索、单视频详情和评论样本，统一归一化到 `TrendItem` 和素材候选后进入本地评分、DeepSeek 分析与素材导入 UI。**完全免费路径**: 自托管 [JoeanAmier/TikTokDownloader](https://github.com/JoeanAmier/TikTokDownloader) (Apache 2.0, 11.4k★) + [KS-Downloader](https://github.com/JoeanAmier/KS-Downloader),REST API on `:5555`,见 `docs/FREE_ALTERNATIVES.md`。
 - 接 Exa/Firecrawl：补网页资料、案例、脚本事实依据。状态：已接 `src/lib/trend/evidence.ts` 双源适配(auto 自动按 key 可用性选)、`/api/trend/evidence`、"联网素材"面板"网页事实证据搜索"卡;未配 key 时诚实抛错,不伪造结果。
 - 输出选题评分、参考链接、拆解要点。
 
@@ -74,7 +74,7 @@
 目标：发布不是最后一步，数据回流驱动下一轮内容。
 
 - 接 social-auto-upload 做国内平台 dry-run。状态：已建立本地发布队列、adapter 状态检查、账号 preflight 和人工确认闸门；已检查 session/config 文件并生成 social-auto-upload 命令预览，仍不执行外部上传。
-- 接 Postiz 做多平台排程候选。状态：已接 Postiz Public API 草稿 adapter 和 integrations probe；默认只预览，`PUBLISH_LIVE_ENABLED=true` 时只创建 `draft`，不直接真发。
+- 接 Postiz 做多平台排程候选。状态：已接 Postiz Public API 草稿 adapter 和 integrations probe；默认只预览，`PUBLISH_LIVE_ENABLED=true` 时只创建 `draft`，不直接真发。**完全免费路径**: 自托管开源 Postiz (Apache 2.0),`POSTIZ_BASE_URL=http://localhost:5000`,见 `docs/FREE_ALTERNATIVES.md`。
 - 接 n8n 编排采集、剪辑、发布、复盘工作流。状态：已接 `/api/orchestration/n8n`、Review UI 编排按钮、dry-run payload、确认后 webhook 触发和可导入 workflow JSON 导出；下一步在真实 n8n 实例里调试定时任务、失败重试和审批映射。
 - 建 30 分钟、24 小时、7 天复盘报告。状态：已接本地 analytics ledger、指标导入、信号计算和下一步动作建议。
 

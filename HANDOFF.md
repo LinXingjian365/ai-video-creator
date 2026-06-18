@@ -250,4 +250,27 @@ key 已落 `.env.local`,实测覆盖:
 - ✅ kuaishou 热榜 `/api/v1/kuaishou/web/hot_search_list`: 返回真数据
 - ❌ douyin 关键词搜索 `/api/v1/douyin/app/v3/fetch_video_search_result`: HTTP 402 "Insufficient balance, this endpoint requires payment and does not accept free credit"
 
-→ TikHub 账户层面的限制,**不是代码 bug**。免费额度只覆盖部分热榜接口,关键词搜索需要付费充值。下次推进 TikHub 联调前先在 https://user.tikhub.io 充值或换免费接口。
+→ TikHub 账户层面的限制,**不是代码 bug**。免费额度只覆盖部分热榜接口,关键词搜索需要付费充值。**已找到完整免费替代方案**,见 `docs/FREE_ALTERNATIVES.md`。
+
+## Claude 更新: 免费/开源替代方案文档 (2026-06-18)
+
+**起因**: 用户指出 Postiz $29/月、TikHub 搜索充值制都是付费方案,要求找 GitHub 上的免费替代。
+
+**调研结论** (详见 `docs/FREE_ALTERNATIVES.md`):
+
+| 当前付费方案 | 月费 | 免费替代 | License |
+|---|---|---|---|
+| Postiz 托管版 | $23-99/月 | [Postiz 自托管](https://github.com/gitroomhq/postiz-app) | Apache 2.0 |
+| TikHub 抖音搜索 | 充值制 | [JoeanAmier/TikTokDownloader](https://github.com/JoeanAmier/TikTokDownloader) 11.4k★ | Apache 2.0 |
+| TikHub 快手 | 充值制 | [JoeanAmier/KS-Downloader](https://github.com/JoeanAmier/KS-Downloader) | Apache 2.0 |
+| n8n Cloud | $24-60/月 | n8n Community Edition 自托管 | Fair Code |
+| BGM 商业曲库 | 订阅制 | Pixabay/Mixkit/FreePD 本地库 (CC0) | CC0 |
+
+**关键发现**: Postiz 本身就是 MIT Apache 2.0,$29/月只是 postiz.com 托管费;TikHub 原作者(Evil0ctal)的项目也是开源的,他停更跑去做商业版 TikHub 了,**JoeanAmier 这套是直接替代品**——Docker 一行起,5555 端口 REST API,显式支持 `/douyin/search` `/douyin/hot` `/douyin/comment` 等端点。
+
+下一步优先级 (按"成本×价值×实现难度"):
+1. **n8n 自托管** (难度低,价值高) — 已有导出 JSON,起 Docker 5 分钟搞定
+2. **BGM 本地库** (难度低,价值中) — 项目已支持任意 mp3 路径,只缺 `bgm/library.ts` 选曲器
+3. **Postiz 自托管** (难度中,价值高) — 三容器 docker-compose,半小时搭起,真实发布闭环
+4. **TikTokDownloader 自托管** (难度中,价值高) — Docker 一行,需手动维护抖音 Cookie 防风控
+5. **KS-Downloader** (难度中,价值中) — 重度用快手时优先级才升
