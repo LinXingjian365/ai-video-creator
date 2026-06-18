@@ -56,6 +56,7 @@ describe("getTrendSource", () => {
     expect(getTrendSource("bilibili").platform).toBe("bilibili");
     expect(getTrendSource("youtube").platform).toBe("youtube");
     expect(getTrendSource("douyin").platform).toBe("douyin");
+    expect(getTrendSource("kuaishou").platform).toBe("kuaishou");
   });
 });
 

@@ -202,7 +202,7 @@ export const creatorSuiteSchema = z.object({
 });
 
 export const trendReportSchema = z.object({
-  platform: z.enum(["bilibili", "douyin", "youtube"]).default("bilibili"),
+  platform: z.enum(["bilibili", "douyin", "kuaishou", "youtube"]).default("bilibili"),
   category: z.string().min(1).default("all"),
   topN: z.coerce.number().int().min(1).max(50).default(20)
 });

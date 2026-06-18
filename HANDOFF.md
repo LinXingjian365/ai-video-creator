@@ -192,3 +192,15 @@ src/
 下一步：
 - 在真实 Postiz/social-auto-upload 登录态配置好后，先跑 `/api/publish/preflight?probePostiz=true`，确认无 blocker，再批准一个队列项并用 `mode=draft` 做 Postiz 草稿烟测。
 - social-auto-upload 仍只生成命令预览；真正执行上传命令前要继续保留人工确认和 dry-run 默认。
+
+## Codex 更新: TikHub 抖音/快手热榜已接入
+
+已完成：
+- `src/lib/trend/sources/tikhub.ts`：新增 TikHub Bearer 请求层，支持 `TIKHUB_BASE_URL`、`TIKHUB_TIMEOUT_MS`、`TIKHUB_ENDPOINT_DOUYIN`、`TIKHUB_ENDPOINT_KUAISHOU`，并把常见 TikHub 响应字段归一化成统一 `TrendItem`。
+- `src/lib/trend/sources/douyin.ts`：从“只报错降级”推进到 TikHub 抖音热榜源。
+- `src/lib/trend/sources/kuaishou.ts`：新增快手热榜源，支持 `hot/entertainment/society/useful/challenge/search` board type。
+- `/api/trend/report`：schema 已支持 `kuaishou`，UI 热点情报下拉已增加快手。
+
+下一步：
+- 配置真实 `TIKHUB_API_KEY` 后，分别跑 `platform=douyin` 和 `platform=kuaishou` 的 `/api/trend/report`，确认真实响应字段是否需要补充映射。
+- 继续接 TikHub 搜索、评论、单视频详情，把“爆款链接/标题 -> 原视频信号 -> 素材候选”补成上游完整闭环。

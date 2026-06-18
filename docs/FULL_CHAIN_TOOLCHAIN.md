@@ -24,7 +24,7 @@ flowchart LR
 
 | 阶段 | 推荐成熟工具 | 用途 | 当前项目状态 | 生产化条件 |
 |---|---|---|---|---|
-| 热点搜索 | Bilibili public ranking、TikHub API、Exa、Firecrawl | B站真实榜单、抖音/快手/B站/网页热点、标题、链接、评论、搜索结果 | 已落地 B站公开排行榜与热门 fallback；其他源已有配置位和集成目录 | 配置 `BILI_COOKIE` 可降低 B站风控；继续补 TikHub/Exa/Firecrawl 真实采集 route |
+| 热点搜索 | Bilibili public ranking、TikHub API、Exa、Firecrawl | B站真实榜单、抖音/快手/B站/网页热点、标题、链接、评论、搜索结果 | 已落地 B站公开排行榜与热门 fallback；已接 TikHub 抖音热榜、快手热榜 endpoint 和统一 TrendItem 归一化；Exa/Firecrawl 已有配置位和集成目录 | 配置 `BILI_COOKIE` 可降低 B站风控；配置 `TIKHUB_API_KEY` 后可跑抖音/快手真实热榜；继续补 Exa/Firecrawl 搜索 route |
 | 网页/素材采集 | Firecrawl、Exa、yt-dlp | 抓网页、搜资料、导入公开视频素材/字幕/封面/元数据 | 已接 `/api/materials/import`，py312 已安装 yt-dlp，会生成素材 manifest | 按需配置 `YTDLP_COOKIES_PATH`，遵守版权和平台规则 |
 | 爆款拆解 | LLM planner、FFmpeg scene/silence detect、PySceneDetect、OpenTimelineIO | 分析开头、节奏、镜头、结构、时间线 | 已有 `creator-suite`、`auto-plan` 和 `/api/materials/analyze`，含字幕/faster-whisper 可选 ASR、PySceneDetect/FFmpeg 场景和静音/有声段信号 | 下一步接 OpenTimelineIO |
 | AI 模型网关 | DeepSeek、Doubao Ark、Claude gateway、GPT gateway | 爆火逻辑解释、选题卡、脚本/计划生成 | DeepSeek 已作为默认 LLM provider 接入；Ark/Claude/GPT gateway 已预留 env 和 client 分支 | 配置对应 API key 后逐个跑真实连通测试 |

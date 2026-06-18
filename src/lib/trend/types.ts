@@ -1,4 +1,4 @@
-export type Platform = "bilibili" | "douyin" | "youtube";
+export type Platform = "bilibili" | "douyin" | "kuaishou" | "youtube";
 
 export interface TrendMetrics {
   views: number;

@@ -183,7 +183,15 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5182/api/auto/simulate" -C
 
 ### POST `/api/trend/report`
 
-抓取 B站真实榜单，计算潜力分和置信度，并在 LLM 可用时生成爆火逻辑分析。该接口会创建 `trend-report` task，并在当前请求内完成后返回最终 task。
+抓取真实平台热点，计算潜力分和置信度，并在 LLM 可用时生成爆火逻辑分析。该接口会创建 `trend-report` task，并在当前请求内完成后返回最终 task。`platform` 支持 `bilibili`、`douyin`、`kuaishou`、`youtube`。
+
+数据源说明：
+- `bilibili`：优先 B 站公开 ranking API，`all` 会回退 popular。
+- `douyin`：通过 TikHub `GET /api/v1/douyin/web/fetch_hot_search_result`，需要 `TIKHUB_API_KEY`。
+- `kuaishou`：通过 TikHub `GET /api/v1/kuaishou/web/fetch_kuaishou_hot_list_v2`，需要 `TIKHUB_API_KEY`，`category` 可传 `hot/entertainment/society/useful/challenge/search` 或数字 board type。
+- `youtube`：通过 YouTube Data API v3 mostPopular，需要 `YOUTUBE_API_KEY`。
+
+TikHub 请求使用 `Authorization: Bearer <token>`，endpoint 可通过 `TIKHUB_ENDPOINT_DOUYIN` / `TIKHUB_ENDPOINT_KUAISHOU` 覆盖；响应会被归一化成统一 `TrendItem`，再进入本地评分和 DeepSeek 分析。
 
 ```json
 {
@@ -214,6 +222,8 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5182/api/auto/simulate" -C
   }
 }
 ```
+
+
 
 配置说明：
 

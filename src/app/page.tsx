@@ -227,7 +227,12 @@ const biliCategories = [
   { value: "tech", label: "科技" },
   { value: "dance", label: "舞蹈" },
   { value: "food", label: "美食" },
-  { value: "movie", label: "影视" }
+  { value: "movie", label: "影视" },
+  { value: "entertainment", label: "快手-文娱" },
+  { value: "society", label: "快手-社会" },
+  { value: "useful", label: "快手-有用" },
+  { value: "challenge", label: "快手-挑战" },
+  { value: "search", label: "快手-搜索" }
 ];
 
 const defaultForm = {
@@ -1338,12 +1343,13 @@ function TrendIntelligencePanel({
           <span>平台</span>
           <select value={platform} onChange={(event) => onPlatformChange(event.target.value)}>
             <option value="bilibili">B站（真实榜单）</option>
+            <option value="kuaishou">快手（TikHub 热榜）</option>
             <option value="youtube">YouTube（需 YOUTUBE_API_KEY）</option>
-            <option value="douyin">抖音（需第三方数据源）</option>
+            <option value="douyin">抖音（TikHub 热榜）</option>
           </select>
         </label>
         <label className="field">
-          <span>B站分区</span>
+          <span>分类 / 榜单类型</span>
           <select value={category} onChange={(event) => onCategoryChange(event.target.value)}>
             {biliCategories.map((item) => (
               <option key={item.value} value={item.value}>{item.label}</option>
