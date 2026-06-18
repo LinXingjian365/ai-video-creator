@@ -35,6 +35,7 @@ npx vitest run # 123 tests, 21 files
 | 多平台热点源 | ✅ B站真实 + YouTube/抖音/快手(TikHub) + Exa/Firecrawl 网页证据 |
 | UI 重设计 | ✅ Midnight Neon 暗夜霓虹 |
 | BGM 混音 | ✅ FFmpeg 渲染后混音(无配音/配音双路径) |
+| BGM 智能选曲 | ✅ 本地库扫描 + mood 关键词匹配(零依赖,无 API) |
 | 平台发布脚手架 | ✅ 本地队列 + adapter 状态 + 人工确认闸门 |
 | 真实发布 adapter 草案 | ✅ Postiz draft / social-auto-upload command preview / live 开关 |
 | 数据回流 | ✅ 本地 analytics ledger + 30m/24h/7d 快照建议 |
@@ -270,7 +271,24 @@ key 已落 `.env.local`,实测覆盖:
 
 下一步优先级 (按"成本×价值×实现难度"):
 1. **n8n 自托管** (难度低,价值高) — 已有导出 JSON,起 Docker 5 分钟搞定
-2. **BGM 本地库** (难度低,价值中) — 项目已支持任意 mp3 路径,只缺 `bgm/library.ts` 选曲器
+2. ~~**BGM 本地库** (难度低,价值中)~~ ✅ **已实现 commit 87e5ce1**
 3. **Postiz 自托管** (难度中,价值高) — 三容器 docker-compose,半小时搭起,真实发布闭环
 4. **TikTokDownloader 自托管** (难度中,价值高) — Docker 一行,需手动维护抖音 Cookie 防风控
 5. **KS-Downloader** (难度中,价值中) — 重度用快手时优先级才升
+
+## Claude 更新: BGM 本地库 + 自动选曲 (commit 87e5ce1)
+
+已完成:
+- `src/lib/bgm/library.ts`: 纯函数核心(扫描/打分/选曲分离)。7 个 mood 类别带中英同义词,
+  `tagsFromPath` 把'workspace/input/audio/uplifting/sora-upbeat-electronic.mp3'抽成
+  `['uplifting','tech','sora']`(同义词归一化)。`pickBgm()` 确定性打分:分数高+字典序稳定。
+- `src/lib/bgm/library.test.ts`: 16 单测覆盖中/英文 mood、归一化、空库、无匹配、fallback、rankings。
+- `/api/bgm/library`: GET 列库,POST 按 mood 选。
+- `src/app/page.tsx`: ScriptPanel BGM 路径下新增"AI 选曲"按钮,优先用 `scriptDraft.bgm` 作 mood。
+
+**实测验证**(真实 LLM 输出): `"轻快电子节奏，带科技感凸点"` → 命中 `[uplifting,tech]`
+双关键词 → 精准选中 `pixabay-tech-upbeat-electronic.mp3`(score 2)。空库 / 无匹配场景均返回
+明确 `nextActions` 指引去 pixabay/mixkit/freepd 下 CC0 mp3,**不静默挑随机文件冒充 AI 选曲**。
+
+**用户操作流程**: 把 CC0 mp3 按曲风落到 `workspace/input/audio/<mood>/`(uplifting/calm/tech/
+cinematic/warm/dark/funny),生成脚本后点"AI 选曲" → form.bgmPath 自动填好 → 渲染时混音。

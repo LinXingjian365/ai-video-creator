@@ -51,7 +51,7 @@
 - 建字幕组件、标题卡、步骤卡、数据卡、片尾关注组件。状态：已完成脚本包装 MVP：标题、钩子、分镜字幕、标签、进度条；数据卡/片尾关注后续增强。
 - 从自动剪辑决策 JSON 生成 Remotion props。状态：已从脚本分镜 props 渲染，后续接 auto-plan/material-analysis props。
 - 输出 9:16、16:9、1:1 多平台版本。状态：已接 FFmpeg 平台版本导出；Remotion 已实测 9:16 输出 MP4。
-- BGM 混音。状态：已接 `src/lib/audio-mix.ts`，Remotion 无配音成片可混入本地 BGM；AI 配音成片可用 `amix` 混合口播+BGM，并在一键全链路 UI 暴露音量参数。
+- BGM 混音。状态：已接 `src/lib/audio-mix.ts`，Remotion 无配音成片可混入本地 BGM；AI 配音成片可用 `amix` 混合口播+BGM，并在一键全链路 UI 暴露音量参数。**自动选曲**(commit 87e5ce1):`src/lib/bgm/library.ts` 扫 `workspace/input/audio` 按 mood 关键词匹配 LLM 推荐曲风;ScriptPanel"AI 选曲"按钮一键填路径,无 API 无月费。
 
 验收：
 
