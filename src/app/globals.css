@@ -712,6 +712,14 @@ input[type="checkbox"] {
   font-size: 13px;
 }
 
+.evidence-snippet {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
 .research-candidate small {
   grid-column: 1 / -1;
   color: var(--muted);

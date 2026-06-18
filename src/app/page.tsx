@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { IntelligenceReport } from "@/lib/trend/types";
 import type { TikHubResearchReport } from "@/lib/trend/research";
+import type { EvidenceReport } from "@/lib/trend/evidence";
 import type { ScriptDraft } from "@/lib/script/generate";
 import type { FullChainResult } from "@/lib/full-chain";
 import type { PublishDryRunResult } from "@/lib/publish/dry-run";
@@ -250,6 +251,7 @@ const defaultForm = {
   researchUrl: "",
   researchItemId: "",
   researchIncludeComments: true,
+  evidenceProvider: "auto",
   materialAnalysisPath: "workspace/input/references",
   materialTranscriptionMode: "auto",
   whisperModel: "tiny",
@@ -327,6 +329,8 @@ export default function Home() {
   const [analyticsSnapshots, setAnalyticsSnapshots] = useState<AnalyticsSnapshot[]>([]);
   const [researchBusy, setResearchBusy] = useState(false);
   const [researchReport, setResearchReport] = useState<TikHubResearchReport | null>(null);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [evidenceReport, setEvidenceReport] = useState<EvidenceReport | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -935,6 +939,43 @@ export default function Home() {
     }
   }
 
+  async function runEvidenceSearchAction() {
+    const query = form.researchQuery.trim();
+    if (!query) {
+      setMessage("先填关键词,再做证据搜索");
+      return;
+    }
+    setEvidenceBusy(true);
+    setMessage("");
+    setResult(null);
+    try {
+      const data = await runPost("/api/trend/evidence", {
+        query,
+        provider: form.evidenceProvider,
+        limit: 8,
+        includeContents: true
+      }, "证据搜索已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("证据搜索任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "证据搜索失败");
+      }
+      const report = final.result as EvidenceReport;
+      setEvidenceReport(report);
+      setResult(report);
+      setMessage(`证据搜索完成:${report.provider} 返回 ${report.results.length} 条事实参考`);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "证据搜索请求失败");
+    } finally {
+      setEvidenceBusy(false);
+    }
+  }
+
   async function analyzeReferenceMaterial() {
     setAnalysisBusy(true);
     setMessage("");
@@ -1119,6 +1160,9 @@ export default function Home() {
             researchBusy={researchBusy}
             researchReport={researchReport}
             onRunTikHubResearch={runTikHubResearchAction}
+            evidenceBusy={evidenceBusy}
+            evidenceReport={evidenceReport}
+            onRunEvidenceSearch={runEvidenceSearchAction}
             onAnalyzeMaterial={analyzeReferenceMaterial}
             onCreatePlanFromScript={createPlanFromScript}
             onRenderScriptPackage={renderScriptPackage}
@@ -1186,6 +1230,9 @@ function StageWorkspace({
   researchBusy,
   researchReport,
   onRunTikHubResearch,
+  evidenceBusy,
+  evidenceReport,
+  onRunEvidenceSearch,
   onAnalyzeMaterial,
   onCreatePlanFromScript,
   onRenderScriptPackage,
@@ -1240,6 +1287,9 @@ function StageWorkspace({
   researchBusy: boolean;
   researchReport: TikHubResearchReport | null;
   onRunTikHubResearch: () => void;
+  evidenceBusy: boolean;
+  evidenceReport: EvidenceReport | null;
+  onRunEvidenceSearch: () => void;
   onAnalyzeMaterial: () => void;
   onCreatePlanFromScript: () => void;
   onRenderScriptPackage: () => void;
@@ -1310,9 +1360,12 @@ function StageWorkspace({
           materialBusy={materialBusy}
           researchBusy={researchBusy}
           researchReport={researchReport}
+          evidenceBusy={evidenceBusy}
+          evidenceReport={evidenceReport}
           onAnalyzeMaterial={onAnalyzeMaterial}
           onImportMaterial={onImportMaterial}
           onRunTikHubResearch={onRunTikHubResearch}
+          onRunEvidenceSearch={onRunEvidenceSearch}
           update={update}
         />
       ) : null}
@@ -1501,18 +1554,24 @@ function CollectPanel({
   analysisBusy,
   researchBusy,
   researchReport,
+  evidenceBusy,
+  evidenceReport,
   onImportMaterial,
   onAnalyzeMaterial,
-  onRunTikHubResearch
+  onRunTikHubResearch,
+  onRunEvidenceSearch
 }: FormPanelProps & {
   assets: WorkspaceAsset[];
   materialBusy: boolean;
   analysisBusy: boolean;
   researchBusy: boolean;
   researchReport: TikHubResearchReport | null;
+  evidenceBusy: boolean;
+  evidenceReport: EvidenceReport | null;
   onImportMaterial: () => void;
   onAnalyzeMaterial: () => void;
   onRunTikHubResearch: () => void;
+  onRunEvidenceSearch: () => void;
 }) {
   const analyzableAssets = assets
     .filter((asset) => asset.role === "input" && (asset.kind === "manifest" || asset.kind === "video"))
@@ -1577,6 +1636,58 @@ function CollectPanel({
             {researchReport.nextActions.length ? (
               <ul className="research-actions">
                 {researchReport.nextActions.map((action) => <li key={action}>{action}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="stage-form-card material-import-card research-card">
+        <div className="form-card-title">
+          <strong>网页事实证据搜索</strong>
+          <span>Exa / Firecrawl 真实搜索;只用于脚本的事实背书,不抓视频画面。</span>
+        </div>
+        <div className="form-grid">
+          <Field label="关键词(复用上面的研究关键词)" value={form.researchQuery} onChange={(value) => update("researchQuery", value)} />
+          <label className="field">
+            <span>证据源</span>
+            <select value={form.evidenceProvider} onChange={(event) => update("evidenceProvider", event.target.value)}>
+              <option value="auto">自动(有谁用谁)</option>
+              <option value="exa">Exa(需 EXA_API_KEY)</option>
+              <option value="firecrawl">Firecrawl(需 FIRECRAWL_API_KEY)</option>
+            </select>
+          </label>
+        </div>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={evidenceBusy} onClick={onRunEvidenceSearch} type="button">
+            {evidenceBusy ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+            搜索事实证据
+          </button>
+          <small>需要 EXA_API_KEY 或 FIRECRAWL_API_KEY;未配置会明确报错,不返回伪造结果。</small>
+        </div>
+        {evidenceReport ? (
+          <div className="research-result">
+            <div className="research-stats">
+              <span>{evidenceReport.provider}</span>
+              <span>{evidenceReport.results.length} 条结果</span>
+            </div>
+            {evidenceReport.results.length ? (
+              <div className="research-candidates">
+                {evidenceReport.results.slice(0, 5).map((item) => (
+                  <article className="research-candidate" key={item.url}>
+                    <strong>{item.title}</strong>
+                    <small>
+                      <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>
+                      {item.publishedAt ? ` · ${item.publishedAt.slice(0, 10)}` : ""}
+                    </small>
+                    {item.snippet ? <p className="evidence-snippet">{item.snippet}</p> : null}
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {evidenceReport.nextActions.length ? (
+              <ul className="research-actions">
+                {evidenceReport.nextActions.map((action) => <li key={action}>{action}</li>)}
               </ul>
             ) : null}
           </div>

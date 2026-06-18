@@ -219,6 +219,13 @@ export const tikhubResearchSchema = z.object({
   path: ["query"]
 });
 
+export const evidenceSearchSchema = z.object({
+  query: z.string().min(1),
+  provider: z.enum(["exa", "firecrawl", "auto"]).default("auto"),
+  limit: z.coerce.number().int().min(1).max(20).default(8),
+  includeContents: z.coerce.boolean().default(true)
+});
+
 export const scriptGenerateSchema = z.object({
   topic: z.string().min(1),
   platform: z.enum(["douyin", "bilibili", "kuaishou"]).default("douyin"),
