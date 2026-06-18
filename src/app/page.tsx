@@ -491,10 +491,16 @@ export default function Home() {
   async function generateScript() {
     const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
     const references = form.references.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const evidence = (evidenceReport?.results ?? []).slice(0, 6).map((item) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.snippet,
+      publishedAt: item.publishedAt
+    }));
     const response = await fetch("/api/script/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic: form.scriptTopic, platform, audience: form.audience, references })
+      body: JSON.stringify({ topic: form.scriptTopic, platform, audience: form.audience, references, evidence })
     });
     const data = await response.json();
     setResult(data);
@@ -593,11 +599,18 @@ export default function Home() {
     try {
       const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
       const variantTargets = (["douyin", "kuaishou", "bilibili"] as const).filter((id) => form[id]);
+      const evidence = (evidenceReport?.results ?? []).slice(0, 6).map((item) => ({
+        title: item.title,
+        url: item.url,
+        snippet: item.snippet,
+        publishedAt: item.publishedAt
+      }));
       const data = await runPost("/api/full-chain", {
         topic: form.scriptTopic,
         platform,
         audience: form.audience || undefined,
         references: form.references.split("\n").map((line) => line.trim()).filter(Boolean),
+        evidence,
         aspectRatio: platform === "bilibili" ? "16:9" : "9:16",
         narrated: form.narrated,
         ...(form.narrated ? { ttsProvider: form.ttsProvider } : {}),
@@ -1379,6 +1392,7 @@ function StageWorkspace({
           remotionBusy={remotionBusy}
           fullChainBusy={fullChainBusy}
           fullChainResult={fullChainResult}
+          evidenceCount={evidenceReport?.results.length ?? 0}
           onCreatePlanFromScript={onCreatePlanFromScript}
           onRenderScriptPackage={onRenderScriptPackage}
           onRunFullChain={onRunFullChain}
@@ -1802,6 +1816,7 @@ function ScriptPanel({
   remotionBusy,
   fullChainBusy,
   fullChainResult,
+  evidenceCount,
   onCreatePlanFromScript,
   onRenderScriptPackage,
   onRunFullChain
@@ -1811,6 +1826,7 @@ function ScriptPanel({
   remotionBusy: boolean;
   fullChainBusy: boolean;
   fullChainResult: FullChainResult | null;
+  evidenceCount: number;
   onCreatePlanFromScript: () => void;
   onRenderScriptPackage: () => void;
   onRunFullChain: () => void;
@@ -1821,7 +1837,12 @@ function ScriptPanel({
         <Field label="选题（来自热点选题卡或自己写）" multiline value={form.scriptTopic} onChange={(value) => update("scriptTopic", value)} />
         <Field label="目标人群" value={form.audience} onChange={(value) => update("audience", value)} />
         <Field label="参考爆款（只借鉴方法，每行一个）" multiline value={form.references} onChange={(value) => update("references", value)} />
-        <small className="hint">LLM 产出可直接开拍的分镜脚本;未配 key 会明确报错，不出假模板。</small>
+        <small className="hint">
+          LLM 产出可直接开拍的分镜脚本;未配 key 会明确报错，不出假模板。
+          {evidenceCount > 0 ? (
+            <span className="hint-pill"> · 已挂载 {evidenceCount} 条网页事实证据,会自动喂给 LLM 引用</span>
+          ) : null}
+        </small>
         <div className="full-chain-config">
           <label className="toggle-row">
             <input checked={form.narrated} onChange={(event) => update("narrated", event.target.checked)} type="checkbox" />
@@ -1910,6 +1931,19 @@ function ScriptPanel({
           <p className="script-bgm"><strong>配乐：</strong>{draft.bgm}</p>
           <p className="script-tags">{draft.tags.map((tag) => <span key={tag}>{tag.startsWith("#") ? tag : `#${tag}`}</span>)}</p>
           {draft.platformTips ? <p className="script-tips"><strong>平台适配：</strong>{draft.platformTips}</p> : null}
+          {draft.citedSources && draft.citedSources.length > 0 ? (
+            <div className="script-cited">
+              <strong>事实引用</strong>
+              <ul>
+                {draft.citedSources.map((source) => (
+                  <li key={source.url}>
+                    <a href={source.url} target="_blank" rel="noreferrer">{source.url}</a>
+                    {source.used ? <span> — {source.used}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="material-import-actions">
             <button className="primary-button" disabled={scriptPlanBusy} onClick={onCreatePlanFromScript} type="button">
               {scriptPlanBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}

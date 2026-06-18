@@ -231,7 +231,17 @@ export const scriptGenerateSchema = z.object({
   platform: z.enum(["douyin", "bilibili", "kuaishou"]).default("douyin"),
   audience: z.string().min(1).optional(),
   durationSec: z.coerce.number().int().positive().max(600).default(45),
-  references: z.array(z.string().min(1)).default([])
+  references: z.array(z.string().min(1)).default([]),
+  evidence: z
+    .array(
+      z.object({
+        title: z.string().min(1).optional(),
+        url: z.string().min(1),
+        snippet: z.string().optional(),
+        publishedAt: z.string().optional()
+      })
+    )
+    .default([])
 });
 
 export const fullChainSchema = z.object({
@@ -240,6 +250,16 @@ export const fullChainSchema = z.object({
   audience: z.string().min(1).optional(),
   durationSec: z.coerce.number().int().positive().max(600).default(45),
   references: z.array(z.string().min(1)).default([]),
+  evidence: z
+    .array(
+      z.object({
+        title: z.string().min(1).optional(),
+        url: z.string().min(1),
+        snippet: z.string().optional(),
+        publishedAt: z.string().optional()
+      })
+    )
+    .default([]),
   aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
   variantTargets: z
     .array(z.enum(["douyin", "kuaishou", "bilibili", "square"]))

@@ -44,6 +44,7 @@ describe("generateScript", () => {
     const s = await generateScript({ topic: "AI剪辑技巧", platform: "douyin" }, client);
     expect(s.titles[0]).toContain("剪辑");
     expect(s.beats).toHaveLength(2);
+    expect(s.citedSources).toEqual([]);
   });
   it("prompt 包含选题和平台", async () => {
     let captured = "";
@@ -52,5 +53,53 @@ describe("generateScript", () => {
     expect(captured).toContain("测试选题XYZ");
     expect(captured).toContain("bilibili");
     expect(captured).toContain("大学生");
+  });
+
+  it("prompt 渲染事实证据并提示 LLM 引用", async () => {
+    let captured = "";
+    const client: LLMClient = { complete: async ({ prompt }) => { captured = prompt ?? ""; return goodJson; } };
+    await generateScript(
+      {
+        topic: "AI 视频生成 2026",
+        evidence: [
+          { title: "Sora 2 vs Runway 横评", url: "https://example.com/sora-runway", snippet: "Sora 2 在物理一致性测试得分 8.7,Runway Gen-4 7.9。", publishedAt: "2026-04-12T00:00:00Z" },
+          { url: "https://example.com/no-title", snippet: "无标题但有摘要的事实条目。" }
+        ]
+      },
+      client
+    );
+    expect(captured).toContain("事实证据");
+    expect(captured).toContain("[1] Sora 2 vs Runway 横评 (2026-04-12) — https://example.com/sora-runway");
+    expect(captured).toContain("摘要: Sora 2 在物理一致性测试得分 8.7");
+    // 无标题时用 url 占位
+    expect(captured).toContain("[2] https://example.com/no-title");
+  });
+
+  it("无证据时 prompt 不出现事实证据章节", async () => {
+    let captured = "";
+    const client: LLMClient = { complete: async ({ prompt }) => { captured = prompt ?? ""; return goodJson; } };
+    await generateScript({ topic: "选题", evidence: [] }, client);
+    expect(captured).not.toContain("事实证据");
+  });
+
+  it("parseScript 解析 citedSources 并丢弃无效项", () => {
+    const json = JSON.stringify({
+      titles: ["t"],
+      hook: "h",
+      beats: [],
+      bgm: "b",
+      tags: [],
+      platformTips: "p",
+      citedSources: [
+        { url: "https://a.example/x", used: "钩子里引用 8.7 分对比" },
+        { url: "  ", used: "应被丢弃" },
+        { used: "缺 url 应被丢弃" },
+        { url: "https://b.example/y" } // used 缺省补空串
+      ]
+    });
+    const s = parseScript(json);
+    expect(s.citedSources).toHaveLength(2);
+    expect(s.citedSources[0]).toEqual({ url: "https://a.example/x", used: "钩子里引用 8.7 分对比" });
+    expect(s.citedSources[1]).toEqual({ url: "https://b.example/y", used: "" });
   });
 });

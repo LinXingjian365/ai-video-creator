@@ -8,7 +8,8 @@ const draft: ScriptDraft = {
   beats: [{ time: "0-3s", shot: "标题卡", voiceover: "抛个问题。", caption: "钩子" }],
   bgm: "轻快电子",
   tags: ["AI", "科普"],
-  platformTips: "前3秒留住人"
+  platformTips: "前3秒留住人",
+  citedSources: []
 };
 
 describe("pickTitle", () => {

@@ -7,7 +7,7 @@ import {
   type PlatformVariantMode
 } from "@/lib/platform-variants";
 import { renderScriptPackage, type RemotionAspectRatio, type RemotionRenderInput } from "@/lib/remotion-render";
-import { generateScript, type ScriptDraft } from "@/lib/script/generate";
+import { generateScript, type ScriptDraft, type ScriptEvidenceInput } from "@/lib/script/generate";
 import type { TtsProvider } from "@/lib/tts/synthesize";
 
 export interface FullChainInput {
@@ -16,6 +16,7 @@ export interface FullChainInput {
   audience?: string;
   durationSec?: number;
   references?: string[];
+  evidence?: ScriptEvidenceInput[];
   aspectRatio?: RemotionAspectRatio;
   variantTargets?: PlatformVariantId[];
   variantMode?: PlatformVariantMode;
@@ -115,7 +116,8 @@ export async function runFullChain(
       platform,
       audience: input.audience,
       durationSec: input.durationSec,
-      references: input.references
+      references: input.references,
+      evidence: input.evidence
     },
     client
   );
