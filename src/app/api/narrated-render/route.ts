@@ -44,7 +44,7 @@ async function runRender(taskId: string, payload: ReturnType<typeof narratedRend
     updateTask(taskId, { progress: 95 });
     appendTaskLog(
       taskId,
-      `配音成片完成:${result.videoPath}(${result.provider}/${result.voice}, ${result.durationSec.toFixed(1)}s)`
+      `配音成片完成:${result.videoPath}(${result.provider}/${result.voice}, ${result.durationSec.toFixed(1)}s, 字幕 ${result.subtitleCount} 条)`
     );
     return completeTask(taskId, result);
   } catch (error) {

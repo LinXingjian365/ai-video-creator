@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { activeCueIndex, buildCaptionCues } from "./captions";
+import { activeCueIndex, buildCaptionCues, cuesFromTimings } from "./captions";
 
 export interface ScriptPackageProps {
   title: string;
@@ -15,6 +15,7 @@ export interface ScriptPackageProps {
   bgm?: string;
   platform?: string;
   durationSec?: number;
+  subtitleCues?: Array<{ text: string; startSec: number; endSec: number }>;
 }
 
 const fallbackProps: ScriptPackageProps = {
@@ -34,10 +35,19 @@ export const ScriptPackage: React.FC<Partial<ScriptPackageProps>> = (props) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
   const beats = merged.beats.length > 0 ? merged.beats : fallbackProps.beats;
-  const cues = useMemo(() => buildCaptionCues(beats, durationInFrames), [beats, durationInFrames]);
-  const activeIndex = activeCueIndex(cues, frame);
-  const activeBeat = beats[Math.max(0, activeIndex)];
-  const activeCue = activeIndex >= 0 ? cues[activeIndex] : undefined;
+  // beatCard 始终按脚本节拍切换;底部烧录字幕优先用配音真实时间轴(edge-tts),无则退化为节拍
+  const beatCues = useMemo(() => buildCaptionCues(beats, durationInFrames), [beats, durationInFrames]);
+  const beatIndex = activeCueIndex(beatCues, frame);
+  const activeBeat = beats[Math.max(0, beatIndex)];
+  const subtitleCues = useMemo(
+    () =>
+      merged.subtitleCues && merged.subtitleCues.length > 0
+        ? cuesFromTimings(merged.subtitleCues, durationInFrames, fps)
+        : beatCues,
+    [merged.subtitleCues, beatCues, durationInFrames, fps]
+  );
+  const subtitleIndex = activeCueIndex(subtitleCues, frame);
+  const activeCue = subtitleIndex >= 0 ? subtitleCues[subtitleIndex] : undefined;
   const progress = Math.min(1, frame / Math.max(1, durationInFrames - 1));
   const introOpacity = interpolate(frame, [0, fps * 0.4], [0, 1], { extrapolateRight: "clamp" });
   const isVertical = height >= width;
@@ -62,8 +72,8 @@ export const ScriptPackage: React.FC<Partial<ScriptPackageProps>> = (props) => {
 
         <section style={styles.beatCard}>
           <div style={styles.beatMeta}>
-            <span>{activeBeat.time ?? `Beat ${activeIndex + 1}`}</span>
-            <span>{activeIndex + 1}/{beats.length}</span>
+            <span>{activeBeat.time ?? `Beat ${beatIndex + 1}`}</span>
+            <span>{beatIndex + 1}/{beats.length}</span>
           </div>
           <strong style={styles.caption}>{activeBeat.shot || "保留高信息密度镜头"}</strong>
           <p style={styles.voiceover}>{activeBeat.voiceover || activeBeat.shot}</p>

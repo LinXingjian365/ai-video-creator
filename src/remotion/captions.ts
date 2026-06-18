@@ -84,3 +84,23 @@ export function activeCueIndex(cues: CaptionCue[], frame: number): number {
   }
   return frame < cues[0].fromFrame ? 0 : cues.length - 1;
 }
+
+// 把带真实起止秒的字幕段(来自 edge-tts 字幕)转成帧窗口, 用于配音版字幕精确对齐。
+export function cuesFromTimings(
+  timings: Array<{ text: string; startSec: number; endSec: number }>,
+  durationInFrames: number,
+  fps: number
+): CaptionCue[] {
+  const total = Math.max(1, Math.round(durationInFrames));
+  const cues: CaptionCue[] = [];
+  for (const timing of timings) {
+    const caption = timing.text.trim();
+    if (!caption) {
+      continue;
+    }
+    const fromFrame = Math.min(total - 1, Math.max(0, Math.round(timing.startSec * fps)));
+    const toFrame = Math.min(total, Math.max(fromFrame + 1, Math.round(timing.endSec * fps)));
+    cues.push({ index: cues.length, caption, fromFrame, toFrame });
+  }
+  return cues;
+}

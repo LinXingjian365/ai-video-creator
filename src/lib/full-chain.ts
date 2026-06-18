@@ -128,7 +128,7 @@ export async function runFullChain(
       durationSec: narrated.durationSec,
       audioPath: narrated.narrationPath
     };
-    onLog?.(`   配音:${narrated.provider}/${narrated.voice}, ${narrated.durationSec.toFixed(1)}s`);
+    onLog?.(`   配音:${narrated.provider}/${narrated.voice}, ${narrated.durationSec.toFixed(1)}s, 字幕 ${narrated.subtitleCount} 条`);
   } else {
     onLog?.(`② 渲染 Remotion 成片:${title}`);
     const render = await renderScriptPackage(scriptDraftToRenderInput(draft, { title, platform, aspectRatio }));

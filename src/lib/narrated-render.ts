@@ -28,6 +28,7 @@ export interface NarratedRenderResult {
   durationSec: number;
   provider: TtsProvider;
   voice: string;
+  subtitleCount: number;   // 烧进成片的真实时间轴字幕条数(edge 有, SAPI 为 0)
 }
 
 export interface NarratedRenderDeps {
@@ -66,7 +67,8 @@ export async function renderNarratedPackage(
     tags: input.tags,
     bgm: input.bgm,
     platform: input.platform,
-    durationSec: narration.durationSec + pad
+    durationSec: narration.durationSec + pad,
+    subtitleCues: narration.cues
   });
 
   const videoPath = input.outputPath
@@ -81,7 +83,8 @@ export async function renderNarratedPackage(
     narrationPath: narration.audioPath,
     durationSec: narration.durationSec,
     provider: narration.provider,
-    voice: narration.voice
+    voice: narration.voice,
+    subtitleCount: narration.cues?.length ?? 0
   };
 }
 

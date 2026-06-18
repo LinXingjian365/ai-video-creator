@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeCueIndex, buildCaptionCues, parseBeatTime } from "@/remotion/captions";
+import { activeCueIndex, buildCaptionCues, cuesFromTimings, parseBeatTime } from "@/remotion/captions";
 
 describe("parseBeatTime", () => {
   it("parses second ranges like 0-3s / 3-18s", () => {
@@ -76,5 +76,32 @@ describe("activeCueIndex", () => {
     expect(activeCueIndex(cues, -10)).toBe(0);
     expect(activeCueIndex(cues, 9999)).toBe(1);
     expect(activeCueIndex([], 5)).toBe(-1);
+  });
+});
+
+describe("cuesFromTimings", () => {
+  it("converts real subtitle seconds to frame windows at the given fps", () => {
+    const cues = cuesFromTimings(
+      [
+        { text: "第一句", startSec: 0.1, endSec: 3.162 },
+        { text: "第二句", startSec: 3.112, endSec: 6.187 }
+      ],
+      300,
+      30
+    );
+    expect(cues[0]).toEqual({ index: 0, caption: "第一句", fromFrame: 3, toFrame: 95 });
+    expect(cues[1]).toEqual({ index: 1, caption: "第二句", fromFrame: 93, toFrame: 186 });
+  });
+
+  it("clamps to total frames and drops empty text", () => {
+    const cues = cuesFromTimings(
+      [
+        { text: " ", startSec: 0, endSec: 1 },
+        { text: "尾句", startSec: 9, endSec: 99 }
+      ],
+      300,
+      30
+    );
+    expect(cues).toEqual([{ index: 0, caption: "尾句", fromFrame: 270, toFrame: 300 }]);
   });
 });

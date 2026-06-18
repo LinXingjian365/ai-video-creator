@@ -4,6 +4,7 @@ import path from "node:path";
 import { getVideoInfo } from "@/lib/ffmpeg";
 import { outputRoot, resolveLocalPath } from "@/lib/paths";
 import { getVideoToolsPython } from "@/lib/python-tools";
+import { parseSrt, type SubtitleCue } from "@/lib/tts/subtitles";
 
 export type TtsProvider = "edge" | "sapi";
 
@@ -20,6 +21,7 @@ export interface NarrationResult {
   durationSec: number;
   provider: TtsProvider;
   voice: string;
+  cues?: SubtitleCue[];   // edge-tts 句级真实时间轴(SAPI 无)
 }
 
 const DEFAULT_TIMEOUT_MS = 120000;
@@ -64,14 +66,28 @@ export async function synthesizeNarration(
   const textPath = `${audioPath}.txt`;
   await fs.writeFile(textPath, text, "utf8");
 
+  let cues: SubtitleCue[] | undefined;
   if (provider === "edge") {
-    await synthEdge(textPath, audioPath, voice, opts.rate, timeoutMs, env);
+    const subtitlePath = `${audioPath}.srt`;
+    await synthEdge(textPath, audioPath, subtitlePath, voice, opts.rate, timeoutMs, env);
+    cues = await readSubtitleCues(subtitlePath);
   } else {
     await synthSapi(textPath, audioPath, voice, timeoutMs);
   }
 
   const info = await getVideoInfo(audioPath);
-  return { audioPath, durationSec: info.duration, provider, voice };
+  return { audioPath, durationSec: info.duration, provider, voice, cues };
+}
+
+// edge-tts 把字幕写到文件后读回解析; 缺失/解析失败时返回 undefined, 上层退化为按节拍对齐
+async function readSubtitleCues(subtitlePath: string): Promise<SubtitleCue[] | undefined> {
+  try {
+    const content = await fs.readFile(subtitlePath, "utf8");
+    const cues = parseSrt(content);
+    return cues.length > 0 ? cues : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function runProcess(command: string, args: string[], timeoutMs: number, label: string): Promise<void> {
@@ -110,12 +126,24 @@ function runProcess(command: string, args: string[], timeoutMs: number, label: s
 async function synthEdge(
   textPath: string,
   audioPath: string,
+  subtitlePath: string,
   voice: string,
   rate: string | undefined,
   timeoutMs: number,
   env: Record<string, string | undefined>
 ): Promise<void> {
-  const args = ["-m", "edge_tts", "--voice", voice, "--file", textPath, "--write-media", audioPath];
+  const args = [
+    "-m",
+    "edge_tts",
+    "--voice",
+    voice,
+    "--file",
+    textPath,
+    "--write-media",
+    audioPath,
+    "--write-subtitles",
+    subtitlePath
+  ];
   if (rate) {
     args.push("--rate", rate);
   }

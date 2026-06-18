@@ -91,7 +91,8 @@ describe("runFullChain", () => {
       narrationPath: "A:/tts/n.mp3",
       durationSec: 14,
       provider: "edge",
-      voice: "zh-CN-XiaoxiaoNeural"
+      voice: "zh-CN-XiaoxiaoNeural",
+      subtitleCount: 3
     });
     const manifest = {
       schema: "ai-video-assistant.platform-variants.v1" as const,

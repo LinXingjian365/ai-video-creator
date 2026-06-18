@@ -37,7 +37,8 @@ export async function renderScriptPackage(input: RemotionRenderInput): Promise<R
     tags: input.tags ?? [],
     bgm: input.bgm,
     platform: input.platform,
-    durationSec: input.durationSec
+    durationSec: input.durationSec,
+    subtitleCues: input.subtitleCues
   };
   const composition = await selectComposition({
     serveUrl: bundleLocation,
