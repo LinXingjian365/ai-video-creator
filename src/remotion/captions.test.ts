@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { activeCueIndex, buildCaptionCues, cuesFromTimings, parseBeatTime } from "@/remotion/captions";
+import {
+  activeCueIndex,
+  buildCaptionCues,
+  chunkCaptionCues,
+  cuesFromTimings,
+  parseBeatTime,
+  splitTextIntoChunks
+} from "@/remotion/captions";
 
 describe("parseBeatTime", () => {
   it("parses second ranges like 0-3s / 3-18s", () => {
@@ -103,5 +110,46 @@ describe("cuesFromTimings", () => {
       30
     );
     expect(cues).toEqual([{ index: 0, caption: "尾句", fromFrame: 270, toFrame: 300 }]);
+  });
+});
+
+describe("splitTextIntoChunks", () => {
+  it("keeps short text as a single chunk", () => {
+    expect(splitTextIntoChunks("短句子。", 18)).toEqual(["短句子。"]);
+  });
+
+  it("packs punctuation-delimited pieces up to maxChars", () => {
+    expect(splitTextIntoChunks("一二三，四五六，七八九。", 8)).toEqual(["一二三，四五六，", "七八九。"]);
+  });
+
+  it("hard-splits an overlong unpunctuated piece", () => {
+    expect(splitTextIntoChunks("一二三四五六七八九十", 4)).toEqual(["一二三四", "五六七八", "九十"]);
+  });
+});
+
+describe("chunkCaptionCues", () => {
+  it("splits a long cue across its window by character proportion", () => {
+    const cues = chunkCaptionCues(
+      [{ index: 0, caption: "一二三，四五六，七八九。", fromFrame: 0, toFrame: 120 }],
+      8
+    );
+    expect(cues).toEqual([
+      { index: 0, caption: "一二三，四五六，", fromFrame: 0, toFrame: 80 },
+      { index: 1, caption: "七八九。", fromFrame: 80, toFrame: 120 }
+    ]);
+  });
+
+  it("leaves short cues untouched but reindexes", () => {
+    const cues = chunkCaptionCues(
+      [
+        { index: 0, caption: "短一", fromFrame: 0, toFrame: 30 },
+        { index: 1, caption: "短二", fromFrame: 30, toFrame: 60 }
+      ],
+      18
+    );
+    expect(cues).toEqual([
+      { index: 0, caption: "短一", fromFrame: 0, toFrame: 30 },
+      { index: 1, caption: "短二", fromFrame: 30, toFrame: 60 }
+    ]);
   });
 });

@@ -104,3 +104,63 @@ export function cuesFromTimings(
   }
   return cues;
 }
+
+// 把一句文本按标点切成 <= maxChars 的短块(标点跟随前段);单段仍超长则按长度硬切。
+export function splitTextIntoChunks(text: string, maxChars: number): string[] {
+  const clean = text.trim();
+  if (clean.length <= maxChars) {
+    return clean ? [clean] : [];
+  }
+  const pieces = clean
+    .split(/(?<=[，。！？；、,.!?;])/)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+  for (const piece of pieces) {
+    if (piece.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let i = 0; i < piece.length; i += maxChars) {
+        chunks.push(piece.slice(i, i + maxChars));
+      }
+      continue;
+    }
+    if ((current + piece).length > maxChars) {
+      if (current) {
+        chunks.push(current);
+      }
+      current = piece;
+    } else {
+      current += piece;
+    }
+  }
+  if (current) {
+    chunks.push(current);
+  }
+  return chunks.length > 0 ? chunks : [clean];
+}
+
+// 把长字幕段切成短块, 在原段时间窗内按字数比例分配, 让长句像真短视频一样逐句蹦出。
+export function chunkCaptionCues(cues: CaptionCue[], maxChars: number): CaptionCue[] {
+  const result: CaptionCue[] = [];
+  for (const cue of cues) {
+    const chunks = splitTextIntoChunks(cue.caption, maxChars);
+    if (chunks.length <= 1) {
+      result.push({ ...cue, index: result.length });
+      continue;
+    }
+    const span = cue.toFrame - cue.fromFrame;
+    const totalChars = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    let acc = 0;
+    for (const chunk of chunks) {
+      const fromFrame = cue.fromFrame + Math.round((acc / totalChars) * span);
+      acc += chunk.length;
+      const toFrame = cue.fromFrame + Math.round((acc / totalChars) * span);
+      result.push({ index: result.length, caption: chunk, fromFrame, toFrame: Math.max(fromFrame + 1, toFrame) });
+    }
+  }
+  return result;
+}
