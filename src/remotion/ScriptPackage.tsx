@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { activeCueIndex, buildCaptionCues } from "./captions";
 
 export interface ScriptPackageProps {
   title: string;
@@ -33,11 +34,19 @@ export const ScriptPackage: React.FC<Partial<ScriptPackageProps>> = (props) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
   const beats = merged.beats.length > 0 ? merged.beats : fallbackProps.beats;
-  const beatFrame = Math.floor((frame / Math.max(1, durationInFrames)) * beats.length);
-  const activeBeat = beats[Math.min(beats.length - 1, Math.max(0, beatFrame))];
+  const cues = useMemo(() => buildCaptionCues(beats, durationInFrames), [beats, durationInFrames]);
+  const activeIndex = activeCueIndex(cues, frame);
+  const activeBeat = beats[Math.max(0, activeIndex)];
+  const activeCue = activeIndex >= 0 ? cues[activeIndex] : undefined;
   const progress = Math.min(1, frame / Math.max(1, durationInFrames - 1));
   const introOpacity = interpolate(frame, [0, fps * 0.4], [0, 1], { extrapolateRight: "clamp" });
   const isVertical = height >= width;
+  const captionFade = activeCue
+    ? interpolate(frame, [activeCue.fromFrame, activeCue.fromFrame + fps * 0.25], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp"
+      })
+    : 0;
 
   return (
     <AbsoluteFill style={styles.root}>
@@ -53,10 +62,10 @@ export const ScriptPackage: React.FC<Partial<ScriptPackageProps>> = (props) => {
 
         <section style={styles.beatCard}>
           <div style={styles.beatMeta}>
-            <span>{activeBeat.time ?? `Beat ${beatFrame + 1}`}</span>
-            <span>{beatFrame + 1}/{beats.length}</span>
+            <span>{activeBeat.time ?? `Beat ${activeIndex + 1}`}</span>
+            <span>{activeIndex + 1}/{beats.length}</span>
           </div>
-          <strong style={styles.caption}>{activeBeat.caption || activeBeat.shot || "保留高信息密度镜头"}</strong>
+          <strong style={styles.caption}>{activeBeat.shot || "保留高信息密度镜头"}</strong>
           <p style={styles.voiceover}>{activeBeat.voiceover || activeBeat.shot}</p>
         </section>
 
@@ -66,6 +75,14 @@ export const ScriptPackage: React.FC<Partial<ScriptPackageProps>> = (props) => {
           ))}
         </div>
       </div>
+
+      {activeCue && activeCue.caption ? (
+        <div style={{ ...styles.subtitleLayer, bottom: isVertical ? 220 : 96 }}>
+          <span style={{ ...styles.subtitle, fontSize: isVertical ? 54 : 42, opacity: captionFade }}>
+            {activeCue.caption}
+          </span>
+        </div>
+      ) : null}
 
       <div style={styles.progressTrack}>
         <div style={{ ...styles.progressFill, width: `${progress * 100}%` }} />
@@ -164,6 +181,28 @@ const styles: Record<string, React.CSSProperties> = {
     bottom: 0,
     height: 10,
     background: "rgba(255,255,255,0.16)"
+  },
+  subtitleLayer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    display: "flex",
+    justifyContent: "center",
+    padding: "0 56px",
+    pointerEvents: "none"
+  },
+  subtitle: {
+    display: "inline-block",
+    maxWidth: "92%",
+    textAlign: "center",
+    color: "#ffffff",
+    fontWeight: 900,
+    lineHeight: 1.25,
+    padding: "12px 26px",
+    borderRadius: 12,
+    background: "rgba(4, 16, 18, 0.72)",
+    border: "1px solid rgba(125, 224, 206, 0.35)",
+    textShadow: "0 3px 14px rgba(0,0,0,0.8)"
   },
   progressFill: {
     height: "100%",
