@@ -1,4 +1,5 @@
 import type { LLMClient } from "@/lib/llm/client";
+import { renderNarratedPackage } from "@/lib/narrated-render";
 import {
   renderPlatformVariants,
   type PlatformVariantId,
@@ -7,6 +8,7 @@ import {
 } from "@/lib/platform-variants";
 import { renderScriptPackage, type RemotionAspectRatio, type RemotionRenderInput } from "@/lib/remotion-render";
 import { generateScript, type ScriptDraft } from "@/lib/script/generate";
+import type { TtsProvider } from "@/lib/tts/synthesize";
 
 export interface FullChainInput {
   topic: string;
@@ -17,6 +19,16 @@ export interface FullChainInput {
   aspectRatio?: RemotionAspectRatio;
   variantTargets?: PlatformVariantId[];
   variantMode?: PlatformVariantMode;
+  narrated?: boolean;
+  ttsProvider?: TtsProvider;
+  voice?: string;
+}
+
+export interface FullChainNarration {
+  provider: TtsProvider;
+  voice: string;
+  durationSec: number;
+  audioPath: string;
 }
 
 export interface FullChainResult {
@@ -24,19 +36,25 @@ export interface FullChainResult {
   draft: ScriptDraft;
   packageVideoPath: string;
   variants: PlatformVariantManifest;
+  narration?: FullChainNarration;
 }
 
 export interface FullChainDeps {
   generateScript: typeof generateScript;
   renderScriptPackage: typeof renderScriptPackage;
+  renderNarratedPackage: typeof renderNarratedPackage;
   renderPlatformVariants: typeof renderPlatformVariants;
   onLog?: (message: string) => void;
   onProgress?: (progress: number) => void;
 }
 
-const defaultDeps: Pick<FullChainDeps, "generateScript" | "renderScriptPackage" | "renderPlatformVariants"> = {
+const defaultDeps: Pick<
+  FullChainDeps,
+  "generateScript" | "renderScriptPackage" | "renderNarratedPackage" | "renderPlatformVariants"
+> = {
   generateScript,
   renderScriptPackage,
+  renderNarratedPackage,
   renderPlatformVariants
 };
 
@@ -66,7 +84,7 @@ export async function runFullChain(
   client: LLMClient,
   deps: Partial<FullChainDeps> = {}
 ): Promise<FullChainResult> {
-  const { generateScript, renderScriptPackage, renderPlatformVariants, onLog, onProgress } = {
+  const { generateScript, renderScriptPackage, renderNarratedPackage, renderPlatformVariants, onLog, onProgress } = {
     ...defaultDeps,
     ...deps
   };
@@ -88,13 +106,39 @@ export async function runFullChain(
   const title = pickTitle(draft, input.topic);
 
   onProgress?.(35);
-  onLog?.(`② 渲染 Remotion 成片:${title}`);
-  const render = await renderScriptPackage(scriptDraftToRenderInput(draft, { title, platform, aspectRatio }));
+  let packageVideoPath: string;
+  let narration: FullChainNarration | undefined;
+  if (input.narrated) {
+    onLog?.(`② 合成 AI 配音 + 渲染成片:${title}`);
+    const narrated = await renderNarratedPackage({
+      title,
+      hook: draft.hook,
+      beats: draft.beats,
+      tags: draft.tags,
+      bgm: draft.bgm,
+      platform,
+      aspectRatio,
+      ttsProvider: input.ttsProvider,
+      voice: input.voice
+    });
+    packageVideoPath = narrated.videoPath;
+    narration = {
+      provider: narrated.provider,
+      voice: narrated.voice,
+      durationSec: narrated.durationSec,
+      audioPath: narrated.narrationPath
+    };
+    onLog?.(`   配音:${narrated.provider}/${narrated.voice}, ${narrated.durationSec.toFixed(1)}s`);
+  } else {
+    onLog?.(`② 渲染 Remotion 成片:${title}`);
+    const render = await renderScriptPackage(scriptDraftToRenderInput(draft, { title, platform, aspectRatio }));
+    packageVideoPath = render.outputPath;
+  }
 
   onProgress?.(60);
   onLog?.("③ 生成多平台变体");
   const variants = await renderPlatformVariants({
-    inputPath: render.outputPath,
+    inputPath: packageVideoPath,
     title,
     targets: input.variantTargets,
     mode: input.variantMode,
@@ -103,5 +147,5 @@ export async function runFullChain(
   });
 
   onProgress?.(100);
-  return { topic: input.topic, draft, packageVideoPath: render.outputPath, variants };
+  return { topic: input.topic, draft, packageVideoPath, variants, narration };
 }

@@ -225,7 +225,28 @@ export const fullChainSchema = z.object({
   variantTargets: z
     .array(z.enum(["douyin", "kuaishou", "bilibili", "square"]))
     .default(["douyin", "kuaishou", "bilibili", "square"]),
-  variantMode: z.enum(["crop", "fit"]).default("crop")
+  variantMode: z.enum(["crop", "fit"]).default("crop"),
+  narrated: z.coerce.boolean().default(false),
+  ttsProvider: z.enum(["edge", "sapi"]).optional(),
+  voice: z.string().min(1).optional()
+});
+
+export const narratedRenderSchema = z.object({
+  title: z.string().min(1),
+  hook: z.string().min(1).optional(),
+  aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
+  platform: z.string().min(1).optional(),
+  bgm: z.string().min(1).optional(),
+  tags: z.array(z.string().min(1)).default([]),
+  outputPath: z.string().min(1).optional(),
+  ttsProvider: z.enum(["edge", "sapi"]).optional(),
+  voice: z.string().min(1).optional(),
+  beats: z.array(z.object({
+    time: z.string().min(1).optional(),
+    shot: z.string().min(1).optional(),
+    voiceover: z.string().min(1).optional(),
+    caption: z.string().min(1).optional()
+  })).default([])
 });
 
 export const publishDryRunSchema = z.object({

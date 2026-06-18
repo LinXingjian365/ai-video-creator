@@ -235,6 +235,8 @@ const defaultForm = {
   competitorStyle: "高密度干货 + 前3秒强反差 + 大字幕",
   scriptTopic: "在AI里抛硬币，正面概率真的是50%吗？",
   webSearchEnabled: "true",
+  narrated: true,
+  ttsProvider: "edge",
   douyin: true,
   kuaishou: true,
   bilibili: true
@@ -514,8 +516,12 @@ export default function Home() {
         audience: form.audience || undefined,
         references: form.references.split("\n").map((line) => line.trim()).filter(Boolean),
         aspectRatio: platform === "bilibili" ? "16:9" : "9:16",
+        narrated: form.narrated,
+        ...(form.narrated ? { ttsProvider: form.ttsProvider } : {}),
         ...(variantTargets.length > 0 ? { variantTargets } : {})
-      }, "一键全链路已启动：脚本 → Remotion 成片 → 多平台变体");
+      }, form.narrated
+        ? "一键全链路已启动：脚本 → AI 配音成片 → 多平台变体"
+        : "一键全链路已启动：脚本 → Remotion 成片 → 多平台变体");
       const final = data.task?.status === "completed" || data.task?.status === "failed"
         ? data.task as TaskRecord
         : await pollTaskUntilDone(data.task.id, 1_200_000);
@@ -1236,17 +1242,35 @@ function ScriptPanel({
         <Field label="目标人群" value={form.audience} onChange={(value) => update("audience", value)} />
         <Field label="参考爆款（只借鉴方法，每行一个）" multiline value={form.references} onChange={(value) => update("references", value)} />
         <small className="hint">点上方“生成脚本方案”调用 /api/script/generate，由 LLM 产出可直接开拍的分镜脚本。未配置 LLM key 时会明确报错，不出假模板。</small>
+        <div className="full-chain-config">
+          <label className="toggle-row">
+            <input checked={form.narrated} onChange={(event) => update("narrated", event.target.checked)} type="checkbox" />
+            <span>AI 配音口播（TTS 合成 + 成片按配音时长动态对齐）</span>
+          </label>
+          {form.narrated ? (
+            <label className="field">
+              <span>配音引擎</span>
+              <select value={form.ttsProvider} onChange={(event) => update("ttsProvider", event.target.value)}>
+                <option value="edge">edge-tts（neural 中文，音质好，需联网）</option>
+                <option value="sapi">SAPI（本地保底，零依赖）</option>
+              </select>
+            </label>
+          ) : null}
+        </div>
         <div className="material-import-actions full-chain-action">
           <button className="primary-button" disabled={fullChainBusy} onClick={onRunFullChain} type="button">
             {fullChainBusy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
-            一键全链路：选题 → 成片 → 多平台
+            {form.narrated ? "一键全链路：选题 → AI 配音成片 → 多平台" : "一键全链路：选题 → 成片 → 多平台"}
           </button>
-          <small>调 /api/full-chain：LLM 生成脚本 → Remotion 渲染成片 → FFmpeg 输出抖音/快手/B站多平台变体，一步到位。耗时约 2-4 分钟。</small>
+          <small>调 /api/full-chain：LLM 生成脚本 →{form.narrated ? " AI 配音 +" : ""} Remotion 渲染成片 → FFmpeg 输出抖音/快手/B站多平台变体，一步到位。耗时约 2-4 分钟{form.narrated ? "（配音版略长）" : ""}。</small>
         </div>
         {fullChainResult ? (
           <div className="full-chain-result">
             <strong>全链路产出：{fullChainResult.draft.titles[0] ?? fullChainResult.topic}</strong>
             <p className="hint">成片：{fullChainResult.packageVideoPath}</p>
+            {fullChainResult.narration ? (
+              <p className="hint">配音：{fullChainResult.narration.provider}/{fullChainResult.narration.voice} · {fullChainResult.narration.durationSec.toFixed(1)}s</p>
+            ) : null}
             <ul>
               {fullChainResult.variants.variants.map((variant) => (
                 <li key={variant.id}>{variant.label} · {variant.width}×{variant.height}</li>

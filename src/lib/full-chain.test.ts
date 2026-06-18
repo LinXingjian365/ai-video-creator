@@ -81,4 +81,42 @@ describe("runFullChain", () => {
     expect(result.variants).toBe(manifest);
     expect(progress.at(-1)).toBe(100);
   });
+
+  it("uses narrated render and runs variants on the narrated video when narrated flag is set", async () => {
+    const generateScript = vi.fn().mockResolvedValue(draft);
+    const renderScriptPackage = vi.fn();
+    const renderNarratedPackage = vi.fn().mockResolvedValue({
+      videoPath: "A:/out/narrated.mp4",
+      silentVideoPath: "A:/out/silent.mp4",
+      narrationPath: "A:/tts/n.mp3",
+      durationSec: 14,
+      provider: "edge",
+      voice: "zh-CN-XiaoxiaoNeural"
+    });
+    const manifest = {
+      schema: "ai-video-assistant.platform-variants.v1" as const,
+      title: "在AI里抛硬币正面真是50%吗",
+      inputPath: "A:/out/narrated.mp4",
+      outputDir: "A:/out/publish",
+      createdAt: "2026-06-17T00:00:00.000Z",
+      variants: [{ id: "douyin" as const, label: "Douyin 9:16", width: 1080, height: 1920, fps: 30, mode: "crop" as const, outputPath: "A:/out/publish/d.mp4" }]
+    };
+    const renderPlatformVariants = vi.fn().mockResolvedValue(manifest);
+
+    const result = await runFullChain(
+      { topic: "硬币概率", platform: "douyin", variantTargets: ["douyin"], narrated: true, ttsProvider: "edge" },
+      {} as never,
+      { generateScript, renderScriptPackage, renderNarratedPackage, renderPlatformVariants }
+    );
+
+    expect(renderNarratedPackage).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "在AI里抛硬币正面真是50%吗", hook: draft.hook, ttsProvider: "edge" })
+    );
+    expect(renderScriptPackage).not.toHaveBeenCalled();
+    expect(renderPlatformVariants).toHaveBeenCalledWith(
+      expect.objectContaining({ inputPath: "A:/out/narrated.mp4", targets: ["douyin"] })
+    );
+    expect(result.packageVideoPath).toBe("A:/out/narrated.mp4");
+    expect(result.narration).toMatchObject({ provider: "edge", voice: "zh-CN-XiaoxiaoNeural", durationSec: 14, audioPath: "A:/tts/n.mp3" });
+  });
 });
