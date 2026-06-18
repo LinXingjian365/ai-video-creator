@@ -34,9 +34,11 @@ npx vitest run # 123 tests, 21 files
 | 发布 dry-run | ✅ |
 | 多平台热点源 | ✅ (B站真实 + YouTube/抖音诚实降级) |
 | UI 重设计 | ✅ Midnight Neon 暗夜霓虹 |
-| **BGM 混音** | **← 下一项** |
-| 平台发布脚手架 | 待开始 |
-| 数据回流 | 待开始 |
+| BGM 混音 | ✅ FFmpeg 渲染后混音(无配音/配音双路径) |
+| 平台发布脚手架 | ✅ 本地队列 + adapter 状态 + 人工确认闸门 |
+| 真实发布 adapter 草案 | ✅ Postiz draft / social-auto-upload command preview / live 开关 |
+| 数据回流 | ✅ 本地 analytics ledger + 30m/24h/7d 快照建议 |
+| **真实账号联调 / n8n 自动编排** | **← 下一项** |
 
 ## 关键技术细节
 
@@ -74,33 +76,71 @@ src/
     api/                # 27 个 API 路由
   lib/
     broll.ts            # B-roll planner + stageBrollAssets
+    audio-mix.ts        # BGM / narration+BGM FFmpeg mix layer
     remotion-render.ts  # Remotion 渲染入口 + publicDir 暂存逻辑
-    narrated-render.ts  # 配音成片 (TTS → Remotion → ffmpeg 混音)
+    narrated-render.ts  # 配音成片 (TTS → Remotion → narration/BGM 混音)
     tts/synthesize.ts   # TTS 合成 (edge-tts/SAPI 可插拔)
     full-chain.ts       # 一键全链路编排
     llm/client.ts       # LLM 客户端 (DeepSeek 默认)
+    publish/adapters.ts # social-auto-upload/Postiz/manual adapter 状态
+    publish/queue.ts    # 本地待发布队列 + 人工确认闸门
+    publish/dispatch.ts # approved 队列项 → Postiz 草稿/命令预览
+    analytics/ledger.ts # 平台数据快照、信号计算、下一步动作建议
   remotion/
     ScriptPackage.tsx   # Remotion 组件 (B-roll + 字幕 + 无配音/配音双模式)
     captions.ts         # 字幕引擎 (真实时间轴 + 长句分段)
     Root.tsx            # Remotion Composition 注册
 ```
 
-## 下一步: BGM 混音 (优先级②)
+## 已完成: BGM 混音 (优先级②)
 
 **目标**: 成片混入背景音乐。
 
 **入口点**:
-- `src/lib/narrated-render.ts`: 配音版成片 (已有 `ffmpeg -i video.mp4 -i audio.aac -map 0:v -map 1:a` 混音逻辑可参考)
-- `src/lib/remotion-render.ts`: 无声版成片 (无 TTS 口播)
+- `src/lib/audio-mix.ts`: 统一 FFmpeg 混音层，含 `mixBackgroundMusic()` 和 `mixNarrationWithBackgroundMusic()`。
+- `src/lib/remotion-render.ts`: 无配音 Remotion 成片可传 `bgmPath/bgmVolume`，先渲染临时 silent MP4，再混入 BGM。
+- `src/lib/narrated-render.ts`: 配音版成片可传 `bgmPath/bgmVolume/narrationVolume`，用 `amix=duration=first` 混合口播+BGM。
+- `src/lib/full-chain.ts` / `src/app/page.tsx`: 一键全链路 UI 已暴露 BGM 路径、BGM 音量、口播音量。
 
-**参考现有混音**: `narrated-render.ts` 用 `ffmpeg -filter_complex` 做视频轨+音频轨混音。BGM 同理: 拿成片 mp4 + BGM 音频 → `amix` 或 `amerge` → 输出双流 mp4。
+**实现方式**: 渲染后混音，不把本地音频塞进 Remotion `<Audio>`，避免本地文件 URL / bundle 约束。BGM 输入使用 `-stream_loop -1` 循环，输出 `H.264 video copy + AAC 192k audio`。
 
-**BGM 来源思路**:
+**BGM 来源下一步**:
 1. 让 LLM 在脚本生成时推荐 BGM 曲风 (当前 `ScriptDraft.bgm` 字段已有)
-2. 下载免版权 BGM (Pixabay Music API: `https://pixabay.com/api/videos/?key=...`, 或本地库存)
-3. `src/lib/remotion-render.ts` 渲染时把 BGM 路径传给 ScriptPackage 组件 (`<Audio>` component), 或者在渲染后用 ffmpeg 混音
+2. 下载免版权 BGM 或维护本地库存 `workspace/input/audio`
+3. 根据脚本 `bgm` 文案自动匹配本地曲库
 
-**验证方式**: 渲染一段 15s 配音成片 → ffmpeg 混入 BGM → ffprobe 确认双流输出 → 浏览器播放。
+**验证方式**: 已有 `src/lib/audio-mix.test.ts` / `narrated-render.test.ts` / `full-chain.test.ts` 覆盖参数传递和 FFmpeg filter；还需要在每轮交付前跑一次真实 ffmpeg/ffprobe 烟测。
+
+## 已完成: 平台发布脚手架
+
+目标：把当前 dry-run 推进到可配置发布器接口，先不真发，先建立平台 adapter、账号/登录态检查、待发布队列和人工确认闸门。
+
+**入口点**:
+- `src/lib/publish/adapters.ts`: 识别 social-auto-upload、Postiz、manual adapter 状态；当前 `canPublish=false`，全部 dry-run only。
+- `src/lib/publish/queue.ts`: `workspace/drafts/publish-queue.json` 本地队列；`ready/blocked/approved` 状态；人工确认口令 `CONFIRM_DRY_RUN_ONLY`。
+- `src/app/api/publish/queue/route.ts`: `GET` 队列+adapter 状态，`POST` 先 dry-run 再入队。
+- `src/app/api/publish/approve/route.ts`: 人工批准，不真发。
+- `src/app/page.tsx`: 发布面板可加入队列、查看 adapter、输入确认口令并批准。
+
+## 已完成: 真实发布 adapter 草案 / 数据回流
+
+目标：在不破坏 dry-run 默认安全闸门的前提下，接入 social-auto-upload/Postiz 的真实 adapter 草案，并开始建立 30分钟/24小时/7天数据回流模型。真实上传必须继续要求 `approved` 队列项和人工确认。
+
+**入口点**:
+- `src/lib/publish/dispatch.ts`: 消费 `approved` 队列项；manual/social-auto-upload 默认只预览；Postiz 在 `PUBLISH_LIVE_ENABLED=true` 且配置完整时调用 `POST /public/v1/posts` 创建 `draft`。
+- `src/app/api/publish/dispatch/route.ts`: 发布 dispatch API。
+- `src/lib/analytics/ledger.ts`: `workspace/drafts/analytics-ledger.json`；计算互动率、分享率、评论率、涨粉转化率，并输出下一步动作。
+- `src/app/api/analytics/import/route.ts`: `GET` ledger，`POST` 导入 30m/24h/7d/custom 指标快照。
+- `src/app/page.tsx`: 发布面板可 dispatch 草稿；运营复盘面板可导入指标快照并查看建议。
+
+**安全默认**:
+- `.env.example` 默认 `PUBLISH_LIVE_ENABLED=false`。
+- Postiz live 只创建 `type:"draft"`，不调用 `now` 真发。
+- social-auto-upload 只生成命令预览，不执行外部上传命令。
+
+## 下一步: 真实账号联调 / n8n 自动编排
+
+目标：配置真实 Postiz/social-auto-upload 登录态后做一次草稿联调；同时建立 n8n webhook，把“热点 → 脚本 → 成片 → 队列 → 复盘导入”串成定时任务。
 
 ## Git 注意事项
 
@@ -121,3 +161,15 @@ src/
 - `ai-video-toolchain-state.md` — 本机工具链 (ffmpeg/python/yt-dlp/whisper/剪映)
 - `github-repo-and-credential-gotcha.md` — GitHub 凭证踩坑记录
 - `MEMORY.md` — 所有记忆的索引
+
+## Codex ����: n8n �Զ������ѽ���
+
+����ɣ�
+- `src/lib/orchestration/n8n.ts`������ n8n workflow blueprint ��ȫ��· payload��Ĭ�� dry-run��webhook ģʽ��Ҫ `CONFIRM_N8N_WEBHOOK`��
+- `src/app/api/orchestration/n8n/route.ts`��`GET` ��������״̬/��ͼ��`POST` ���� `n8n-orchestration` �������� payload �򴥷� webhook��
+- `src/app/page.tsx`����Ӫ����������� n8n ���ſ�Ƭ����ť�ɵ������ payload �򴥷� webhook��
+- `.env.example`������ `APP_BASE_URL`��`N8N_WEBHOOK_URL`��`N8N_WEBHOOK_SECRET`��
+
+��һ����
+- ����ʵ n8n �ﵼ��/� workflow�����ö�ʱ������ʧ�����ԺͶԱ��� `APP_BASE_URL` �Ļص���
+- ������ʵ Postiz/social-auto-upload ��¼̬���ȴ��� Postiz draft����ֱ���淢��

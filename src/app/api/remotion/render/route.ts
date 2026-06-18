@@ -24,7 +24,7 @@ async function runRender(taskId: string, payload: ReturnType<typeof remotionRend
     appendTaskLog(taskId, "Bundling Remotion composition.");
     const result = await renderScriptPackage(payload);
     updateTask(taskId, { progress: 95 });
-    appendTaskLog(taskId, `Rendered Remotion video to ${result.outputPath}`);
+    appendTaskLog(taskId, `Rendered Remotion video to ${result.outputPath}${result.bgmPath ? " with BGM mix" : ""}`);
     return completeTask(taskId, result);
   } catch (error) {
     return failTask(taskId, error);

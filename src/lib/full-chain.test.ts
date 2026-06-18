@@ -58,7 +58,14 @@ describe("runFullChain", () => {
     const progress: number[] = [];
 
     const result = await runFullChain(
-      { topic: "硬币概率", platform: "douyin", variantTargets: ["douyin"], aspectRatio: "9:16" },
+      {
+        topic: "硬币概率",
+        platform: "douyin",
+        variantTargets: ["douyin"],
+        aspectRatio: "9:16",
+        bgmPath: "workspace/input/audio/bgm.mp3",
+        bgmVolume: 0.2
+      },
       {} as never,
       { generateScript, renderScriptPackage, renderPlatformVariants, onProgress: (p) => progress.push(p) }
     );
@@ -70,7 +77,13 @@ describe("runFullChain", () => {
     );
     // render received the picked title + mapped draft
     expect(renderScriptPackage).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "在AI里抛硬币正面真是50%吗", hook: draft.hook, aspectRatio: "9:16" })
+      expect.objectContaining({
+        title: "在AI里抛硬币正面真是50%吗",
+        hook: draft.hook,
+        aspectRatio: "9:16",
+        bgmPath: "workspace/input/audio/bgm.mp3",
+        bgmVolume: 0.2
+      })
     );
     // variants received the rendered package as input
     expect(renderPlatformVariants).toHaveBeenCalledWith(
@@ -79,6 +92,7 @@ describe("runFullChain", () => {
     expect(result.draft).toBe(draft);
     expect(result.packageVideoPath).toBe("A:/out/pkg.mp4");
     expect(result.variants).toBe(manifest);
+    expect(result.bgm).toEqual({ audioPath: "workspace/input/audio/bgm.mp3", volume: 0.2 });
     expect(progress.at(-1)).toBe(100);
   });
 
@@ -105,13 +119,29 @@ describe("runFullChain", () => {
     const renderPlatformVariants = vi.fn().mockResolvedValue(manifest);
 
     const result = await runFullChain(
-      { topic: "硬币概率", platform: "douyin", variantTargets: ["douyin"], narrated: true, ttsProvider: "edge" },
+      {
+        topic: "硬币概率",
+        platform: "douyin",
+        variantTargets: ["douyin"],
+        narrated: true,
+        ttsProvider: "edge",
+        bgmPath: "workspace/input/audio/bgm.mp3",
+        bgmVolume: 0.15,
+        narrationVolume: 1.1
+      },
       {} as never,
       { generateScript, renderScriptPackage, renderNarratedPackage, renderPlatformVariants }
     );
 
     expect(renderNarratedPackage).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "在AI里抛硬币正面真是50%吗", hook: draft.hook, ttsProvider: "edge" })
+      expect.objectContaining({
+        title: "在AI里抛硬币正面真是50%吗",
+        hook: draft.hook,
+        ttsProvider: "edge",
+        bgmPath: "workspace/input/audio/bgm.mp3",
+        bgmVolume: 0.15,
+        narrationVolume: 1.1
+      })
     );
     expect(renderScriptPackage).not.toHaveBeenCalled();
     expect(renderPlatformVariants).toHaveBeenCalledWith(
@@ -119,5 +149,6 @@ describe("runFullChain", () => {
     );
     expect(result.packageVideoPath).toBe("A:/out/narrated.mp4");
     expect(result.narration).toMatchObject({ provider: "edge", voice: "zh-CN-XiaoxiaoNeural", durationSec: 14, audioPath: "A:/tts/n.mp3" });
+    expect(result.bgm).toEqual({ audioPath: "workspace/input/audio/bgm.mp3", volume: 0.15 });
   });
 });

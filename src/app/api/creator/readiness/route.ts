@@ -138,7 +138,9 @@ function envHint(name: string) {
     DASHSCOPE_API_KEY: "ASR/OCR/vision provider for extractor workflows.",
     POSTIZ_URL: "Self-hosted or hosted Postiz API base URL.",
     POSTIZ_API_KEY: "Postiz API token for scheduled publishing and analytics.",
-    N8N_WEBHOOK_URL: "n8n webhook for scheduled automation."
+    APP_BASE_URL: "Public/local base URL that n8n can call back into, for example http://127.0.0.1:5182.",
+    N8N_WEBHOOK_URL: "n8n webhook for scheduled automation.",
+    N8N_WEBHOOK_SECRET: "Optional shared secret sent as X-AI-Video-Secret when triggering n8n."
   };
   return hints[name] ?? "Optional provider credential.";
 }

@@ -342,7 +342,7 @@ best | 1080p | 720p | 480p | audio | metadata
 
 ### POST `/api/remotion/render`
 
-把结构化脚本渲染成 Remotion 包装视频，输出到 `workspace/output/remotion`。当前模板会生成标题、开场钩子、分镜字幕、标签和进度条，适合先作为脚本视频包装层或后续与素材粗剪合成。
+把结构化脚本渲染成 Remotion 包装视频，输出到 `workspace/output/remotion`。当前模板会生成标题、开场钩子、分镜字幕、标签和进度条，适合先作为脚本视频包装层或后续与素材粗剪合成。可选 `bgmPath` 会在渲染后用 FFmpeg 混入本地 BGM 音频，`bgmVolume` 建议 0.12-0.25。
 
 ```json
 {
@@ -350,6 +350,9 @@ best | 1080p | 720p | 480p | audio | metadata
   "hook": "把AI脚本变成可发布的视频包装层。",
   "aspectRatio": "9:16",
   "platform": "douyin",
+  "durationSec": 15,
+  "bgmPath": "workspace/input/audio/bgm.mp3",
+  "bgmVolume": 0.18,
   "tags": ["AI剪辑", "Remotion"],
   "beats": [
     {
@@ -371,7 +374,9 @@ best | 1080p | 720p | 480p | audio | metadata
     "status": "completed",
     "result": {
       "outputPath": "workspace/output/remotion/xxx-script-package.mp4",
-      "compositionId": "ScriptPackageVertical"
+      "compositionId": "ScriptPackageVertical",
+      "bgmPath": "workspace/input/audio/bgm.mp3",
+      "bgmVolume": 0.18
     }
   }
 }
@@ -417,6 +422,104 @@ best | 1080p | 720p | 480p | audio | metadata
 ### GET `/api/mcp/config`
 
 返回 MCP 配置建议和剪映草稿桥接说明。
+
+## 发布队列
+
+### GET `/api/publish/queue`
+
+读取本地待发布队列和平台 adapter 状态。队列文件落在 `workspace/drafts/publish-queue.json`。当前所有 adapter 都是 dry-run only，不会真实上传。
+
+### POST `/api/publish/queue`
+
+先执行发布 dry-run，再创建待发布队列项。dry-run 通过时状态为 `ready`，失败时状态为 `blocked`。
+
+```json
+{
+  "platform": "douyin",
+  "videoPath": "workspace/output/publish/demo-douyin.mp4",
+  "title": "3个剪映隐藏功能",
+  "description": "可选简介",
+  "tags": ["剪辑", "AI"]
+}
+```
+
+### POST `/api/publish/approve`
+
+人工确认闸门。只有 `ready` 队列项且确认口令为 `CONFIRM_DRY_RUN_ONLY` 时，才会进入 `approved`。这一步仍不真发，只为后续真实 adapter 接入建立安全队列。
+
+```json
+{
+  "id": "publish-queue-item-id",
+  "manualConfirm": "CONFIRM_DRY_RUN_ONLY",
+  "note": "人工已检查标题、画幅、账号和素材权利"
+}
+```
+
+### POST `/api/publish/dispatch`
+
+消费 `approved` 队列项，生成真实 adapter 的草稿请求或命令预览。默认只预览；只有设置 `PUBLISH_LIVE_ENABLED=true`、adapter 配置完整且 `mode` 为 `draft` 时，才会调用 Postiz Public API 创建草稿，不会直接发布 `now`。
+
+```json
+{
+  "id": "publish-queue-item-id",
+  "mode": "draft",
+  "manualConfirm": "CONFIRM_DRY_RUN_ONLY"
+}
+```
+
+Postiz adapter 依据官方 Public API：`Authorization` header、`POST /public/v1/posts`、`type: "draft"`。需要配置 `POSTIZ_API_KEY`、`POSTIZ_INTEGRATION_ID_<PLATFORM>` 和可选的 `POSTIZ_PLATFORM_TYPE_<PLATFORM>`。
+
+## 数据回流
+
+### GET `/api/analytics/import`
+
+读取本地复盘 ledger：`workspace/drafts/analytics-ledger.json`。
+
+### POST `/api/analytics/import`
+
+导入一个平台数据快照，计算互动率、分享率、评论率、涨粉转化率，并生成下一步动作建议。当前支持手动/UI/脚本导入；后续接 TikHub、Postiz analytics 和平台后台。
+
+```json
+{
+  "platform": "douyin",
+  "postId": "post-123",
+  "window": "30m",
+  "metrics": {
+    "views": 1200,
+    "likes": 80,
+    "comments": 12,
+    "shares": 8,
+    "favorites": 20,
+    "followersDelta": 3,
+    "completionRate": 0.42
+  }
+}
+```
+
+## n8n 编排
+
+### GET `/api/orchestration/n8n`
+
+返回当前 n8n webhook 是否已配置，以及可导入/参考的工作流蓝图。蓝图包含定时触发、趋势情报、脚本生成、全链路成片、发布队列、人工批准、dispatch 草稿和复盘导入节点。
+
+### POST `/api/orchestration/n8n`
+
+生成或触发全链路 n8n webhook。默认 `mode` 为 `dry-run`，只返回 payload 预览；只有在 `mode: "webhook"`、配置 `N8N_WEBHOOK_URL`，且 `manualConfirm` 为 `CONFIRM_N8N_WEBHOOK` 时才会 POST 到 n8n。payload 不包含 API key。
+
+```json
+{
+  "topic": "AI剪辑副业真的能赚钱吗",
+  "platform": "douyin",
+  "mode": "dry-run",
+  "category": "tech",
+  "topN": 20,
+  "audience": "25-40岁想提升收入的普通人",
+  "durationSec": 45,
+  "references": ["https://example.com/reference"],
+  "videoPath": "workspace/output/publish/demo-douyin.mp4",
+  "analyticsWindow": "30m"
+}
+```
 
 ## 诊断
 

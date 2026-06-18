@@ -22,6 +22,9 @@ export interface FullChainInput {
   narrated?: boolean;
   ttsProvider?: TtsProvider;
   voice?: string;
+  bgmPath?: string;
+  bgmVolume?: number;
+  narrationVolume?: number;
 }
 
 export interface FullChainNarration {
@@ -37,6 +40,10 @@ export interface FullChainResult {
   packageVideoPath: string;
   variants: PlatformVariantManifest;
   narration?: FullChainNarration;
+  bgm?: {
+    audioPath: string;
+    volume: number;
+  };
 }
 
 export interface FullChainDeps {
@@ -65,7 +72,14 @@ export function pickTitle(draft: ScriptDraft, fallback: string): string {
 
 export function scriptDraftToRenderInput(
   draft: ScriptDraft,
-  opts: { title: string; platform?: string; aspectRatio: RemotionAspectRatio; outputPath?: string }
+  opts: {
+    title: string;
+    platform?: string;
+    aspectRatio: RemotionAspectRatio;
+    outputPath?: string;
+    bgmPath?: string;
+    bgmVolume?: number;
+  }
 ): RemotionRenderInput {
   return {
     aspectRatio: opts.aspectRatio,
@@ -74,6 +88,8 @@ export function scriptDraftToRenderInput(
     beats: draft.beats,
     tags: draft.tags,
     bgm: draft.bgm,
+    bgmPath: opts.bgmPath,
+    bgmVolume: opts.bgmVolume,
     platform: opts.platform,
     outputPath: opts.outputPath
   };
@@ -119,7 +135,10 @@ export async function runFullChain(
       platform,
       aspectRatio,
       ttsProvider: input.ttsProvider,
-      voice: input.voice
+      voice: input.voice,
+      bgmPath: input.bgmPath,
+      bgmVolume: input.bgmVolume,
+      narrationVolume: input.narrationVolume
     });
     packageVideoPath = narrated.videoPath;
     narration = {
@@ -131,7 +150,13 @@ export async function runFullChain(
     onLog?.(`   配音:${narrated.provider}/${narrated.voice}, ${narrated.durationSec.toFixed(1)}s, 字幕 ${narrated.subtitleCount} 条`);
   } else {
     onLog?.(`② 渲染 Remotion 成片:${title}`);
-    const render = await renderScriptPackage(scriptDraftToRenderInput(draft, { title, platform, aspectRatio }));
+    const render = await renderScriptPackage(scriptDraftToRenderInput(draft, {
+      title,
+      platform,
+      aspectRatio,
+      bgmPath: input.bgmPath,
+      bgmVolume: input.bgmVolume
+    }));
     packageVideoPath = render.outputPath;
   }
 
@@ -147,5 +172,12 @@ export async function runFullChain(
   });
 
   onProgress?.(100);
-  return { topic: input.topic, draft, packageVideoPath, variants, narration };
+  return {
+    topic: input.topic,
+    draft,
+    packageVideoPath,
+    variants,
+    narration,
+    bgm: input.bgmPath ? { audioPath: input.bgmPath, volume: input.bgmVolume ?? 0.18 } : undefined
+  };
 }

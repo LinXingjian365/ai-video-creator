@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
+import { mixNarrationWithBackgroundMusic } from "@/lib/audio-mix";
 import { outputRoot, resolveLocalPath } from "@/lib/paths";
 import { renderScriptPackage, type RemotionAspectRatio } from "@/lib/remotion-render";
 import type { ScriptBeat } from "@/lib/script/generate";
@@ -19,6 +20,9 @@ export interface NarratedRenderInput {
   voice?: string;
   outputPath?: string;
   durationPadSec?: number;
+  bgmPath?: string;
+  bgmVolume?: number;
+  narrationVolume?: number;
 }
 
 export interface NarratedRenderResult {
@@ -29,15 +33,23 @@ export interface NarratedRenderResult {
   provider: TtsProvider;
   voice: string;
   subtitleCount: number;   // 烧进成片的真实时间轴字幕条数(edge 有, SAPI 为 0)
+  bgmPath?: string;
+  bgmVolume?: number;
 }
 
 export interface NarratedRenderDeps {
   synthesizeNarration: typeof synthesizeNarration;
   renderScriptPackage: typeof renderScriptPackage;
   muxNarration: typeof muxNarration;
+  mixNarrationWithBackgroundMusic: typeof mixNarrationWithBackgroundMusic;
 }
 
-const defaultDeps: NarratedRenderDeps = { synthesizeNarration, renderScriptPackage, muxNarration };
+const defaultDeps: NarratedRenderDeps = {
+  synthesizeNarration,
+  renderScriptPackage,
+  muxNarration,
+  mixNarrationWithBackgroundMusic
+};
 
 export function buildNarrationSegments(input: { hook?: string; beats?: Array<{ voiceover?: string }> }): string[] {
   return [input.hook ?? "", ...(input.beats ?? []).map((beat) => beat.voiceover ?? "")]
@@ -49,7 +61,10 @@ export async function renderNarratedPackage(
   input: NarratedRenderInput,
   deps: Partial<NarratedRenderDeps> = {}
 ): Promise<NarratedRenderResult> {
-  const { synthesizeNarration, renderScriptPackage, muxNarration } = { ...defaultDeps, ...deps };
+  const { synthesizeNarration, renderScriptPackage, muxNarration, mixNarrationWithBackgroundMusic } = {
+    ...defaultDeps,
+    ...deps
+  };
 
   const segments = buildNarrationSegments(input);
   if (segments.length === 0) {
@@ -75,7 +90,18 @@ export async function renderNarratedPackage(
     ? resolveLocalPath(input.outputPath)
     : path.join(outputRoot, "remotion", `${Date.now()}-narrated.mp4`);
   await fs.mkdir(path.dirname(videoPath), { recursive: true });
-  await muxNarration(render.outputPath, narration.audioPath, videoPath);
+  if (input.bgmPath) {
+    await mixNarrationWithBackgroundMusic({
+      videoPath: render.outputPath,
+      narrationPath: narration.audioPath,
+      bgmPath: input.bgmPath,
+      outputPath: videoPath,
+      bgmVolume: input.bgmVolume,
+      narrationVolume: input.narrationVolume
+    });
+  } else {
+    await muxNarration(render.outputPath, narration.audioPath, videoPath);
+  }
 
   return {
     videoPath,
@@ -84,7 +110,9 @@ export async function renderNarratedPackage(
     durationSec: narration.durationSec,
     provider: narration.provider,
     voice: narration.voice,
-    subtitleCount: narration.cues?.length ?? 0
+    subtitleCount: narration.cues?.length ?? 0,
+    bgmPath: input.bgmPath,
+    bgmVolume: input.bgmPath ? input.bgmVolume ?? 0.18 : undefined
   };
 }
 

@@ -1177,6 +1177,114 @@ input[type="checkbox"] {
   font-size: 12px;
 }
 
+.publish-queue-card {
+  gap: 14px;
+}
+
+.adapter-grid,
+.publish-queue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.adapter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.adapter-card,
+.publish-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card-2);
+}
+
+.adapter-card {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.adapter-card strong,
+.publish-queue-item strong {
+  font-size: 13px;
+}
+
+.adapter-card small,
+.publish-queue-item small {
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.publish-queue-item {
+  border-left-width: 3px;
+}
+
+.publish-queue-item.status-ready {
+  border-left-color: var(--warn);
+}
+
+.publish-queue-item.status-approved {
+  border-left-color: var(--ok);
+}
+
+.publish-queue-item.status-blocked,
+.publish-queue-item.status-cancelled {
+  border-left-color: var(--danger);
+}
+
+.publish-dispatch-result,
+.analytics-snapshot {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card-2);
+}
+
+.publish-dispatch-result strong,
+.analytics-snapshot strong {
+  font-size: 13px;
+}
+
+.publish-dispatch-result small,
+.analytics-snapshot small,
+.analytics-snapshot li {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.publish-dispatch-result code {
+  color: var(--faint);
+  word-break: break-all;
+}
+
+.analytics-card {
+  gap: 14px;
+}
+
+.analytics-metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.analytics-snapshot-list {
+  display: grid;
+  gap: 10px;
+}
+
+.analytics-snapshot ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
 /* ---------- 资产清单 ---------- */
 .asset-quick-list {
   gap: 12px;

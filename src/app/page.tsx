@@ -26,6 +26,11 @@ import type { IntelligenceReport } from "@/lib/trend/types";
 import type { ScriptDraft } from "@/lib/script/generate";
 import type { FullChainResult } from "@/lib/full-chain";
 import type { PublishDryRunResult } from "@/lib/publish/dry-run";
+import type { PublishAdapterStatus } from "@/lib/publish/adapters";
+import type { PublishQueueItem } from "@/lib/publish/queue";
+import type { PublishDispatchResult } from "@/lib/publish/dispatch";
+import type { AnalyticsSnapshot } from "@/lib/analytics/ledger";
+import type { N8nOrchestrationResult } from "@/lib/orchestration/n8n";
 
 type TaskStatus = "pending" | "processing" | "completed" | "failed";
 type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict";
@@ -79,6 +84,19 @@ interface WorkspaceAssetIndex {
   total: number;
   counts: Record<WorkspaceAssetKind, number>;
   assets: WorkspaceAsset[];
+}
+
+interface PublishQueueResponse {
+  queue: {
+    items: PublishQueueItem[];
+  };
+  adapters: PublishAdapterStatus[];
+}
+
+interface AnalyticsLedgerResponse {
+  ledger: {
+    snapshots: AnalyticsSnapshot[];
+  };
 }
 
 const capabilities: Array<{
@@ -230,6 +248,21 @@ const defaultForm = {
   publishSourcePath: "workspace/output",
   publishDryRunPlatform: "douyin",
   publishDryRunTitle: "99%的人不知道的3个剪映神操作",
+  publishManualConfirm: "CONFIRM_DRY_RUN_ONLY",
+  analyticsPostId: "",
+  analyticsPostUrl: "",
+  analyticsWindow: "30m",
+  analyticsViews: 1000,
+  analyticsLikes: 80,
+  analyticsComments: 12,
+  analyticsShares: 8,
+  analyticsFavorites: 20,
+  analyticsFollowersDelta: 3,
+  analyticsCompletionRate: 0.42,
+  n8nManualConfirm: "",
+  bgmPath: "",
+  bgmVolume: 0.18,
+  narrationVolume: 1,
   materialNeeds: "口播素材、屏幕录制、爆款参考、可商用 B-roll",
   campaignGoal: "涨粉、完播、引流、转化",
   competitorStyle: "高密度干货 + 前3秒强反差 + 大字幕",
@@ -267,7 +300,17 @@ export default function Home() {
   const [scriptDraft, setScriptDraft] = useState<ScriptDraft | null>(null);
   const [fullChainResult, setFullChainResult] = useState<FullChainResult | null>(null);
   const [publishDryRunBusy, setPublishDryRunBusy] = useState(false);
+  const [publishQueueBusy, setPublishQueueBusy] = useState(false);
+  const [publishApproveBusy, setPublishApproveBusy] = useState(false);
+  const [publishDispatchBusy, setPublishDispatchBusy] = useState(false);
+  const [analyticsBusy, setAnalyticsBusy] = useState(false);
+  const [n8nBusy, setN8nBusy] = useState(false);
   const [publishDryRunResult, setPublishDryRunResult] = useState<PublishDryRunResult | null>(null);
+  const [publishDispatchResult, setPublishDispatchResult] = useState<PublishDispatchResult | null>(null);
+  const [n8nResult, setN8nResult] = useState<N8nOrchestrationResult | null>(null);
+  const [publishQueue, setPublishQueue] = useState<PublishQueueItem[]>([]);
+  const [publishAdapters, setPublishAdapters] = useState<PublishAdapterStatus[]>([]);
+  const [analyticsSnapshots, setAnalyticsSnapshots] = useState<AnalyticsSnapshot[]>([]);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -278,6 +321,8 @@ export default function Home() {
     void refreshTasks();
     void refreshReadiness();
     void refreshWorkspaceAssets();
+    void refreshPublishQueue();
+    void refreshAnalyticsLedger();
     const timer = window.setInterval(refreshTasks, 1500);
     const assetTimer = window.setInterval(refreshWorkspaceAssets, 5000);
     return () => {
@@ -309,6 +354,23 @@ export default function Home() {
     const response = await fetch("/api/workspace/assets?limit=80", { cache: "no-store" });
     if (response.ok) {
       setWorkspaceAssets(await response.json());
+    }
+  }
+
+  async function refreshPublishQueue() {
+    const response = await fetch("/api/publish/queue", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json() as PublishQueueResponse;
+      setPublishQueue(data.queue?.items ?? []);
+      setPublishAdapters(data.adapters ?? []);
+    }
+  }
+
+  async function refreshAnalyticsLedger() {
+    const response = await fetch("/api/analytics/import", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json() as AnalyticsLedgerResponse;
+      setAnalyticsSnapshots(data.ledger?.snapshots ?? []);
     }
   }
 
@@ -476,6 +538,7 @@ export default function Home() {
         beats: scriptDraft.beats,
         tags: scriptDraft.tags,
         bgm: scriptDraft.bgm,
+        ...(form.bgmPath.trim() ? { bgmPath: form.bgmPath.trim(), bgmVolume: form.bgmVolume } : {}),
         platform,
         aspectRatio: form.bilibili && !form.douyin && !form.kuaishou ? "16:9" : "9:16"
       }, "Remotion 包装视频已启动渲染");
@@ -518,6 +581,11 @@ export default function Home() {
         aspectRatio: platform === "bilibili" ? "16:9" : "9:16",
         narrated: form.narrated,
         ...(form.narrated ? { ttsProvider: form.ttsProvider } : {}),
+        ...(form.bgmPath.trim() ? {
+          bgmPath: form.bgmPath.trim(),
+          bgmVolume: form.bgmVolume,
+          narrationVolume: form.narrationVolume
+        } : {}),
         ...(variantTargets.length > 0 ? { variantTargets } : {})
       }, form.narrated
         ? "一键全链路已启动：脚本 → AI 配音成片 → 多平台变体"
@@ -578,6 +646,179 @@ export default function Home() {
       setMessage(error instanceof Error ? error.message : "dry-run 请求失败");
     } finally {
       setPublishDryRunBusy(false);
+    }
+  }
+
+  async function createPublishQueue() {
+    if (!form.publishSourcePath.trim() || !form.publishDryRunTitle.trim()) {
+      setMessage("先填成片路径和发布标题，再加入待发布队列");
+      return;
+    }
+
+    setPublishQueueBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/queue", {
+        platform: form.publishDryRunPlatform,
+        videoPath: form.publishSourcePath,
+        title: form.publishDryRunTitle,
+        tags: scriptDraft?.tags ?? []
+      }, "已创建待发布队列项");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("创建发布队列任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "创建发布队列失败");
+      }
+      setResult(final.result ?? data);
+      await refreshPublishQueue();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "创建发布队列失败");
+    } finally {
+      setPublishQueueBusy(false);
+    }
+  }
+
+  async function approvePublishQueue(id: string) {
+    setPublishApproveBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/approve", {
+        id,
+        manualConfirm: form.publishManualConfirm,
+        note: "UI 人工确认：仅进入 approved 队列，不真发。"
+      }, "发布队列项已人工批准");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("人工批准任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "人工批准失败");
+      }
+      setResult(final.result ?? data);
+      await refreshPublishQueue();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "人工批准失败");
+    } finally {
+      setPublishApproveBusy(false);
+    }
+  }
+
+  async function dispatchPublishQueue(id: string) {
+    setPublishDispatchBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/dispatch", {
+        id,
+        mode: "draft",
+        manualConfirm: form.publishManualConfirm
+      }, "发布 dispatch 已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("dispatch 任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "dispatch 失败");
+      }
+      setPublishDispatchResult(final.result as PublishDispatchResult);
+      setResult(final.result ?? data);
+      await refreshPublishQueue();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "dispatch 失败");
+    } finally {
+      setPublishDispatchBusy(false);
+    }
+  }
+
+  async function importAnalytics() {
+    setAnalyticsBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/analytics/import", {
+        platform: form.publishDryRunPlatform,
+        postId: form.analyticsPostId.trim() || undefined,
+        postUrl: form.analyticsPostUrl.trim() || undefined,
+        title: form.publishDryRunTitle,
+        window: form.analyticsWindow,
+        metrics: {
+          views: form.analyticsViews,
+          likes: form.analyticsLikes,
+          comments: form.analyticsComments,
+          shares: form.analyticsShares,
+          favorites: form.analyticsFavorites,
+          followersDelta: form.analyticsFollowersDelta,
+          completionRate: form.analyticsCompletionRate
+        }
+      }, "数据回流快照已导入");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("数据回流任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "数据回流失败");
+      }
+      setResult(final.result ?? data);
+      await refreshAnalyticsLedger();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "数据回流失败");
+    } finally {
+      setAnalyticsBusy(false);
+    }
+  }
+
+  async function triggerN8n(mode: "dry-run" | "webhook") {
+    if (!form.scriptTopic.trim()) {
+      setMessage("先填写选题，再生成 n8n 全链路编排。");
+      return;
+    }
+
+    setN8nBusy(true);
+    setMessage("");
+    try {
+      const approvedItem = publishQueue.find((item) => item.status === "approved");
+      const data = await runPost("/api/orchestration/n8n", {
+        topic: form.scriptTopic,
+        platform: form.publishDryRunPlatform,
+        mode,
+        category: trendCategory,
+        topN,
+        audience: form.audience || undefined,
+        durationSec: 45,
+        references: form.references.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        videoPath: form.publishSourcePath.trim() || undefined,
+        queueItemId: approvedItem?.id,
+        analyticsWindow: form.analyticsWindow,
+        manualConfirm: form.n8nManualConfirm || undefined
+      }, mode === "webhook" ? "n8n webhook 触发流程已完成" : "n8n 编排 payload 已生成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("n8n 编排任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "n8n 编排失败");
+      }
+      setN8nResult(final.result as N8nOrchestrationResult);
+      setResult(final.result ?? data);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "n8n 编排请求失败");
+    } finally {
+      setN8nBusy(false);
     }
   }
 
@@ -794,8 +1035,23 @@ export default function Home() {
             onRenderFromAnalysis={renderFromAnalysis}
             onGeneratePlatformVariants={generatePlatformVariants}
             publishDryRunBusy={publishDryRunBusy}
+            publishQueueBusy={publishQueueBusy}
+            publishApproveBusy={publishApproveBusy}
+            publishDispatchBusy={publishDispatchBusy}
             publishDryRunResult={publishDryRunResult}
+            publishDispatchResult={publishDispatchResult}
+            publishQueue={publishQueue}
+            publishAdapters={publishAdapters}
+            analyticsBusy={analyticsBusy}
+            analyticsSnapshots={analyticsSnapshots}
+            n8nBusy={n8nBusy}
+            n8nResult={n8nResult}
             onPublishDryRun={runPublishDryRun}
+            onCreatePublishQueue={createPublishQueue}
+            onApprovePublishQueue={approvePublishQueue}
+            onDispatchPublishQueue={dispatchPublishQueue}
+            onImportAnalytics={importAnalytics}
+            onTriggerN8n={triggerN8n}
           />
 
           <footer className="form-actions">
@@ -840,8 +1096,23 @@ function StageWorkspace({
   onRenderFromAnalysis,
   onGeneratePlatformVariants,
   publishDryRunBusy,
+  publishQueueBusy,
+  publishApproveBusy,
+  publishDispatchBusy,
   publishDryRunResult,
-  onPublishDryRun
+  publishDispatchResult,
+  publishQueue,
+  publishAdapters,
+  analyticsBusy,
+  analyticsSnapshots,
+  n8nBusy,
+  n8nResult,
+  onPublishDryRun,
+  onCreatePublishQueue,
+  onApprovePublishQueue,
+  onDispatchPublishQueue,
+  onImportAnalytics,
+  onTriggerN8n
 }: {
   activeStage: WorkflowStage;
   busy: boolean;
@@ -873,8 +1144,23 @@ function StageWorkspace({
   onRenderFromAnalysis: () => void;
   onGeneratePlatformVariants: () => void;
   publishDryRunBusy: boolean;
+  publishQueueBusy: boolean;
+  publishApproveBusy: boolean;
+  publishDispatchBusy: boolean;
   publishDryRunResult: PublishDryRunResult | null;
+  publishDispatchResult: PublishDispatchResult | null;
+  publishQueue: PublishQueueItem[];
+  publishAdapters: PublishAdapterStatus[];
+  analyticsBusy: boolean;
+  analyticsSnapshots: AnalyticsSnapshot[];
+  n8nBusy: boolean;
+  n8nResult: N8nOrchestrationResult | null;
   onPublishDryRun: () => void;
+  onCreatePublishQueue: () => void;
+  onApprovePublishQueue: (id: string) => void;
+  onDispatchPublishQueue: (id: string) => void;
+  onImportAnalytics: () => void;
+  onTriggerN8n: (mode: "dry-run" | "webhook") => void;
 }) {
   const copy = stageCopy[activeStage];
   const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
@@ -952,12 +1238,33 @@ function StageWorkspace({
           variantBusy={variantBusy}
           onGeneratePlatformVariants={onGeneratePlatformVariants}
           publishDryRunBusy={publishDryRunBusy}
+          publishQueueBusy={publishQueueBusy}
+          publishApproveBusy={publishApproveBusy}
+          publishDispatchBusy={publishDispatchBusy}
           publishDryRunResult={publishDryRunResult}
+          publishDispatchResult={publishDispatchResult}
+          publishQueue={publishQueue}
+          publishAdapters={publishAdapters}
           onPublishDryRun={onPublishDryRun}
+          onCreatePublishQueue={onCreatePublishQueue}
+          onApprovePublishQueue={onApprovePublishQueue}
+          onDispatchPublishQueue={onDispatchPublishQueue}
           update={update}
         />
       ) : null}
-      {activeStage === "review" ? <ReviewPanel readiness={readiness} /> : null}
+      {activeStage === "review" ? (
+        <ReviewPanel
+          analyticsBusy={analyticsBusy}
+          analyticsSnapshots={analyticsSnapshots}
+          form={form}
+          n8nBusy={n8nBusy}
+          n8nResult={n8nResult}
+          onImportAnalytics={onImportAnalytics}
+          onTriggerN8n={onTriggerN8n}
+          readiness={readiness}
+          update={update}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1234,13 +1541,39 @@ function ScriptPanel({
               </select>
             </label>
           ) : null}
+          <Field label="BGM 音频路径（可选，本地 mp3/wav/m4a）" value={form.bgmPath} onChange={(value) => update("bgmPath", value)} />
+          <div className="form-grid">
+            <label className="field">
+              <span>BGM 音量</span>
+              <input
+                max={1}
+                min={0}
+                step={0.01}
+                type="number"
+                value={form.bgmVolume}
+                onChange={(event) => update("bgmVolume", Number(event.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>口播音量</span>
+              <input
+                disabled={!form.narrated}
+                max={2}
+                min={0}
+                step={0.05}
+                type="number"
+                value={form.narrationVolume}
+                onChange={(event) => update("narrationVolume", Number(event.target.value))}
+              />
+            </label>
+          </div>
         </div>
         <div className="material-import-actions full-chain-action">
           <button className="primary-button" disabled={fullChainBusy} onClick={onRunFullChain} type="button">
             {fullChainBusy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
             {form.narrated ? "一键全链路：选题 → AI 配音成片 → 多平台" : "一键全链路：选题 → 成片 → 多平台"}
           </button>
-          <small>脚本 →{form.narrated ? " AI 配音 +" : ""} Remotion 成片 → 抖音/快手/B站多平台变体，一步到位(约 2-4 分钟{form.narrated ? "，配音版略长" : ""})。</small>
+          <small>脚本 →{form.narrated ? " AI 配音 +" : ""} Remotion 成片{form.bgmPath.trim() ? " + BGM混音" : ""} → 抖音/快手/B站多平台变体，一步到位(约 2-4 分钟{form.narrated ? "，配音版略长" : ""})。</small>
         </div>
         {fullChainResult ? (
           <div className="full-chain-result">
@@ -1248,6 +1581,9 @@ function ScriptPanel({
             <p className="hint">成片：{fullChainResult.packageVideoPath}</p>
             {fullChainResult.narration ? (
               <p className="hint">配音：{fullChainResult.narration.provider}/{fullChainResult.narration.voice} · {fullChainResult.narration.durationSec.toFixed(1)}s</p>
+            ) : null}
+            {fullChainResult.bgm ? (
+              <p className="hint">BGM：{fullChainResult.bgm.audioPath} · 音量 {fullChainResult.bgm.volume}</p>
             ) : null}
             <ul>
               {fullChainResult.variants.variants.map((variant) => (
@@ -1352,13 +1688,40 @@ function EditPanel({ form, update, assets, renderAnalysisBusy, onRenderFromAnaly
   );
 }
 
-function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVariants, publishDryRunBusy, publishDryRunResult, onPublishDryRun }: FormPanelProps & {
+function PublishPanel({
+  form,
+  update,
+  assets,
+  variantBusy,
+  onGeneratePlatformVariants,
+  publishDryRunBusy,
+  publishQueueBusy,
+  publishApproveBusy,
+  publishDispatchBusy,
+  publishDryRunResult,
+  publishDispatchResult,
+  publishQueue,
+  publishAdapters,
+  onPublishDryRun,
+  onCreatePublishQueue,
+  onApprovePublishQueue,
+  onDispatchPublishQueue
+}: FormPanelProps & {
   assets: WorkspaceAsset[];
   variantBusy: boolean;
   onGeneratePlatformVariants: () => void;
   publishDryRunBusy: boolean;
+  publishQueueBusy: boolean;
+  publishApproveBusy: boolean;
+  publishDispatchBusy: boolean;
   publishDryRunResult: PublishDryRunResult | null;
+  publishDispatchResult: PublishDispatchResult | null;
+  publishQueue: PublishQueueItem[];
+  publishAdapters: PublishAdapterStatus[];
   onPublishDryRun: () => void;
+  onCreatePublishQueue: () => void;
+  onApprovePublishQueue: (id: string) => void;
+  onDispatchPublishQueue: (id: string) => void;
 }) {
   const outputVideos = assets
     .filter((asset) => asset.kind === "video" && asset.role === "output")
@@ -1412,7 +1775,11 @@ function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVar
             {publishDryRunBusy ? <Loader2 className="spin" size={18} /> : <CheckCircle2 size={18} />}
             dry-run 校验
           </button>
-          <small>标签取自最近草稿;校验通过才适合接真实发布 API。</small>
+          <button className="secondary-button" disabled={publishQueueBusy} onClick={onCreatePublishQueue} type="button">
+            {publishQueueBusy ? <Loader2 className="spin" size={16} /> : <UploadCloud size={16} />}
+            加入待发布队列
+          </button>
+          <small>标签取自最近草稿；队列只保存待发布载荷和人工确认状态，当前版本不会真发。</small>
         </div>
         {publishDryRunResult ? (
           <div className={`publish-dryrun-result ${publishDryRunResult.willPublish ? "ok" : "blocked"}`}>
@@ -1429,6 +1796,66 @@ function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVar
           </div>
         ) : null}
       </section>
+      <section className="stage-form-card compact publish-queue-card">
+        <div className="form-card-title">
+          <strong>平台 adapter 与人工确认闸门</strong>
+          <span>真实发布前必须 dry-run 通过，再输入确认口令进入 approved 队列；上传 adapter 仍保持关闭。</span>
+        </div>
+        <div className="adapter-grid">
+          {publishAdapters.map((adapter) => (
+            <article className="adapter-card" key={adapter.platform}>
+              <strong>{adapter.platformLabel}</strong>
+              <span className={adapter.configured ? "pill ok" : "pill missing"}>
+                {adapter.adapter} / {adapter.configured ? "已配置" : "未配置"}
+              </span>
+              <small>{adapter.dryRunOnly ? "dry-run only · 不真发" : "可发布"}</small>
+            </article>
+          ))}
+        </div>
+        <Field label="人工确认口令" value={form.publishManualConfirm} onChange={(value) => update("publishManualConfirm", value)} />
+        <div className="publish-queue-list">
+          {publishQueue.length === 0 ? (
+            <small>暂无待发布队列。先选择成片并点击“加入待发布队列”。</small>
+          ) : publishQueue.slice(0, 6).map((item) => (
+            <article className={`publish-queue-item status-${item.status}`} key={item.id}>
+              <div>
+                <strong>{item.dryRun.platformLabel} · {item.input.title}</strong>
+                <small>{item.status} / {item.input.videoPath}</small>
+              </div>
+              {item.status === "ready" ? (
+                <button
+                  className="secondary-button"
+                  disabled={publishApproveBusy}
+                  onClick={() => onApprovePublishQueue(item.id)}
+                  type="button"
+                >
+                  {publishApproveBusy ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />}
+                  人工批准
+                </button>
+              ) : item.status === "approved" ? (
+                <button
+                  className="secondary-button"
+                  disabled={publishDispatchBusy}
+                  onClick={() => onDispatchPublishQueue(item.id)}
+                  type="button"
+                >
+                  {publishDispatchBusy ? <Loader2 className="spin" size={16} /> : <Rocket size={16} />}
+                  dispatch 草稿
+                </button>
+              ) : (
+                <span className="pill missing">{item.status}</span>
+              )}
+            </article>
+          ))}
+        </div>
+        {publishDispatchResult ? (
+          <div className="publish-dispatch-result">
+            <strong>{publishDispatchResult.adapter} · {publishDispatchResult.status}</strong>
+            <small>{publishDispatchResult.message}</small>
+            {publishDispatchResult.endpoint ? <code>{publishDispatchResult.endpoint}</code> : null}
+          </div>
+        ) : null}
+      </section>
       <section className="publish-board">
         <StageCard icon={Megaphone} title="抖音" body="9:16、强开头、标题短、评论引导。" />
         <StageCard icon={Megaphone} title="快手" body="9:16、人设强、真实生活场景。" />
@@ -1438,13 +1865,108 @@ function PublishPanel({ form, update, assets, variantBusy, onGeneratePlatformVar
   );
 }
 
-function ReviewPanel({ readiness }: { readiness: Readiness | null }) {
+function ReviewPanel({
+  analyticsBusy,
+  analyticsSnapshots,
+  form,
+  n8nBusy,
+  n8nResult,
+  onImportAnalytics,
+  onTriggerN8n,
+  readiness,
+  update
+}: {
+  analyticsBusy: boolean;
+  analyticsSnapshots: AnalyticsSnapshot[];
+  form: CreatorForm;
+  n8nBusy: boolean;
+  n8nResult: N8nOrchestrationResult | null;
+  onImportAnalytics: () => void;
+  onTriggerN8n: (mode: "dry-run" | "webhook") => void;
+  readiness: Readiness | null;
+  update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
+}) {
   return (
     <div className="stage-layout review-layout">
       <section className="tool-grid">
         <StageCard icon={CheckCircle2} title="本机命令" body="node/npm/python/uv/yt-dlp/ffmpeg/n8n。" />
-        <StageCard icon={BarChart3} title="数据复盘" body="后续接播放、完播、点赞、评论、涨粉指标。" />
+        <StageCard icon={BarChart3} title="数据复盘" body="导入播放、完播、点赞、评论、涨粉指标，生成下一步动作。" />
         <StageCard icon={Rocket} title="下一轮动作" body="根据复盘决定追更、重剪、换标题或换选题。" />
+      </section>
+      <section className="stage-form-card compact n8n-card">
+        <div className="form-card-title">
+          <strong>n8n 全链路编排</strong>
+          <span>把热点、脚本、成片、发布队列、dispatch 草稿和复盘导入串成 webhook 工作流。</span>
+        </div>
+        <div className="form-grid">
+          <Field label="n8n webhook 确认口令" value={form.n8nManualConfirm} onChange={(value) => update("n8nManualConfirm", value)} />
+          <Field label="成片路径 / 可选" value={form.publishSourcePath} onChange={(value) => update("publishSourcePath", value)} />
+        </div>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={n8nBusy} onClick={() => onTriggerN8n("dry-run")} type="button">
+            {n8nBusy ? <Loader2 className="spin" size={18} /> : <Network size={18} />}
+            生成编排 payload
+          </button>
+          <button className="secondary-button" disabled={n8nBusy} onClick={() => onTriggerN8n("webhook")} type="button">
+            {n8nBusy ? <Loader2 className="spin" size={16} /> : <Rocket size={16} />}
+            触发 n8n webhook
+          </button>
+          <small>触发 webhook 需要填写 CONFIRM_N8N_WEBHOOK；payload 不包含任何 API key。</small>
+        </div>
+        {n8nResult ? (
+          <div className={`publish-dispatch-result ${n8nResult.sent ? "ok" : "blocked"}`}>
+            <strong>{n8nResult.status} · {n8nResult.sent ? "webhook 已发送" : "预览/拦截"}</strong>
+            <small>{n8nResult.message}</small>
+            {n8nResult.endpoint ? <code>{n8nResult.endpoint}</code> : null}
+            <small>{n8nResult.payload.steps.length} steps / run {n8nResult.payload.runId.slice(0, 8)}</small>
+          </div>
+        ) : null}
+      </section>
+      <section className="stage-form-card compact analytics-card">
+        <div className="form-card-title">
+          <strong>导入平台数据快照</strong>
+          <span>先支持手动/脚本导入，后续再接 TikHub/Postiz/平台 analytics 自动同步。</span>
+        </div>
+        <div className="form-grid">
+          <label className="field">
+            <span>复盘窗口</span>
+            <select value={form.analyticsWindow} onChange={(event) => update("analyticsWindow", event.target.value)}>
+              <option value="30m">30分钟</option>
+              <option value="24h">24小时</option>
+              <option value="7d">7天</option>
+              <option value="custom">自定义</option>
+            </select>
+          </label>
+          <Field label="Post ID" value={form.analyticsPostId} onChange={(value) => update("analyticsPostId", value)} />
+          <Field label="Post URL" value={form.analyticsPostUrl} onChange={(value) => update("analyticsPostUrl", value)} />
+        </div>
+        <div className="form-grid analytics-metrics-grid">
+          <NumberField label="播放" value={form.analyticsViews} onChange={(value) => update("analyticsViews", value)} />
+          <NumberField label="点赞" value={form.analyticsLikes} onChange={(value) => update("analyticsLikes", value)} />
+          <NumberField label="评论" value={form.analyticsComments} onChange={(value) => update("analyticsComments", value)} />
+          <NumberField label="分享" value={form.analyticsShares} onChange={(value) => update("analyticsShares", value)} />
+          <NumberField label="收藏" value={form.analyticsFavorites} onChange={(value) => update("analyticsFavorites", value)} />
+          <NumberField label="涨粉" value={form.analyticsFollowersDelta} onChange={(value) => update("analyticsFollowersDelta", value)} />
+          <NumberField label="完播率" max={1} min={0} step={0.01} value={form.analyticsCompletionRate} onChange={(value) => update("analyticsCompletionRate", value)} />
+        </div>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={analyticsBusy} onClick={onImportAnalytics} type="button">
+            {analyticsBusy ? <Loader2 className="spin" size={18} /> : <BarChart3 size={18} />}
+            导入复盘快照
+          </button>
+          <small>会写入 workspace/drafts/analytics-ledger.json，并给出追更/重剪/换标题建议。</small>
+        </div>
+        <div className="analytics-snapshot-list">
+          {analyticsSnapshots.length === 0 ? (
+            <small>暂无复盘快照。</small>
+          ) : analyticsSnapshots.slice(0, 5).map((snapshot) => (
+            <article className="analytics-snapshot" key={snapshot.id}>
+              <strong>{snapshot.platform} · {snapshot.window} · {snapshot.metrics.views} 播放</strong>
+              <small>互动率 {(snapshot.signals.engagementRate * 100).toFixed(2)}% / 分享率 {(snapshot.signals.shareRate * 100).toFixed(2)}%</small>
+              <ul>{snapshot.nextActions.slice(0, 2).map((action) => <li key={action}>{action}</li>)}</ul>
+            </article>
+          ))}
+        </div>
       </section>
       {readiness?.llm ? (
         <section className="stage-form-card compact">
@@ -1555,6 +2077,36 @@ function Field({
       ) : (
         <input value={value} onChange={(event) => onChange(event.target.value)} />
       )}
+    </label>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max,
+  step = 1
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        max={max}
+        min={min}
+        step={step}
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
     </label>
   );
 }

@@ -228,7 +228,10 @@ export const fullChainSchema = z.object({
   variantMode: z.enum(["crop", "fit"]).default("crop"),
   narrated: z.coerce.boolean().default(false),
   ttsProvider: z.enum(["edge", "sapi"]).optional(),
-  voice: z.string().min(1).optional()
+  voice: z.string().min(1).optional(),
+  bgmPath: z.string().min(1).optional(),
+  bgmVolume: z.coerce.number().min(0).max(1).default(0.18),
+  narrationVolume: z.coerce.number().min(0).max(2).default(1)
 });
 
 export const narratedRenderSchema = z.object({
@@ -241,6 +244,9 @@ export const narratedRenderSchema = z.object({
   outputPath: z.string().min(1).optional(),
   ttsProvider: z.enum(["edge", "sapi"]).optional(),
   voice: z.string().min(1).optional(),
+  bgmPath: z.string().min(1).optional(),
+  bgmVolume: z.coerce.number().min(0).max(1).default(0.18),
+  narrationVolume: z.coerce.number().min(0).max(2).default(1),
   beats: z.array(z.object({
     time: z.string().min(1).optional(),
     shot: z.string().min(1).optional(),
@@ -255,6 +261,59 @@ export const publishDryRunSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   tags: z.array(z.string().min(1)).default([])
+});
+
+export const publishQueueSchema = publishDryRunSchema.extend({
+  scheduledAt: z.string().min(1).optional()
+});
+
+export const publishApproveSchema = z.object({
+  id: z.string().min(1),
+  manualConfirm: z.string().min(1),
+  note: z.string().optional()
+});
+
+export const publishDispatchSchema = z.object({
+  id: z.string().min(1),
+  mode: z.enum(["draft", "live"]).default("draft"),
+  manualConfirm: z.string().min(1)
+});
+
+export const analyticsImportSchema = z.object({
+  platform: z.enum(["douyin", "kuaishou", "bilibili"]).default("douyin"),
+  postId: z.string().min(1).optional(),
+  postUrl: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
+  capturedAt: z.string().min(1).optional(),
+  window: z.enum(["30m", "24h", "7d", "custom"]).default("custom"),
+  metrics: z.object({
+    views: z.coerce.number().int().min(0),
+    likes: z.coerce.number().int().min(0).default(0),
+    comments: z.coerce.number().int().min(0).default(0),
+    shares: z.coerce.number().int().min(0).default(0),
+    favorites: z.coerce.number().int().min(0).optional(),
+    followersDelta: z.coerce.number().int().optional(),
+    completionRate: z.coerce.number().min(0).max(1).optional(),
+    avgWatchSec: z.coerce.number().min(0).optional()
+  })
+}).refine((value) => Boolean(value.postId || value.postUrl || value.title), {
+  message: "Provide postId, postUrl, or title.",
+  path: ["postId"]
+});
+
+export const n8nOrchestrationSchema = z.object({
+  topic: z.string().min(1),
+  platform: z.enum(["douyin", "kuaishou", "bilibili"]).default("douyin"),
+  mode: z.enum(["dry-run", "webhook"]).default("dry-run"),
+  category: z.string().min(1).default("all"),
+  topN: z.coerce.number().int().min(1).max(50).default(20),
+  audience: z.string().min(1).optional(),
+  durationSec: z.coerce.number().int().positive().max(600).default(45),
+  references: z.array(z.string().min(1)).default([]),
+  videoPath: z.string().min(1).optional(),
+  queueItemId: z.string().min(1).optional(),
+  analyticsWindow: z.enum(["30m", "24h", "7d", "custom"]).default("30m"),
+  manualConfirm: z.string().optional()
 });
 
 export const materialImportSchema = z.object({
@@ -297,7 +356,10 @@ export const remotionRenderSchema = z.object({
   hook: z.string().min(1).optional(),
   aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
   platform: z.string().min(1).optional(),
+  durationSec: z.coerce.number().positive().max(600).optional(),
   bgm: z.string().min(1).optional(),
+  bgmPath: z.string().min(1).optional(),
+  bgmVolume: z.coerce.number().min(0).max(1).default(0.18),
   tags: z.array(z.string().min(1)).default([]),
   outputPath: z.string().min(1).optional(),
   beats: z.array(z.object({

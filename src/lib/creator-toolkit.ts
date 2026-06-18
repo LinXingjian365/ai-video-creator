@@ -254,7 +254,7 @@ export const creatorToolkit: CreatorTool[] = [
     source: "n8n-io/n8n",
     url: "https://github.com/n8n-io/n8n",
     install: "npm install n8n -g",
-    env: ["N8N_WEBHOOK_URL"],
+    env: ["APP_BASE_URL", "N8N_WEBHOOK_URL", "N8N_WEBHOOK_SECRET"],
     why: "Mature workflow automation layer for scheduled jobs, webhooks, approvals and retries.",
     integrationPlan: ["daily trend job", "render queue", "publish approval", "analytics sync"],
     notes: ["Use this when the local app graduates from manual runs to timed automation."]

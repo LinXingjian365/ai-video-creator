@@ -38,10 +38,17 @@ flowchart TB
 | `src/app/api/materials/import/route.ts` | 公开视频参考素材导入，调用 yt-dlp 并生成 manifest |
 | `src/app/api/materials/analyze/route.ts` | 素材分析，生成字幕片段、场景变化、静音/有声段和候选切点 |
 | `src/app/api/remotion/render/route.ts` | 将脚本节拍渲染成可发布的 Remotion 包装 MP4 |
+| `src/app/api/publish/*/route.ts` | 发布 dry-run、待发布队列、人工确认闸门 |
+| `src/app/api/analytics/import/route.ts` | 导入播放/互动/涨粉指标快照，生成复盘建议 |
+| `src/app/api/orchestration/n8n/route.ts` | 生成 n8n 全链路 payload，或在确认后触发 webhook |
 | `src/app/api/integrations/route.ts` | 成熟工具集成目录 |
 | `src/app/api/mcp/config/route.ts` | MCP 配置建议 |
 | `src/lib/ffmpeg.ts` | FFmpeg/FFprobe 封装 |
 | `src/lib/platform-variants.ts` | 平台比例视频导出，生成抖音/快手/B站/方版发布视频 |
+| `src/lib/audio-mix.ts` | FFmpeg BGM 混音层，支持无配音视频+BGM、口播+BGM |
+| `src/lib/publish/*` | 发布 dry-run、平台 adapter 状态、本地待发布队列 |
+| `src/lib/analytics/ledger.ts` | 数据回流 ledger、指标信号计算和下一步动作建议 |
+| `src/lib/orchestration/n8n.ts` | n8n 工作流蓝图、payload 构建、安全确认和 webhook 触发 |
 | `src/lib/auto-plan.ts` | 自动剪辑决策生成 |
 | `src/lib/auto-render.ts` | 自动粗剪执行与剪映计划生成 |
 | `src/lib/creator-suite.ts` | 热点、脚本、素材、发布、复盘方案生成 |
@@ -137,4 +144,5 @@ Remotion 包装渲染流程已经接入：
 - 所有本地文件路径都通过 `resolveLocalPath` 处理。
 - 长任务不阻塞 UI，统一走 task id。趋势报告属于短任务，在 API 请求内完成并返回最终 task，避免 Next route 后台任务挂起。
 - 外部发布必须先有 dry-run，不允许直接一键真发。
+- 发布队列只允许 `ready` 项通过人工确认进入 `approved`；当前 adapter 全部 dry-run only。
 - 工作区输出要可追溯：每个计划、粗剪、草稿都应落盘。

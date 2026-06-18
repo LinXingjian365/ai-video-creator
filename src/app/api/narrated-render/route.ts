@@ -39,12 +39,15 @@ async function runRender(taskId: string, payload: ReturnType<typeof narratedRend
       aspectRatio: payload.aspectRatio,
       ttsProvider: payload.ttsProvider,
       voice: payload.voice,
-      outputPath: payload.outputPath
+      outputPath: payload.outputPath,
+      bgmPath: payload.bgmPath,
+      bgmVolume: payload.bgmVolume,
+      narrationVolume: payload.narrationVolume
     });
     updateTask(taskId, { progress: 95 });
     appendTaskLog(
       taskId,
-      `配音成片完成:${result.videoPath}(${result.provider}/${result.voice}, ${result.durationSec.toFixed(1)}s, 字幕 ${result.subtitleCount} 条)`
+      `配音成片完成:${result.videoPath}(${result.provider}/${result.voice}, ${result.durationSec.toFixed(1)}s, 字幕 ${result.subtitleCount} 条${result.bgmPath ? ", 已混入BGM" : ""})`
     );
     return completeTask(taskId, result);
   } catch (error) {
