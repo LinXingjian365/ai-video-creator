@@ -230,6 +230,24 @@ src/
 - 验收: typecheck / 全量 166 测试 / production build 全绿; dev `:5215` 烟测验证按钮 → API → 任务流水显示一致, 0 console 报错。
 
 下一步:
-- 把证据条目自动并入 `script/generate.ts` 生成的草稿引用 (新增可选 `evidence: EvidenceResult[]` 字段, 在 LLM prompt 里以 "fact sources" 形式喂入)。
 - 真实联调 Postiz / social-auto-upload 草稿(P5 验收剩余项)。
 - 真实 n8n 实例导入 `workspace/drafts/n8n-workflow-*.json` 跑定时任务。
+
+## Claude 更新: 网页证据自动喂进脚本 LLM (commit 3d6e0e5)
+
+已完成:
+- `src/lib/script/generate.ts`: `ScriptInput.evidence?` 透传到 LLM prompt 的"事实证据"章节, SYSTEM 指令要求融入真实数字/结论/案例并填 `citedSources` (`url + used` 说明)。
+- `src/lib/full-chain.ts`: `FullChainInput.evidence?` 透传到 generateScript。
+- `src/lib/schemas.ts`: `scriptGenerateSchema` / `fullChainSchema` 都加 `evidence[]`。
+- `src/app/page.tsx`: `generateScript()` / `runFullChainAction()` 自动从 `evidenceReport` 取前 6 条; 脚本结果新增"事实引用"卡(青色高亮显示 LLM 实际引用的 URL + 用法); 选题字段下方显示"已挂载 N 条事实证据"提示 pill。
+- 全量 169 测试绿 (+3 evidence 测试 + 1 full-chain test 补 `citedSources: []`)。
+
+实测 DeepSeek 行为: 喂入 `Sora 2 评分 8.7 / Runway 7.9` + `Pika 73% 用户日均 5 次`两条证据,模型把 8.7 vs 7.9 写进 hook、73% 写进 beat,并在 `citedSources` 标注每条 URL 的使用方式。
+
+## TikHub API key 实测状态 (2026-06-18)
+
+key 已落 `.env.local`,实测覆盖:
+- ✅ kuaishou 热榜 `/api/v1/kuaishou/web/hot_search_list`: 返回真数据
+- ❌ douyin 关键词搜索 `/api/v1/douyin/app/v3/fetch_video_search_result`: HTTP 402 "Insufficient balance, this endpoint requires payment and does not accept free credit"
+
+→ TikHub 账户层面的限制,**不是代码 bug**。免费额度只覆盖部分热榜接口,关键词搜索需要付费充值。下次推进 TikHub 联调前先在 https://user.tikhub.io 充值或换免费接口。
