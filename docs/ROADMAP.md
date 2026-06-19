@@ -35,7 +35,7 @@
 
 目标：输入账号方向，输出可验证的选题池。
 
-- 接 TikHub 或平台 MCP：搜索热点、竞品、评论、标题。状态：已接 TikHub 抖音热榜、快手热榜、关键词搜索、单视频详情和评论样本，统一归一化到 `TrendItem` 和素材候选后进入本地评分、DeepSeek 分析与素材导入 UI。**完全免费路径**: 自托管 [JoeanAmier/TikTokDownloader](https://github.com/JoeanAmier/TikTokDownloader) (Apache 2.0, 11.4k★) + [KS-Downloader](https://github.com/JoeanAmier/KS-Downloader),REST API on `:5555`,见 `docs/FREE_ALTERNATIVES.md`。
+- 接 TikHub 或平台 MCP：搜索热点、竞品、评论、标题。状态：已接 TikHub 抖音热榜、快手热榜、关键词搜索、单视频详情和评论样本；抖音热榜已接 TTD 免费路径；快手单视频详情已接 KSD 免费路径；统一归一化到 `TrendItem` 和素材候选后进入本地评分、DeepSeek 分析与素材导入 UI。**完全免费路径**: 自托管 [JoeanAmier/TikTokDownloader](https://github.com/JoeanAmier/TikTokDownloader) (Apache 2.0, 11.4k★) + [KS-Downloader](https://github.com/JoeanAmier/KS-Downloader),见 `docs/FREE_ALTERNATIVES.md`。
 - 接 Exa/Firecrawl：补网页资料、案例、脚本事实依据。状态：已接 `src/lib/trend/evidence.ts` 双源适配(auto 自动按 key 可用性选)、`/api/trend/evidence`、"联网素材"面板"网页事实证据搜索"卡;未配 key 时诚实抛错,不伪造结果。
 - 输出选题评分、参考链接、拆解要点。
 

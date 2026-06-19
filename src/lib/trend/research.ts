@@ -1,4 +1,5 @@
 import { mapTikHubTrendResponse } from "@/lib/trend/sources/tikhub";
+import { buildKsdDetailText, fetchKsdDetail, isKsdConfigured, ksdDetailEndpoint } from "@/lib/trend/sources/ks-downloader";
 import type { Platform, TrendItem } from "@/lib/trend/types";
 
 export type ResearchPlatform = Extract<Platform, "douyin" | "kuaishou">;
@@ -73,23 +74,27 @@ const DEFAULT_ENDPOINTS = {
 export async function runTikHubResearch(input: TikHubResearchInput, deps: TikHubResearchDeps = {}): Promise<TikHubResearchReport> {
   const env = deps.env ?? process.env;
   const token = env.TIKHUB_API_KEY;
-  if (!token) {
-    throw new Error("TikHub research requires TIKHUB_API_KEY. Configure it before competitor search/detail/comment research.");
-  }
   if (!input.query?.trim() && !input.url?.trim() && !input.itemId?.trim()) {
     throw new Error("Provide query, url, or itemId for TikHub research.");
+  }
+
+  const wantsDetail = Boolean(input.url?.trim() || input.itemId?.trim());
+  const canUseKsdDetail = input.platform === "kuaishou" && wantsDetail && isKsdConfigured(env);
+  const needsTikHub = Boolean(input.query?.trim()) || (wantsDetail && !canUseKsdDetail);
+  if (needsTikHub && !token) {
+    throw new Error("TikHub research requires TIKHUB_API_KEY for search or TikHub detail. For free Kuaishou detail, start KS-Downloader and set KSD_BASE_URL or KSD_ENABLED=true.");
   }
 
   const limit = clampLimit(input.limit);
   const endpointCalls: ResearchEndpointCall[] = [];
   const searchItems = input.query?.trim()
-    ? await callSearch(input.platform, input.query.trim(), limit, env, token, deps.fetch, endpointCalls)
+    ? await callSearch(input.platform, input.query.trim(), limit, env, requireTikHubToken(token), deps.fetch, endpointCalls)
     : [];
   const detail = input.url?.trim() || input.itemId?.trim()
     ? await callDetail(input.platform, { url: input.url?.trim(), itemId: input.itemId?.trim() }, env, token, deps.fetch, endpointCalls)
     : undefined;
   const commentsItemId = input.itemId?.trim() || detail?.id;
-  const comments = input.includeComments && commentsItemId
+  const comments = input.includeComments && commentsItemId && token
     ? await callComments(input.platform, commentsItemId, limit, env, token, deps.fetch, endpointCalls)
     : [];
 
@@ -104,7 +109,13 @@ export async function runTikHubResearch(input: TikHubResearchInput, deps: TikHub
     detail,
     comments,
     materialCandidates: buildMaterialCandidates(input.platform, searchItems, detail).slice(0, limit),
-    nextActions: buildNextActions({ searchItems, detail, comments, includeComments: Boolean(input.includeComments) })
+    nextActions: buildNextActions({
+      searchItems,
+      detail,
+      comments,
+      includeComments: Boolean(input.includeComments),
+      skippedCommentsForMissingTikHubKey: Boolean(input.includeComments && commentsItemId && !token)
+    })
   };
 }
 
@@ -130,17 +141,24 @@ async function callDetail(
   platform: ResearchPlatform,
   input: { url?: string; itemId?: string },
   env: Record<string, string | undefined>,
-  token: string,
+  token: string | undefined,
   fetchImpl: typeof fetch | undefined,
   endpointCalls: ResearchEndpointCall[]
 ) {
+  if (platform === "kuaishou" && isKsdConfigured(env)) {
+    const endpoint = ksdDetailEndpoint(env);
+    const params = { text: buildKsdDetailText(input) };
+    endpointCalls.push({ kind: "detail", endpoint, params });
+    return fetchKsdDetail(input, { env, fetch: fetchImpl });
+  }
+
   const key = platform === "douyin"
     ? input.url ? "douyinDetailByUrl" : "douyinDetailById"
     : input.url ? "kuaishouDetailByUrl" : "kuaishouDetailById";
   const endpoint = endpointFor(key, env);
   const params: Record<string, string> = buildDetailParams(platform, input);
   endpointCalls.push({ kind: "detail", endpoint, params });
-  const raw = await requestTikHub(endpoint, params, env, token, fetchImpl);
+  const raw = await requestTikHub(endpoint, params, env, requireTikHubToken(token), fetchImpl);
   return normalizeSingleItem(raw, platform, "detail");
 }
 
@@ -199,6 +217,13 @@ function endpointFor(key: keyof typeof DEFAULT_ENDPOINTS, env: Record<string, st
   return env[`TIKHUB_ENDPOINT_${snakeKey(key)}`] || DEFAULT_ENDPOINTS[key];
 }
 
+function requireTikHubToken(token: string | undefined): string {
+  if (!token) {
+    throw new Error("TikHub research requires TIKHUB_API_KEY.");
+  }
+  return token;
+}
+
 function snakeKey(value: string) {
   return value.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase();
 }
@@ -250,7 +275,7 @@ function buildMaterialCandidates(platform: ResearchPlatform, searchItems: TrendI
   }));
 }
 
-function buildNextActions(input: { searchItems: TrendItem[]; detail?: TrendItem; comments: ResearchComment[]; includeComments: boolean }) {
+function buildNextActions(input: { searchItems: TrendItem[]; detail?: TrendItem; comments: ResearchComment[]; includeComments: boolean; skippedCommentsForMissingTikHubKey?: boolean }) {
   const actions: string[] = [];
   if (input.searchItems.length) {
     actions.push("Pick 3-5 search hits as references, then import only content you have rights to use.");
@@ -260,6 +285,9 @@ function buildNextActions(input: { searchItems: TrendItem[]; detail?: TrendItem;
   }
   if (input.includeComments && input.comments.length) {
     actions.push("Extract objections and repeated phrases from comments into the script hook and pinned-comment plan.");
+  }
+  if (input.skippedCommentsForMissingTikHubKey) {
+    actions.push("Comments were skipped because TikHub key is missing; KS-Downloader currently supplies free Kuaishou detail only.");
   }
   if (input.includeComments && !input.comments.length) {
     actions.push("No comment sample returned; retry with a platform item id if the URL parser did not expose one.");

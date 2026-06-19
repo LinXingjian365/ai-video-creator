@@ -235,7 +235,7 @@ TikHub 请求使用 `Authorization: Bearer <token>`，endpoint 可通过 `TIKHUB
 
 ### POST `/api/trend/research`
 
-用 TikHub 做抖音/快手竞品研究：关键词搜索、单视频详情、评论样本，并归一化成 `TrendItem`、素材候选和下一步动作。该接口创建 `trend-research` task，并在当前请求内返回最终 task。
+用 TikHub 做抖音/快手竞品研究：关键词搜索、单视频详情、评论样本，并归一化成 `TrendItem`、素材候选和下一步动作。快手单视频详情如果配置了本地 KS-Downloader，会优先走免费自托管 `POST /detail/`，不强制 TikHub key。该接口创建 `trend-research` task，并在当前请求内返回最终 task。
 
 ```json
 {
@@ -248,7 +248,7 @@ TikHub 请求使用 `Authorization: Bearer <token>`，endpoint 可通过 `TIKHUB
 }
 ```
 
-`query`、`url`、`itemId` 至少传一个。`url` 可以是平台分享链接或分享文本；快手链接会按 TikHub 的 `share_text` 参数请求。
+`query`、`url`、`itemId` 至少传一个。`url` 可以是平台分享链接或分享文本；快手链接默认按 TikHub 的 `share_text` 参数请求；若已配置 `KSD_BASE_URL` 或 `KSD_ENABLED=true`，快手 URL/ID 详情会改走 KS-Downloader。
 
 TikHub endpoint 默认值：
 
@@ -264,6 +264,18 @@ TikHub endpoint 默认值：
 ```
 
 这些路径可用 `.env` 里的 `TIKHUB_ENDPOINT_DOUYIN_SEARCH`、`TIKHUB_ENDPOINT_DOUYIN_DETAIL_BY_URL`、`TIKHUB_ENDPOINT_DOUYIN_DETAIL_BY_ID`、`TIKHUB_ENDPOINT_DOUYIN_COMMENTS`、`TIKHUB_ENDPOINT_KUAISHOU_SEARCH`、`TIKHUB_ENDPOINT_KUAISHOU_DETAIL_BY_URL`、`TIKHUB_ENDPOINT_KUAISHOU_DETAIL_BY_ID`、`TIKHUB_ENDPOINT_KUAISHOU_COMMENTS` 覆盖。
+
+KS-Downloader 快手免费详情配置：
+
+```text
+KSD_ENABLED=true
+KSD_BASE_URL=http://127.0.0.1:5557
+KSD_DETAIL_ENDPOINT=/detail/
+KSD_COOKIE=
+KSD_PROXY=
+```
+
+当前只把 KS-Downloader 用作快手 URL/ID 详情源；没有把它伪装成快手热榜源。
 
 返回重点字段：
 

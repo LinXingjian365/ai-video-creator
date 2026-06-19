@@ -76,6 +76,38 @@ describe("runTikHubResearch", () => {
     expect(String(fetchMock.mock.calls[1][0])).toContain("photo_id=3xabc");
   });
 
+  it("uses KS-Downloader for free Kuaishou detail without requiring TikHub key", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      data: {
+        detailID: "3xabc",
+        caption: "快手免费详情",
+        name: "创作者A",
+        viewCount: "90000",
+        realLikeCount: 1000
+      }
+    })));
+
+    const report = await runTikHubResearch({
+      platform: "kuaishou",
+      itemId: "3xabc",
+      includeComments: true
+    }, {
+      env: { KSD_BASE_URL: "http://127.0.0.1:5557" },
+      fetch: fetchMock as unknown as typeof fetch
+    });
+
+    expect(report.detail).toMatchObject({
+      platform: "kuaishou",
+      id: "3xabc",
+      title: "快手免费详情"
+    });
+    expect(report.comments).toEqual([]);
+    expect(report.nextActions).toContain("Comments were skipped because TikHub key is missing; KS-Downloader currently supplies free Kuaishou detail only.");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:5557/detail/");
+    expect(JSON.parse(init.body as string).text).toBe("https://www.kuaishou.com/short-video/3xabc");
+  });
+
   it("fails honestly without a key", async () => {
     await expect(runTikHubResearch({ platform: "douyin", query: "AI" }, { env: {} })).rejects.toThrow(/TIKHUB_API_KEY/);
   });

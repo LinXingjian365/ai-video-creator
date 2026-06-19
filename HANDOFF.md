@@ -168,7 +168,7 @@ src/
 1. ~~n8n~~ ✅ 容器 running on 5678,workflow 已导出+导入
 2. ~~Postiz~~ ✅ 全栈(含 ES+Temporal+pg+redis) running on 5000,账号/API key 自动建
 3. ~~TTD~~ ✅ 原生 python 跑在 5555(非 Docker),douyin hot 实测通
-4. KS-Downloader adapter — 快手免费替代(照搬 TTD 模式即可)
+4. ~~KS-Downloader adapter~~ ✅ — 快手免费详情替代已接入；热榜仍需另找源或走 TikHub
 5. ~~BGM~~ ✅ workspace/input/audio/{7 moods} 已填 CC-BY 曲
 
 ## Git 注意事项
@@ -298,7 +298,7 @@ key 已落 `.env.local`,实测覆盖:
 2. ~~BGM 本地库~~ ✅ — workspace/input/audio/{7 moods} 已填 Kevin MacLeod CC-BY 曲
 3. ~~Postiz 自托管~~ ✅ — 全栈 6 容器 running,账号+API key 已自动建
 4. ~~TikTokDownloader adapter~~ ✅ — 打补丁+douyin hot 实测通(免费),重写适配器映射话题趋势
-5. **KS-Downloader adapter** — 快手免费替代(TTD 姊妹项目),同模式可照搬
+5. **KS-Downloader adapter** ✅ — 已接入快手 URL/ID 详情免费路径；未伪造热榜，因为 KS-Downloader 未暴露 verified hot-list API
 
 ## 2026-06-19 Claude 更新: TikTokDownloader 免费抖音热榜 (重写, commit 93fc534→fdb8aae)
 
@@ -378,6 +378,7 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 | `patches/ttd-douyin-hot.patch` | 给 TTD 加 /douyin/hot HTTP 路由 |
 | `patches/ttd-run_api.py` | TTD 非交互启动脚本 |
 | `src/lib/trend/sources/tiktok-downloader.ts` | 免费抖音热榜适配器 |
+| `src/lib/trend/sources/ks-downloader.ts` | 免费快手单视频详情适配器 |
 | `src/lib/trend/sources/douyin.ts` | 抖音源路由(TTD_ENABLED→TTD,否则→TikHub) |
 | `src/lib/orchestration/n8n.ts` | n8n workflow payload 生成+导出 |
 | `src/lib/publish/dispatch.ts` | Postiz draft dispatch |
@@ -386,3 +387,15 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 | `C:/Users/Administrator/.claude/projects/A--AI--------/memory/` | 项目记忆文件 |
 | `C:/Users/Administrator/.claude/projects/A--AI--------/memory/project-state-2026-06-19.md` | 最终运行态快照 |
 | `C:/Users/Administrator/.claude/projects/A--AI--------/memory/docker-clash-tun-and-free-douyin.md` | Clash TUN/Docker 踩坑记录 |
+
+## Codex 更新: KS-Downloader 快手详情免费路径已接入
+
+已完成:
+- `src/lib/trend/sources/ks-downloader.ts`: 新增自托管 KS-Downloader 适配层，支持 `KSD_BASE_URL` / `KSD_DETAIL_ENDPOINT` / `KSD_COOKIE` / `KSD_PROXY`，把 `/detail/` 响应归一化为 `TrendItem`。
+- `src/lib/trend/research.ts`: `platform=kuaishou` 且提供 URL/ID 时，若配置 `KSD_BASE_URL` 或 `KSD_ENABLED=true`，优先走 KSD 详情，不再强制 TikHub key；关键词搜索和评论仍走 TikHub。
+- `src/app/page.tsx`: 联网素材卡片文案改为 TikHub / KSD，明确关键词/评论与快手详情的不同路径。
+- `.env.example` / `docs/API.md` / `docs/FULL_CHAIN_TOOLCHAIN.md` / `docs/ROADMAP.md`: 同步 KSD 配置和边界。
+
+边界:
+- KS-Downloader 当前没有 verified 快手热榜 API，所以没有把它伪装成热榜源；快手热榜仍由 TikHub 或后续新源负责。
+- 本轮验证: typecheck 绿，34 files / 207 tests 绿，production build 绿。

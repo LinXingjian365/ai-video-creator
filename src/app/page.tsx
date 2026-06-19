@@ -1641,15 +1641,15 @@ function CollectPanel({
   return (
     <div className="stage-layout collect-layout">
       <section className="tool-grid">
-        <StageCard icon={Search} title="搜索与热点" body="Exa、Firecrawl、TikHub 找热点、标题、参考链接。" />
+        <StageCard icon={Search} title="搜索与热点" body="Exa、Firecrawl、TikHub/KSD 找热点、标题、参考链接。" />
         <StageCard icon={DownloadCloud} title="视频素材导入" body="yt-dlp 把可合法使用的视频、字幕、元数据入库。" />
         <StageCard icon={FileJson} title="素材目录" body="统一落盘 references / raw / broll / audio。" />
       </section>
 
       <section className="stage-form-card material-import-card research-card">
         <div className="form-card-title">
-          <strong>TikHub 爆款研究</strong>
-          <span>关键词搜索、单视频详情和评论样本会回填参考素材候选。</span>
+          <strong>TikHub / KSD 爆款研究</strong>
+          <span>关键词搜索走 TikHub；快手单视频详情可走本地 KS-Downloader 免费路径。</span>
         </div>
         <div className="form-grid">
           <label className="field">
@@ -1672,7 +1672,7 @@ function CollectPanel({
             {researchBusy ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
             研究爆款信号
           </button>
-          <small>需要 TIKHUB_API_KEY；结果只用于结构参考和合规素材选择。</small>
+          <small>关键词/评论需要 TIKHUB_API_KEY；快手详情可配置 KSD_BASE_URL。结果只用于结构参考和合规素材选择。</small>
         </div>
         {researchReport ? (
           <div className="research-result">
