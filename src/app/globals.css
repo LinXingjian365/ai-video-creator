@@ -4,35 +4,38 @@
    ============================================================ */
 
 :root {
-  --bg: #0a0e1a;
-  --panel: #111728;
-  --card: #131a2e;
-  --card-2: #0e1426;
-  --raised: #182142;
+  /* 大厂级深色控制台:近黑画布 · surface 阶梯 · 单一靛蓝强调 · 1px 发丝线(零辉光) */
+  --bg: #0a0b0d;
+  --panel: #111315;
+  --card: #16181b;
+  --card-2: #111315;
+  --raised: #1b1e22;
 
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --line: #24272c;
+  --line-strong: #33373d;
 
-  --ink: #eaf0ff;
-  --ink-soft: #c3cce6;
-  --muted: #7b86a8;
-  --faint: #515b78;
+  --ink: #f5f7fa;
+  --ink-soft: #c4cad4;
+  --muted: #868d99;
+  --faint: #5b626d;
 
-  --cyan: #22d3ee;
-  --cyan-deep: #0bb6d4;
-  --magenta: #f472b6;
-  --magenta-deep: #e84d9f;
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --danger: #fb7185;
+  /* 双霓虹塌成单一靛蓝强调(变量名保留,全站级联) */
+  --cyan: #6366f1;
+  --cyan-deep: #818cf8;
+  --magenta: #6366f1;
+  --magenta-deep: #818cf8;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --danger: #ef4444;
 
-  --glow-cyan: 0 0 22px rgba(34, 211, 238, 0.32);
-  --glow-magenta: 0 0 22px rgba(244, 114, 182, 0.3);
-  --drop: 0 24px 60px rgba(0, 0, 0, 0.55);
+  /* 辉光归零:深度只靠 surface 阶梯 + 发丝线 */
+  --glow-cyan: none;
+  --glow-magenta: none;
+  --drop: 0 1px 0 rgba(0, 0, 0, 0.4);
 
-  --r-lg: 16px;
-  --r-md: 12px;
-  --r-sm: 9px;
+  --r-lg: 12px;
+  --r-md: 10px;
+  --r-sm: 8px;
 
   --ff-display: var(--font-display), "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --ff-mono: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -56,14 +59,13 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(1100px 760px at 8% -10%, rgba(34, 211, 238, 0.12), transparent 58%),
-    radial-gradient(1000px 720px at 104% 112%, rgba(244, 114, 182, 0.12), transparent 55%),
+    radial-gradient(1200px 800px at 12% -15%, rgba(99, 102, 241, 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.28);
+  background: rgba(99, 102, 241, 0.28);
   color: #fff;
 }
 
@@ -253,8 +255,8 @@ h2 {
 }
 
 .feature-item.active {
-  border-color: rgba(34, 211, 238, 0.4);
-  background: linear-gradient(100deg, rgba(34, 211, 238, 0.14), rgba(244, 114, 182, 0.08));
+  border-color: rgba(99, 102, 241, 0.4);
+  background: linear-gradient(100deg, rgba(99, 102, 241, 0.14), rgba(99, 102, 241, 0.08));
 }
 
 .feature-item.active svg {
@@ -267,7 +269,7 @@ h2 {
 }
 
 .feature-item.active small {
-  color: rgba(34, 211, 238, 0.85);
+  color: rgba(99, 102, 241, 0.85);
 }
 
 /* ---------- 工作区路径盒 ---------- */
@@ -361,7 +363,7 @@ code {
 
 .icon-button:hover {
   color: var(--cyan);
-  border-color: rgba(34, 211, 238, 0.4);
+  border-color: rgba(99, 102, 241, 0.4);
   transform: rotate(-30deg);
 }
 
@@ -390,7 +392,7 @@ code {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(34, 211, 238, 0.08), transparent 46%),
+    radial-gradient(120% 140% at 0% 0%, rgba(99, 102, 241, 0.08), transparent 46%),
     var(--card);
 }
 
@@ -498,7 +500,7 @@ select:focus,
 textarea:focus {
   border-color: var(--cyan);
   background: #0c1426;
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.16);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
 }
 
 select option {
@@ -541,9 +543,7 @@ input[type="checkbox"] {
 }
 
 .primary-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 0 30px rgba(34, 211, 238, 0.45);
-  filter: saturate(1.12);
+  filter: brightness(1.08);
 }
 
 .primary-button:active:not(:disabled) {
@@ -567,7 +567,7 @@ input[type="checkbox"] {
 }
 
 .secondary-button:hover:not(:disabled) {
-  border-color: rgba(34, 211, 238, 0.5);
+  border-color: rgba(99, 102, 241, 0.5);
   background: var(--raised);
   transform: translateY(-1px);
 }
@@ -724,9 +724,9 @@ input[type="checkbox"] {
   display: grid;
   gap: 6px;
   padding: 12px 14px;
-  border: 1px solid rgba(34, 211, 238, 0.28);
+  border: 1px solid rgba(99, 102, 241, 0.28);
   border-radius: var(--r-md);
-  background: rgba(34, 211, 238, 0.06);
+  background: rgba(99, 102, 241, 0.06);
 }
 
 .script-cited > strong {
@@ -756,7 +756,7 @@ input[type="checkbox"] {
   margin-left: 6px;
   padding: 1px 8px;
   border-radius: 999px;
-  background: rgba(34, 211, 238, 0.14);
+  background: rgba(99, 102, 241, 0.14);
   color: var(--cyan);
   font-size: 11.5px;
 }
@@ -805,7 +805,7 @@ input[type="checkbox"] {
 }
 
 .stage-card:hover {
-  border-color: rgba(34, 211, 238, 0.3);
+  border-color: rgba(99, 102, 241, 0.3);
   background: var(--raised);
   transform: translateY(-2px);
 }
@@ -929,7 +929,7 @@ input[type="checkbox"] {
 }
 
 .trend-item:hover {
-  border-color: rgba(34, 211, 238, 0.28);
+  border-color: rgba(99, 102, 241, 0.28);
   transform: translateX(2px);
 }
 
@@ -999,12 +999,12 @@ input[type="checkbox"] {
 
 .trend-metrics span:first-child {
   color: var(--cyan);
-  background: rgba(34, 211, 238, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .trend-metrics span:nth-child(2) {
   color: var(--magenta);
-  background: rgba(244, 114, 182, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .trend-logic {
@@ -1175,7 +1175,7 @@ input[type="checkbox"] {
   height: 26px;
   padding: 0 11px;
   border-radius: 999px;
-  background: rgba(34, 211, 238, 0.1);
+  background: rgba(99, 102, 241, 0.1);
   color: var(--cyan);
   font-family: var(--ff-mono);
   font-size: 11.5px;
@@ -1185,9 +1185,9 @@ input[type="checkbox"] {
   display: grid;
   gap: 10px;
   padding: 14px;
-  border: 1px solid rgba(244, 114, 182, 0.28);
+  border: 1px solid rgba(99, 102, 241, 0.28);
   border-radius: var(--r-md);
-  background: rgba(244, 114, 182, 0.06);
+  background: rgba(99, 102, 241, 0.06);
 }
 
 .full-chain-action .primary-button {
@@ -1199,7 +1199,7 @@ input[type="checkbox"] {
   display: grid;
   gap: 8px;
   padding: 16px;
-  border: 1px solid rgba(34, 211, 238, 0.32);
+  border: 1px solid rgba(99, 102, 241, 0.32);
   border-radius: var(--r-md);
   background: var(--card-2);
 }
@@ -1585,7 +1585,7 @@ input[type="checkbox"] {
 .selfcheck-row code {
   font-size: 11px;
   color: var(--cyan);
-  background: rgba(34, 211, 238, 0.08);
+  background: rgba(99, 102, 241, 0.08);
   padding: 4px 8px;
   border-radius: 8px;
   word-break: break-all;
@@ -1628,7 +1628,7 @@ input[type="checkbox"] {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: rgba(34, 211, 238, 0.1);
+  background: rgba(99, 102, 241, 0.1);
   color: var(--cyan);
   font-family: var(--ff-mono);
   font-size: 10px;
@@ -1695,8 +1695,7 @@ input[type="checkbox"] {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--cyan), var(--magenta));
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
+  background: var(--cyan);
   transition: width 220ms ease;
 }
 
