@@ -6,7 +6,7 @@
 
 ## 0. 当前栈实测状态(2026-06-20 凌晨)
 
-跑 `npm run smoke:live`(本指南配的脚本)实测结果:
+### 快速 smoke(`npm run smoke:live`,~70s)
 
 | 步骤 | 状态 | 数据点 |
 |---|---|---|
@@ -14,6 +14,18 @@
 | Step 1 抖音热榜(免费 TTD) | ✅ 3 真话题 / 49s | "端午节一桌封神挑战" 等;DeepSeek 解读病毒逻辑 ✓ |
 | Step 2 脚本生成(DeepSeek) | ✅ 11s | 真 hook + 6 beats + 8 tags |
 | Step 3 Postiz 探活 | ⚠️ 1 blocker | API key 有效,integrations=0 |
+
+### 完整含渲染 smoke(`npm run smoke:live:full`,~7 分钟)— **已实证全链路出真视频**
+
+| 阶段 | 实测产物 |
+|---|---|
+| ① 文案脚本(LLM) | 标题 "别再这样吃了!3个健康饮食的真相颠覆你的认知" + hook + beats |
+| ② Remotion 成片 | `workspace/output/remotion/1781887273412-script-package.mp4`(3.3 MB) |
+| ③ 多平台变体 | 4 个真实 mp4: 抖音 1080×1920 / 快手 1080×1920 / B站 1920×1080 / 方形 1080×1080 |
+| 总耗时 | **433 秒**(LLM ~15s + 渲染 ~100s + 4 变体 ffmpeg ~25s,其余 bundle) |
+| 单变体 ffprobe | h264 真编码 / aac 音频 / 时长 45.0s / 文件 1.1–2.0 MB |
+
+→ **栈真的能产出可上传到抖音/快手/B站的成片**,不是空架子。
 
 **唯一阻塞**:`POSTIZ_INTEGRATION_ID_*` 未填(必须你在 Postiz UI 里 OAuth 连号后才有)。
 
@@ -39,7 +51,10 @@
 
 ## 2. 一键真实联调
 
-`npm run smoke:live`(本指南配的脚本,默认打 `http://127.0.0.1:5182`)
+两种粒度:
+
+- **快速(诊断/日常)** `npm run smoke:live` ~70s:trend → script → preflight,不渲染
+- **完整(实证产视频)** `npm run smoke:live:full` ~7 分钟:含 Remotion 渲染 + 4 平台变体,完成后看 `workspace/output/publish/<topic>-<ts>/*.mp4`
 
 > 前提:dev server 在 5182 端口,TTD 在 5555,Docker 6 容器全 Up。任一项缺,自检会指出来。
 > 启动顺序:Docker Desktop → `docker compose -f deployments/postiz/docker-compose.yml up -d` + `docker compose -f deployments/n8n/docker-compose.yml up -d` → `cd ~/Desktop/TikTokDownloader && .venv/Scripts/python.exe run_api.py` → `npm run dev`

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "n8n:smoke": "node scripts/n8n-smoke-test.mjs",
     "smoke:live": "node scripts/live-smoke.mjs",
+    "smoke:live:full": "node scripts/live-smoke-full.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
