@@ -55,7 +55,7 @@ npx vitest run # 225 tests, 36 files
 | 全链路自检面板 | ✅ /api/health/self-check + 辅助面板,探 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 四态 |
 | 抖音搜索/评论免费路径 | ✅ research.ts 配 TTD_DOUYIN_COOKIE 走 TTD(/douyin/search,/comment),否则 TikHub(plumbing 已测,真实形状待 cookie 联调) |
 | 快手免费热榜 | ❌ 无可建免费源(TikHub 快手热榜计费 / KSD 无热榜端点)—— 保留 TikHub,诚实不伪造 |
-| **下一项** | (1)Postiz 平台 OAuth 拿 integration_id → 真草稿联调 → (2)TTD 配 douyin cookie 验证免费搜索真实形状 |
+| **下一项** | (1)按 [docs/CONFIG_AND_LAUNCH.md](docs/CONFIG_AND_LAUNCH.md) 走完 Postiz OAuth → 填 integration_id → 真草稿联调 → (2)`npm run smoke:live` 实测端到端(已实证抖音热榜→DeepSeek 脚本→preflight 全通过) |
 
 ## 基础设施(2026-06-19 session 搭建,全在跑)
 
