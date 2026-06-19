@@ -5,6 +5,8 @@ import { draftsRoot, ensureDir } from "@/lib/paths";
 import type { PublishPlatform } from "@/lib/publish/dry-run";
 
 export const N8N_CONFIRM_TEXT = "CONFIRM_N8N_WEBHOOK";
+export const N8N_HTTP_MAX_TRIES = 3;
+export const N8N_HTTP_WAIT_BETWEEN_TRIES_MS = 10_000;
 
 export type N8nOrchestrationMode = "dry-run" | "webhook";
 export type N8nOrchestrationStatus = "preview" | "sent" | "blocked";
@@ -85,6 +87,9 @@ export interface N8nImportableWorkflowNode {
   typeVersion: number;
   position: [number, number];
   disabled?: boolean;
+  retryOnFail?: boolean;
+  maxTries?: number;
+  waitBetweenTries?: number;
   parameters: Record<string, unknown>;
   notes?: string;
   notesInFlow?: boolean;
@@ -225,6 +230,7 @@ export function buildN8nImportableWorkflow(
   const renderId = randomUUID();
   const queueId = randomUUID();
   const approvalNoteId = randomUUID();
+  const approvalMappingNoteId = randomUUID();
   const dispatchId = randomUUID();
   const analyticsId = randomUUID();
 
@@ -271,16 +277,39 @@ export function buildN8nImportableWorkflow(
         content: [
           "Stop here until the publish queue item is approved in the local console.",
           "Dispatch requires manualConfirm=CONFIRM_DRY_RUN_ONLY and an approved queue item id.",
-          "Keep PUBLISH_LIVE_ENABLED=false until real account tests are finished."
+          "Keep PUBLISH_LIVE_ENABLED=false until real account tests are finished.",
+          input.queueItemId
+            ? `This export was created with approved queueItemId=${input.queueItemId}.`
+            : "No approved queueItemId was supplied at export time."
         ].join("\n"),
         width: 360,
-        height: 180
+        height: 220
+      }
+    },
+    {
+      id: approvalMappingNoteId,
+      name: "Approval id mapping",
+      type: "n8n-nodes-base.stickyNote",
+      typeVersion: 1,
+      position: [1580, 330],
+      parameters: {
+        content: [
+          "Before enabling dispatch:",
+          "1. Open the local console publish queue.",
+          "2. Approve exactly one ready item with CONFIRM_DRY_RUN_ONLY.",
+          "3. Copy that approved item id into the dispatch node body if this export still says REPLACE_WITH_APPROVED_QUEUE_ITEM_ID.",
+          "The dispatch node stays disabled by default so this workflow cannot publish silently."
+        ].join("\n"),
+        width: 420,
+        height: 220
       }
     },
     {
       ...httpNode(dispatchId, "05 Dispatch approved draft", payload.steps[4].endpoint, payload.steps[4].payloadHint, [1580, 80]),
       disabled: true,
-      notes: "Disabled by default. Enable only after a queue item is approved and id mapping is wired.",
+      notes: input.queueItemId
+        ? "Disabled by default. This export includes a queueItemId, but dispatch must still be reviewed before enabling."
+        : "Disabled by default. Replace REPLACE_WITH_APPROVED_QUEUE_ITEM_ID with an approved queue item id before enabling.",
       notesInFlow: true
     },
     {
@@ -335,6 +364,7 @@ export async function exportN8nWorkflowFile(
     importNotes: [
       "Import the JSON in n8n via the workflow editor or CLI.",
       "No credentials or API keys are embedded in this workflow.",
+      `HTTP nodes include retryOnFail=${N8N_HTTP_MAX_TRIES} tries with ${N8N_HTTP_WAIT_BETWEEN_TRIES_MS}ms between tries.`,
       "Review APP_BASE_URL, schedule interval, queue approval id mapping, and disabled dispatch/analytics nodes before activation."
     ]
   };
@@ -486,7 +516,7 @@ function buildWorkflowSteps(
       endpoint: `${baseUrl}/api/publish/dispatch`,
       requiresHumanApproval: true,
       payloadHint: {
-        id: input.queueItemId || "{{approvedQueueItem.id}}",
+        id: input.queueItemId?.trim() || "REPLACE_WITH_APPROVED_QUEUE_ITEM_ID",
         mode: "draft",
         manualConfirm: "CONFIRM_DRY_RUN_ONLY"
       }
@@ -520,6 +550,9 @@ function httpNode(
     type: "n8n-nodes-base.httpRequest",
     typeVersion: 4.2,
     position,
+    retryOnFail: true,
+    maxTries: N8N_HTTP_MAX_TRIES,
+    waitBetweenTries: N8N_HTTP_WAIT_BETWEEN_TRIES_MS,
     parameters: {
       method: "POST",
       url,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
@@ -185,6 +185,21 @@ const capabilities: Array<{
   }
 ];
 
+const pipelineStages = [
+  capabilities.find((item) => item.id === "trend"),
+  capabilities.find((item) => item.id === "analyze"),
+  capabilities.find((item) => item.id === "collect"),
+  capabilities.find((item) => item.id === "script"),
+  capabilities.find((item) => item.id === "edit"),
+  capabilities.find((item) => item.id === "publish"),
+  capabilities.find((item) => item.id === "review")
+].filter(Boolean) as typeof capabilities;
+
+const supportStages = [
+  capabilities.find((item) => item.id === "predict"),
+  capabilities.find((item) => item.id === "selfcheck")
+].filter(Boolean) as typeof capabilities;
+
 const stageCopy: Record<WorkflowStage, { headline: string; description: string; proof: string[] }> = {
   trend: {
     headline: "B站真实热点情报",
@@ -353,6 +368,12 @@ export default function Home() {
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
     [activeStage]
   );
+  const activePipelineIndex = pipelineStages.findIndex((item) => item.id === activeStage);
+  const runningTaskCount = tasks.filter((task) => task.status === "pending" || task.status === "processing").length;
+  const approvedQueueCount = publishQueue.filter((item) => item.status === "approved").length;
+  const readyQueueCount = publishQueue.filter((item) => item.status === "ready").length;
+  const systemOkCount = selfCheckReport?.summary.ok ?? readiness?.commands.filter((item) => item.ok).length ?? 0;
+  const systemTotalCount = selfCheckReport?.summary.total ?? readiness?.commands.length ?? 0;
 
   useEffect(() => {
     void refreshTasks();
@@ -1155,41 +1176,66 @@ export default function Home() {
   }
 
   return (
-    <main className="console-shell creator-shell">
-      <aside className="sidebar">
+    <main className="console-shell creator-shell command-shell">
+      <aside className="sidebar command-sidebar">
         <div className="brand">
           <div className="brand-mark"><Wand2 size={20} /></div>
           <div>
-            <strong>AI 视频增长控制台</strong>
-            <span>热点情报 / 素材收集 / 仿创作 / 自动剪辑 / 发布复盘</span>
+            <strong>AI 视频任务指挥舱</strong>
+            <span>Trend → Script → Cut → Publish → Learn</span>
           </div>
         </div>
 
-        <div className="feature-list">
-          {capabilities.map((item, index) => {
+        <div className="mission-brief">
+          <span>今日链路</span>
+          <strong>{activePipelineIndex >= 0 ? `${activePipelineIndex + 1}/7` : "辅助"}</strong>
+          <small>{activeCapability.title} · {activeCapability.body}</small>
+        </div>
+
+        <div className="feature-list pipeline-rail">
+          <div className="nav-group">七阶段生产轨道</div>
+          {pipelineStages.map((item, index) => {
             const Icon = item.icon;
-            const pipeline = index < 6;
             return (
-              <Fragment key={item.id}>
-                {index === 0 ? <div className="nav-group">创作主线</div> : null}
-                {index === 6 ? <div className="nav-group">辅助</div> : null}
-                <button
-                  aria-pressed={activeStage === item.id}
-                  className={activeStage === item.id ? "feature-item active" : "feature-item"}
-                  onClick={() => {
-                    setActiveStage(item.id);
-                    setMessage("");
-                  }}
-                  type="button"
-                >
-                  <span className="feature-index">{pipeline ? String(index + 1).padStart(2, "0") : "··"}</span>
-                  <Icon size={18} />
-                  <div>
-                    <strong>{item.title}</strong>
-                    <small>{item.body}</small>
-                  </div>
-                </button>
-              </Fragment>
+              <button
+                aria-pressed={activeStage === item.id}
+                className={activeStage === item.id ? "feature-item active" : "feature-item"}
+                key={item.id}
+                onClick={() => {
+                  setActiveStage(item.id);
+                  setMessage("");
+                }}
+                type="button"
+              >
+                <span className="feature-index">{String(index + 1).padStart(2, "0")}</span>
+                <Icon size={18} />
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>{item.body}</small>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="support-dock">
+          <span>辅助工具</span>
+          {supportStages.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                aria-pressed={activeStage === item.id}
+                className={activeStage === item.id ? "support-tool active" : "support-tool"}
+                key={item.id}
+                onClick={() => {
+                  setActiveStage(item.id);
+                  setMessage("");
+                }}
+                type="button"
+              >
+                <Icon size={15} />
+                {item.title}
+              </button>
             );
           })}
         </div>
@@ -1204,15 +1250,61 @@ export default function Home() {
       </aside>
 
       <section className="workbench">
-        <header className="topbar hero-bar">
-          <div>
-            <p>抖音 · 快手 · B站 创作控制台</p>
-            <h1>真实热点驱动，AI 写 · 找 · 剪 · 发一条龙</h1>
-            <span>B站真实榜单 + 确定性打分 + DeepSeek 解读；能力未接通时诚实降级，不伪装成功。</span>
+        <header className="topbar command-topbar">
+          <div className="hero-bar command-hero">
+            <div>
+              <p>AI VIDEO OPERATIONS COMMAND</p>
+              <h1>从热点判断到成片发布的本地执行台</h1>
+              <span>真实数据进来，AI 只做推理和执行建议；素材、剪辑、发布全部经过本地文件、任务日志和人工闸门验证。</span>
+            </div>
+            <button className="icon-button" onClick={refreshTasks} title="刷新任务" type="button">
+              <Clock3 size={18} />
+            </button>
           </div>
-          <button className="icon-button" onClick={refreshTasks} title="刷新任务" type="button">
-            <Clock3 size={18} />
-          </button>
+
+          <div className="mission-metrics">
+            <div>
+              <span>执行中</span>
+              <strong>{runningTaskCount}</strong>
+              <small>任务队列</small>
+            </div>
+            <div>
+              <span>素材库</span>
+              <strong>{workspaceAssets?.total ?? 0}</strong>
+              <small>workspace 文件</small>
+            </div>
+            <div>
+              <span>发布闸门</span>
+              <strong>{approvedQueueCount}/{readyQueueCount}</strong>
+              <small>approved / ready</small>
+            </div>
+            <div>
+              <span>系统能力</span>
+              <strong>{systemTotalCount ? `${systemOkCount}/${systemTotalCount}` : "待检"}</strong>
+              <small>服务与本地工具</small>
+            </div>
+          </div>
+
+          <div className="phase-map" aria-label="AI 视频全流程阶段">
+            {pipelineStages.map((item, index) => {
+              const isActive = activeStage === item.id;
+              const isPast = activePipelineIndex >= 0 && index < activePipelineIndex;
+              return (
+                <button
+                  className={isActive ? "phase-node active" : isPast ? "phase-node past" : "phase-node"}
+                  key={item.id}
+                  onClick={() => {
+                    setActiveStage(item.id);
+                    setMessage("");
+                  }}
+                  type="button"
+                >
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{item.title}</strong>
+                </button>
+              );
+            })}
+          </div>
         </header>
 
         <form
@@ -2184,14 +2276,68 @@ function EditPanel({ form, update, assets, renderAnalysisBusy, onRenderFromAnaly
   onRenderFromAnalysis: () => void;
 }) {
   const analysisAssets = assets.filter((asset) => asset.kind === "material-analysis").slice(0, 5);
+  const inputVideos = assets.filter((asset) => asset.kind === "video" && asset.role === "input");
+  const outputVideos = assets.filter((asset) => asset.kind === "video" && asset.role === "output");
+  const jianyingPlans = assets.filter((asset) => asset.kind === "jianying-plan");
+  const selectedAnalysis = form.roughCutAnalysisPath.trim().length > 0;
+  const editSignals = [
+    {
+      label: "素材入轨",
+      value: `${inputVideos.length} 个输入视频`,
+      state: inputVideos.length > 0 ? "ready" : "waiting"
+    },
+    {
+      label: "分析信号",
+      value: selectedAnalysis
+        ? "已指定分析路径"
+        : analysisAssets.length > 0
+          ? `${analysisAssets.length} 份可用分析`
+          : "等待素材分析",
+      state: selectedAnalysis || analysisAssets.length > 0 ? "ready" : "waiting"
+    },
+    {
+      label: "FFmpeg 粗剪",
+      value: renderAnalysisBusy
+        ? "正在裁剪合并"
+        : outputVideos.length > 0
+          ? `${outputVideos.length} 个输出视频`
+          : "等待执行",
+      state: renderAnalysisBusy ? "running" : outputVideos.length > 0 ? "ready" : "waiting"
+    },
+    {
+      label: "剪映计划",
+      value: jianyingPlans.length > 0 ? `${jianyingPlans.length} 份计划` : "等待粗剪结果",
+      state: jianyingPlans.length > 0 ? "ready" : "waiting"
+    }
+  ] as const;
 
   return (
     <div className="stage-layout edit-layout">
-      <section className="edit-pipeline">
-        <StageCard icon={Scissors} title="1. 生成测试素材" body="当前可真实生成本地测试视频，证明链路能跑。" />
-        <StageCard icon={Scissors} title="2. 裁剪三段" body="FFmpeg clip 输出 hook、demo、ending 三段。" />
-        <StageCard icon={Files} title="3. 合成 rough cut" body="FFmpeg merge 生成 MP4。" />
-        <StageCard icon={FileJson} title="4. 剪映计划" body="输出 JianYing plan JSON，后续接真实 MCP 草稿。" />
+      <section className="edit-console">
+        <div className="edit-console-head">
+          <div>
+            <span>EDIT SIGNAL BUS</span>
+            <strong>自动剪辑执行轨</strong>
+          </div>
+          <small>状态来自工作区资产和当前 FFmpeg 任务</small>
+        </div>
+        <div className="edit-signal-track">
+          {editSignals.map((signal, index) => (
+            <div className={`edit-signal ${signal.state}`} key={signal.label}>
+              <div className="edit-signal-index">
+                {signal.state === "ready" ? (
+                  <CheckCircle2 size={16} />
+                ) : signal.state === "running" ? (
+                  <Loader2 className="spin" size={16} />
+                ) : (
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                )}
+              </div>
+              <strong>{signal.label}</strong>
+              <small>{signal.value}</small>
+            </div>
+          ))}
+        </div>
       </section>
       <section className="stage-form-card compact">
         <div className="form-card-title">
@@ -2685,16 +2831,44 @@ function TaskPanel({
   const recentAssets = workspaceAssets?.assets
     .filter((asset) => ["video", "material-analysis", "jianying-plan", "manifest"].includes(asset.kind))
     .slice(0, 5) ?? [];
+  const taskSummary = {
+    running: tasks.filter((task) => task.status === "processing").length,
+    queued: tasks.filter((task) => task.status === "pending").length,
+    completed: tasks.filter((task) => task.status === "completed").length,
+    failed: tasks.filter((task) => task.status === "failed").length
+  };
 
   return (
     <aside className="task-panel">
       <div className="panel-title">
         <div>
-          <p>任务监控</p>
+          <p>AI EXECUTION TOWER</p>
+          <span>AI 执行塔</span>
           <h2>{tasks.length}</h2>
         </div>
-        <Files size={20} />
+        <div className={`tower-beacon ${taskSummary.running > 0 ? "active" : ""}`} title={taskSummary.running > 0 ? "有任务正在执行" : "当前无运行任务"}>
+          <Network size={18} />
+        </div>
       </div>
+
+      <section className="tower-summary" aria-label="任务状态汇总">
+        <div className="running">
+          <span>运行中</span>
+          <strong>{taskSummary.running}</strong>
+        </div>
+        <div>
+          <span>排队</span>
+          <strong>{taskSummary.queued}</strong>
+        </div>
+        <div className="completed">
+          <span>完成</span>
+          <strong>{taskSummary.completed}</strong>
+        </div>
+        <div className={taskSummary.failed > 0 ? "failed" : ""}>
+          <span>失败</span>
+          <strong>{taskSummary.failed}</strong>
+        </div>
+      </section>
 
       {readiness ? (
         <details className="panel-fold readiness-box">

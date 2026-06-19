@@ -36,7 +36,7 @@ flowchart LR
 | 图文包装 | Remotion | React 组件化字幕、标题卡、数据卡、片尾 | 已建 `src/remotion` 模板和 `/api/remotion/render`，脚本包装 MP4 已实测输出，支持渲染后 BGM 混音 | 下一步把素材粗剪作为底层视频并叠加动态图文包装 |
 | 可编辑草稿 | JianYing MCP | 生成剪映可编辑草稿、轨道、字幕、转场 | 已生成 JianYing plan JSON | 配置 JianYing MCP 并把 plan 映射到真实 MCP 调用 |
 | 发布矩阵 | FFmpeg variants、social-auto-upload、Postiz、n8n | 抖音/快手/B站/多平台发布、排程 | 已有 env 配置位、发布矩阵计划、平台视频版本导出、本地发布队列、adapter 状态检查、账号 preflight、人工确认闸门、Postiz draft adapter 和 social-auto-upload 命令预览 | 配置真实账号后跑 preflight，再继续默认 dry-run 草稿联调 |
-| 自动编排 | n8n | 把采集、剪辑、发布、复盘串成工作流 | 已有 `N8N_WEBHOOK_URL`/`N8N_WEBHOOK_SECRET`/`APP_BASE_URL` 配置位，已接 `/api/orchestration/n8n` dry-run payload、确认口令、webhook 触发和 `workspace/drafts/n8n-workflow-*.json` 导出；`npm run n8n:smoke` 已能把最小 workflow 导入自托管 n8n 并真实执行 HTTP 节点；`N8N_SMOKE_MODE=orchestration` 已能分阶段执行蓝图、readiness、workspace assets、dry-run payload | 下一步接失败重试、approved 队列 id 映射和 analytics 数据源映射 |
+| 自动编排 | n8n | 把采集、剪辑、发布、复盘串成工作流 | 已有 `N8N_WEBHOOK_URL`/`N8N_WEBHOOK_SECRET`/`APP_BASE_URL` 配置位，已接 `/api/orchestration/n8n` dry-run payload、确认口令、webhook 触发和 `workspace/drafts/n8n-workflow-*.json` 导出；`npm run n8n:smoke` 已能把最小 workflow 导入自托管 n8n 并真实执行 HTTP 节点；`N8N_SMOKE_MODE=orchestration` 已能分阶段执行蓝图、readiness、workspace assets、dry-run payload；导出 workflow 已带 HTTP retry、审批队列 id 映射说明和 disabled dispatch/analytics 闸门 | 下一步接 analytics 数据源映射 |
 | 数据复盘 | 平台 analytics、Postiz、TikHub | 30 分钟/24 小时数据回流和下一轮决策 | 已接本地 analytics ledger、指标导入、信号计算和下一步动作建议 | 接真实平台数据源自动同步 |
 
 ## 核心工具来源与成熟度

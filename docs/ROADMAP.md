@@ -75,7 +75,7 @@
 
 - 接 social-auto-upload 做国内平台 dry-run。状态：已建立本地发布队列、adapter 状态检查、账号 preflight 和人工确认闸门；已检查 session/config 文件并生成 social-auto-upload 命令预览，仍不执行外部上传。
 - 接 Postiz 做多平台排程候选。状态：已接 Postiz Public API 草稿 adapter 和 integrations probe；默认只预览，`PUBLISH_LIVE_ENABLED=true` 时只创建 `draft`，不直接真发。**完全免费路径**: 自托管开源 Postiz (Apache 2.0),`POSTIZ_BASE_URL=http://localhost:5000`,见 `docs/FREE_ALTERNATIVES.md`。
-- 接 n8n 编排采集、剪辑、发布、复盘工作流。状态：已接 `/api/orchestration/n8n`、Review UI 编排按钮、dry-run payload、确认后 webhook 触发、可导入 workflow JSON 导出，以及 `npm run n8n:smoke` 自托管 n8n 真实执行烟测；`N8N_SMOKE_MODE=orchestration` 已能分阶段执行蓝图读取、readiness、workspace assets 和 dry-run payload。下一步继续接失败重试、approved 队列 id 映射和真实 analytics 数据源映射。
+- 接 n8n 编排采集、剪辑、发布、复盘工作流。状态：已接 `/api/orchestration/n8n`、Review UI 编排按钮、dry-run payload、确认后 webhook 触发、可导入 workflow JSON 导出，以及 `npm run n8n:smoke` 自托管 n8n 真实执行烟测；`N8N_SMOKE_MODE=orchestration` 已能分阶段执行蓝图读取、readiness、workspace assets 和 dry-run payload。导出 workflow 已带 HTTP retry、disabled dispatch/analytics 闸门和 approved 队列 id 映射提示。下一步继续接真实 analytics 数据源映射。
 - 建 30 分钟、24 小时、7 天复盘报告。状态：已接本地 analytics ledger、指标导入、信号计算和下一步动作建议。
 
 验收：

@@ -5,6 +5,8 @@ import {
   buildN8nWorkflowPayload,
   exportN8nWorkflowFile,
   N8N_CONFIRM_TEXT,
+  N8N_HTTP_MAX_TRIES,
+  N8N_HTTP_WAIT_BETWEEN_TRIES_MS,
   triggerN8nOrchestration
 } from "@/lib/orchestration/n8n";
 
@@ -112,7 +114,36 @@ describe("n8n orchestration", () => {
     ]));
     expect(workflow.connections["01 Trend report"].main[0][0].node).toBe("02 Generate script");
     expect(workflow.nodes.find((node) => node.name === "05 Dispatch approved draft")?.disabled).toBe(true);
+    expect(workflow.nodes.find((node) => node.name === "Approval id mapping")?.type).toBe("n8n-nodes-base.stickyNote");
     expect(JSON.stringify(workflow)).not.toContain("do-not-include");
+  });
+
+  it("adds retry policy to importable HTTP nodes and keeps dispatch gated by an approved queue id", () => {
+    const workflow = buildN8nImportableWorkflow(
+      { topic: "AI video topic", platform: "douyin", category: "tech" },
+      { APP_BASE_URL: "http://127.0.0.1:5182" }
+    );
+    const httpNodes = workflow.nodes.filter((node) => node.type === "n8n-nodes-base.httpRequest");
+    expect(httpNodes.length).toBeGreaterThanOrEqual(6);
+    expect(httpNodes.every((node) => node.retryOnFail === true)).toBe(true);
+    expect(httpNodes.every((node) => node.maxTries === N8N_HTTP_MAX_TRIES)).toBe(true);
+    expect(httpNodes.every((node) => node.waitBetweenTries === N8N_HTTP_WAIT_BETWEEN_TRIES_MS)).toBe(true);
+
+    const dispatch = workflow.nodes.find((node) => node.name === "05 Dispatch approved draft");
+    expect(dispatch?.disabled).toBe(true);
+    expect(JSON.parse(dispatch?.parameters.jsonBody as string).id).toBe("REPLACE_WITH_APPROVED_QUEUE_ITEM_ID");
+    expect(dispatch?.notes).toContain("approved queue item id");
+  });
+
+  it("wires an explicit queue item id into exported dispatch payloads", () => {
+    const workflow = buildN8nImportableWorkflow(
+      { topic: "AI video topic", platform: "douyin", queueItemId: "queue-approved-123" },
+      { APP_BASE_URL: "http://127.0.0.1:5182" }
+    );
+    const dispatch = workflow.nodes.find((node) => node.name === "05 Dispatch approved draft");
+    expect(JSON.parse(dispatch?.parameters.jsonBody as string).id).toBe("queue-approved-123");
+    expect(dispatch?.notes).toContain("includes a queueItemId");
+    expect(JSON.stringify(workflow.nodes.find((node) => node.name === "Human approval required"))).toContain("queue-approved-123");
   });
 
   it("exports the n8n workflow scaffold to drafts", async () => {
@@ -125,7 +156,8 @@ describe("n8n orchestration", () => {
     );
 
     expect(result.workflowPath).toBe("workspace/drafts/n8n-workflow-bilibili-2026-06-18T00-00-00-000Z.json");
-    expect(result.workflow.nodes.length).toBeGreaterThanOrEqual(8);
+    expect(result.workflow.nodes.length).toBeGreaterThanOrEqual(9);
     expect(result.importNotes.join("\n")).toContain("No credentials");
+    expect(result.importNotes.join("\n")).toContain("retryOnFail");
   });
 });

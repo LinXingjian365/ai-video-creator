@@ -1,15 +1,17 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-06-19(Claude Opus 4.8 — 本次 session 打通免费抖音热榜 + Docker 全栈 + Postiz 账号 + BGM 库)  
-**分支**:`feat/s1-trend-intelligence` — **60 commits,本轮待 push 到 origin**
-**状态**:✅ **223 tests 绿(36 files)** / typecheck 绿 / build 绿 / **前端已做大厂级重设计(单一靛蓝、去双霓虹,浏览器实测通过)** / 全链路自检面板 + 抖音搜索/评论免费路径(TTD)/ Docker 全栈(AutoStart 需 DD GUI 开)
+**最后更新**:2026-06-19(Codex — A 方案任务指挥舱、剪辑执行轨、n8n 重试与审批映射)
+**分支**:`feat/s1-trend-intelligence` — **61 commits,本轮待 push 到 origin**
+**状态**:✅ **225 tests 绿(36 files)** / typecheck 绿 / build 绿 / **前端已切换 A 方案“AI 视频任务指挥舱”并完成桌面/移动截图验证** / 全链路自检面板 + 抖音搜索/评论免费路径(TTD)/ Docker 全栈(AutoStart 需 DD GUI 开)
 
-## 前端大厂级重设计(2026-06-19,对标 Linear/Vercel)
-- **方案文档**:`docs/FRONTEND_REDESIGN.md`(诊断+设计令牌+布局/组件规范+落地优先级)
-- **已落地 #1**:`globals.css` 令牌重映射 —— 近黑画布 #0a0b0d + surface 阶梯 + **单一靛蓝 #6366f1**(双霓虹 cyan/magenta 全塌成靛蓝)+ 1px 发丝线 + 辉光归零 + 圆角收紧。变量名不变、全站级联,浏览器实测 OK。
+## 前端 A 方案：AI 视频任务指挥舱(2026-06-19)
+- **方案文档**:`docs/FRONTEND_REDESIGN.md`；项目级设计系统:`.interface-design/system.md`。
+- **已落地第一轮**:`page.tsx` 七阶段生产轨道 + 顶部横向阶段地图 + 执行/素材/发布/系统四类指标 + 右侧 AI 执行塔；自动剪辑页增加由工作区资产和 FFmpeg 任务驱动的真实执行轨；`globals.css` 切换黑曜石/钢灰/琥珀/青蓝 Operations Bay 视觉。
+- **真实能力保留**:热点、素材、脚本、剪辑、发布、复盘、自检面板继续调用既有 API 和任务队列，不是静态换皮。
+- **验证**:桌面 1440×1000、移动 390×900 headless Chrome 截图已检查；移动端生产轨道压为两列，主工作区可在首屏下方进入。
 - **Stitch 设计稿**(已生成主屏):https://stitch.withgoogle.com → 项目「AI 视频增长控制台 — 大厂级重设计」(`projects/15497212605110749047`,设计系统 `assets/248578457415922417`)。可用 `edit_screens`/`generate_screen_from_text` 续生成子页。
 - **Figma 文件**(空,待画):https://www.figma.com/design/MrGOowBiC9lCzepy5GZoCG(用户 View 席位但能建文件;use_figma 写入需 figma-use 技能)
-- **剩余设计项(未做)**:#2 Stitch 再生成联网素材/文案脚本/发布矩阵子页;#3 Figma 用 use_figma 建主屏骨架(用户曾打断,低优先)。
+- **剩余设计项**:继续逐个优化七阶段内部工作台，重点补素材预览和真实链路配置向导；Stitch/Figma 只做参考，不再凌驾于代码中的真实功能。
 
 > **如果上一轮 session 跑过 push**,先 `git log --oneline origin/feat/s1-trend-intelligence..HEAD` 确认 delta。
 
@@ -17,7 +19,7 @@
 
 ## 项目一句话
 
-本地 AI 视频创作控制台:B站/抖音/快手/YouTube 热点抓取 → Exa/Firecrawl 网页事实 → LLM 脚本生成(带引用) → TTS 配音 → Remotion 成片(B-roll + 烧录字幕 + BGM 自动选曲) → 多平台变体 → 发布队列(人工确认) → 数据回流。Next.js 15 App Router,35 个 API 路由,全 TypeScript。
+本地 AI 视频创作控制台:B站/抖音/快手/YouTube 热点抓取 → Exa/Firecrawl 网页事实 → LLM 脚本生成(带引用) → TTS 配音 → Remotion 成片(B-roll + 烧录字幕 + BGM 自动选曲) → 多平台变体 → 发布队列(人工确认) → 数据回流。Next.js 15 App Router,36 个 API 路由,全 TypeScript。
 
 ## 快速启动
 
@@ -26,7 +28,7 @@ cd "A:/AI视频生成剪辑助手"
 # 确保 .env.local 存在且含 DEEPSEEK_API_KEY、TIKHUB_API_KEY 等(见 .env.example)
 npm run dev    # 默认 high port, 浏览器开 http://127.0.0.1:<port>
 npm run build  # 构建前必须先停 dev + rm -rf .next, 否则 PageNotFoundError 假失败
-npx vitest run # 194 tests, 33 files
+npx vitest run # 225 tests, 36 files
 ```
 
 ## 当前状态
@@ -34,7 +36,7 @@ npx vitest run # 194 tests, 33 files
 | 项 | 状态 |
 |---|---|
 | production build | ✅ 绿 |
-| 测试 (194 in 33 files) | ✅ 全绿 |
+| 测试 (225 in 36 files) | ✅ 全绿 |
 | typecheck | ✅ 绿 |
 | B-roll 素材合成 | ✅ stageBrollAssets 暂存 publicDir + staticFile |
 | AI 配音 (TTS) | ✅ edge-tts / SAPI 双引擎 |
@@ -42,12 +44,12 @@ npx vitest run # 194 tests, 33 files
 | 一键全链路 | ✅ 选题→脚本→配音→成片→变体 |
 | 多平台热点源 | ✅ B站真实 + 抖音(TTD自托管/TikHub) + 快手(TikHub) + YouTube(Data API v3) |
 | 网页事实证据 | ✅ Exa + Firecrawl 双源,自动喂进 LLM 脚本 prompt |
-| UI 重设计 | ✅ Midnight Neon(暗夜霓虹) |
+| UI 重设计 | ✅ A 方案“AI 视频任务指挥舱”(Operations Bay) |
 | BGM 混音 | ✅ FFmpeg 渲染后混音(无配音/配音双路径) |
 | BGM 智能选曲 | ✅ 本地库 + LLM mood 匹配(零 API) |
 | 发布脚手架 | ✅ 队列 + adapter 体检 + preflight + dispatch + 人工确认闸门 |
 | 数据回流 | ✅ analytics ledger + 30m/24h/7d 快照建议 |
-| n8n 编排 | ✅ payload 生成 + webhook 触发 + workflow JSON 导出 |
+| n8n 编排 | ✅ payload 生成 + webhook 触发 + workflow JSON 导出 + retry/审批 id 映射 |
 | TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub),TTD 补丁免费热榜实测通 |
 | KS-Downloader 适配 | ✅ ks-downloader.ts 快手详情免费路径(Codex) |
 | 全链路自检面板 | ✅ /api/health/self-check + 辅助面板,探 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 四态 |
@@ -63,7 +65,7 @@ npx vitest run # 194 tests, 33 files
 | n8n | 5678 | Docker compose | `docker compose -f deployments/n8n/docker-compose.yml up -d` |
 | Postiz + ES + Temporal + postgres + redis | 5000/7233 | Docker compose | `docker compose -f deployments/postiz/docker-compose.yml up -d` |
 
-- **Postiz 账号已建** `linyuxin5211314@gmail.com` / `Postiz#2026Local`,API key 已填 `.env.local`。TikTok OAuth 需在 Postiz UI 配 client_key(非本项代码问题)。
+- **Postiz 本地账号已建**，登录凭据和 API key 仅保存在本地环境，不写入版本库文档。TikTok OAuth 需在 Postiz UI 配 client_key(非本项代码问题)。
 - **Docker Desktop 须配代理** `settings-store.json`: `ProxyHTTPMode:manual` + Override 全指向 `http://127.0.0.1:7890`。无此 docker 出不了网(Clash TUN 劫持)。
 - **TTD 免费热榜实测通**: `patches/ttd-douyin-hot.patch` 给 TTD 补了 `/douyin/hot` HTTP 路由。数据是抖音热榜话题词。
 - **BGM 库**: `workspace/input/audio/{calm,cinematic,dark,funny,tech,uplifting,warm}/` 各1首 Kevin MacLeod CC-BY 曲,选曲器中文情绪词命中实测通过。
@@ -98,7 +100,7 @@ npx vitest run # 194 tests, 33 files
 src/
   app/                  # Next.js App Router
     page.tsx            # 单页控制台 (2781 行, 所有面板组件内联)
-    globals.css         # Midnight Neon 设计系统
+    globals.css         # Operations Bay 指挥舱设计系统
     layout.tsx          # 字体挂载 (next/font/local)
     fonts/              # 自托管 Sora + IBM Plex Mono woff2
     api/                # 35 个 API 路由
@@ -191,7 +193,7 @@ src/
   git config --local credential.helper manager
   # 或直接用个人 access token
   ```
-- 当前 45 commits 全部未推送(2026-06-18 收尾)。push 命令:`git push -u origin feat/s1-trend-intelligence`,失败先看 [GitHub 凭证坑](C:/Users/Administrator/.claude/projects/A--AI--------/memory/github-repo-and-credential-gotcha.md)。
+- 当前基线 60 commits 已推送到 `origin/feat/s1-trend-intelligence`；本轮提交后应为 61 commits ahead of main。push 失败先看 [GitHub 凭证坑](C:/Users/Administrator/.claude/projects/A--AI--------/memory/github-repo-and-credential-gotcha.md)。
 
 ## 记忆文件
 
@@ -218,7 +220,7 @@ src/
 - `src/app/page.tsx`：运营复盘面板新增“导出 workflow JSON”按钮。
 
 下一步：
-- 把导出的 JSON 导入真实 n8n 实例，调通定时触发、失败重试、approved 队列 id 映射和 analytics 数据源映射。
+- 把导出的 JSON 导入真实 n8n 实例，继续联调 analytics 数据源映射。
 - 配置真实 Postiz/social-auto-upload 登录态后，先创建 Postiz draft，不直接真发。
 
 ## Codex 更新: 发布账号 preflight 已接入
@@ -370,14 +372,14 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 2. **跑全链路脚本**: POST `/api/script/generate` → POST `/api/full-chain` → 出 Remotion 成片
 3. **推 Postiz 草稿**: POST `/api/publish/dispatch` (需 integration_id,目前为空 → 返回 preview,不真发;配好 ID 后可发 draft)
 4. **跑 n8n 烟测**: `npm run n8n:smoke` — 生成最小 workflow → 导入 n8n 容器 → 用一次性 n8n CLI 容器真实执行 HTTP 节点 → 结果写入 `workspace/drafts/n8n-smoke-status-result-*.json`；更深验证用 `$env:N8N_SMOKE_MODE='orchestration'; npm run n8n:smoke; Remove-Item Env:\N8N_SMOKE_MODE`，会分阶段打蓝图/readiness/workspace assets/dry-run payload，不触发真实发布。
-5. **跑测试**: `npx vitest run` (223 tests,36 files)
+5. **跑测试**: `npx vitest run` (225 tests,36 files)
 6. **全链路自检**: 开 UI「辅助 → 全链路自检」,或 `curl http://127.0.0.1:5182/api/health/self-check`(dev server 在跑时),一眼看 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 状态
 6. **修改代码**:收窄在趋势源/脚本生成/发布适配器/add BGM/add 新平台源,不动基础设施 compose
 
 ## 第四阶段:需要用户操作才能做的事
 
-- **push 50 commits 到 GitHub**: 需确认 credential helper 不冲突(见 [[GitHub仓库与凭证坑]]),然后 `git push -u origin feat/s1-trend-intelligence`
-- **Postiz 连平台拿 integration_id**: 用户登录 http://localhost:5000(账号 `linyuxin5211314@gmail.com`/`Postiz#2026Local`)→ 在 Postiz UI 连接抖音/快手/B站 OAuth → 拿到 integration_id → 填 `.env.local` 的 `POSTIZ_INTEGRATION_ID_*` → 然后 dispatch.ts 就能创建真实 draft
+- **push 当前提交到 GitHub**: 需确认 credential helper 不冲突(见 [[GitHub仓库与凭证坑]]),然后 `git push -u origin feat/s1-trend-intelligence`
+- **Postiz 连平台拿 integration_id**: 用户用本地保存的凭据登录 http://localhost:5000 → 在 Postiz UI 连接抖音/快手/B站 OAuth → 拿到 integration_id → 填 `.env.local` 的 `POSTIZ_INTEGRATION_ID_*` → 然后 dispatch.ts 就能创建真实 draft
 - **Postiz TikTok `client_key` 报错**:Postiz 自身的 TikTok OAuth 要你在其管理后台填入 TikTok Developer App 的 client_key/secret,不是本项目的代码问题。如果只是抖音(douyin)而非 TikTok,这条可忽略
 - **填写更多 CC0 曲目**: 去 pixabay.com/music 或 mixkit.co 下载 mp3,按 mood 放进 `workspace/input/audio/<mood>/`,选曲器自动识别
 
@@ -443,4 +445,16 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 - n8n 执行状态 `success`，最终节点成功返回 `/api/orchestration/n8n` dry-run task，`secretsIncluded=false`。
 
 边界:
-- 该 smoke 不跑 `/api/full-chain`，避免在验证编排时触发长渲染/外部上传；下一步是接失败重试、approved queue id 映射和真实 analytics 数据源映射。
+- 该 smoke 不跑 `/api/full-chain`，避免在验证编排时触发长渲染/外部上传；下一步是接真实 analytics 数据源映射。
+
+## Codex 更新: n8n workflow retry 与审批 id 映射已接入
+
+已完成:
+- `src/lib/orchestration/n8n.ts`: 导出的 n8n HTTP Request 节点统一带 `retryOnFail=true`、`maxTries=3`、`waitBetweenTries=10000`。
+- `src/lib/orchestration/n8n.ts`: dispatch body 改为明确的 `REPLACE_WITH_APPROVED_QUEUE_ITEM_ID` 占位；如果导出请求带 `queueItemId`，会直接写入该 approved item id。
+- `src/lib/orchestration/n8n.ts`: workflow 内新增 `Approval id mapping` sticky note，说明批准队列项、复制 id、再启用 dispatch 的步骤；dispatch/analytics 仍默认 disabled。
+- `src/lib/orchestration/n8n.test.ts`: 增加 retry、占位 id、显式 queueItemId 三组单测。
+
+边界:
+- 这仍然不会自动发布；dispatch 节点必须人工启用，且后端仍要求 approved 队列项和 `CONFIRM_DRY_RUN_ONLY`。
+- 下一步是把 Postiz/TikHub/手动导入的数据源映射到 analytics 节点，而不是跳过人工发布闸门。
