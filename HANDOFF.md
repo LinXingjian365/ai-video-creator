@@ -1,8 +1,15 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
 **最后更新**:2026-06-19(Claude Opus 4.8 — 本次 session 打通免费抖音热榜 + Docker 全栈 + Postiz 账号 + BGM 库)  
-**分支**:`feat/s1-trend-intelligence` — **56 commits,已全部 push 到 origin**  
-**状态**:✅ **221 tests 绿(35 files)** / typecheck 绿 / 全链路自检面板 + 抖音搜索/评论免费路径(TTD,配 cookie 启用)/ Docker 全栈(AutoStart 需在 DD GUI 开)
+**分支**:`feat/s1-trend-intelligence` — **58 commits,已全部 push 到 origin**  
+**状态**:✅ **221 tests 绿(35 files)** / typecheck 绿 / **前端已做大厂级重设计(单一靛蓝、去双霓虹,浏览器实测通过)** / 全链路自检面板 + 抖音搜索/评论免费路径(TTD)/ Docker 全栈(AutoStart 需 DD GUI 开)
+
+## 前端大厂级重设计(2026-06-19,对标 Linear/Vercel)
+- **方案文档**:`docs/FRONTEND_REDESIGN.md`(诊断+设计令牌+布局/组件规范+落地优先级)
+- **已落地 #1**:`globals.css` 令牌重映射 —— 近黑画布 #0a0b0d + surface 阶梯 + **单一靛蓝 #6366f1**(双霓虹 cyan/magenta 全塌成靛蓝)+ 1px 发丝线 + 辉光归零 + 圆角收紧。变量名不变、全站级联,浏览器实测 OK。
+- **Stitch 设计稿**(已生成主屏):https://stitch.withgoogle.com → 项目「AI 视频增长控制台 — 大厂级重设计」(`projects/15497212605110749047`,设计系统 `assets/248578457415922417`)。可用 `edit_screens`/`generate_screen_from_text` 续生成子页。
+- **Figma 文件**(空,待画):https://www.figma.com/design/MrGOowBiC9lCzepy5GZoCG(用户 View 席位但能建文件;use_figma 写入需 figma-use 技能)
+- **剩余设计项(未做)**:#2 Stitch 再生成联网素材/文案脚本/发布矩阵子页;#3 Figma 用 use_figma 建主屏骨架(用户曾打断,低优先)。
 
 > **如果上一轮 session 跑过 push**,先 `git log --oneline origin/feat/s1-trend-intelligence..HEAD` 确认 delta。
 
