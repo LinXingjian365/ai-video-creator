@@ -1,0 +1,50 @@
+# Postiz 自托管 (Apache 2.0, 自托管无月费)
+# 起停: docker compose -f deployments/postiz/docker-compose.yml up -d
+# UI:  http://localhost:5000  (首个注册号自动成 admin,建号后把 DISABLE_REGISTRATION 改 true 重启)
+services:
+  postiz:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    container_name: postiz
+    restart: unless-stopped
+    environment:
+      MAIN_URL: "http://localhost:5000"
+      FRONTEND_URL: "http://localhost:5000"
+      NEXT_PUBLIC_BACKEND_URL: "http://localhost:5000/api"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in deployments/postiz/.env}"
+      DATABASE_URL: "postgresql://postiz:postiz@postiz-postgres:5432/postiz"
+      REDIS_URL: "redis://postiz-redis:6379"
+      BACKEND_INTERNAL_URL: "http://localhost:3000"
+      IS_GENERAL: "true"
+      DISABLE_REGISTRATION: "false"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postiz-postgres
+      - postiz-redis
+    volumes:
+      - postiz-config:/config
+      - postiz-uploads:/uploads
+
+  postiz-postgres:
+    image: postgres:17-alpine
+    container_name: postiz-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postiz
+      POSTGRES_PASSWORD: postiz
+      POSTGRES_DB: postiz
+    volumes:
+      - postiz-pg:/var/lib/postgresql/data
+
+  postiz-redis:
+    image: redis:7.2-alpine
+    container_name: postiz-redis
+    restart: unless-stopped
+    volumes:
+      - postiz-redis:/data
+
+volumes:
+  postiz-pg:
+  postiz-redis:
+  postiz-config:
+  postiz-uploads:
