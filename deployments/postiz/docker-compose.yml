@@ -16,14 +16,37 @@ services:
       BACKEND_INTERNAL_URL: "http://localhost:3000"
       IS_GENERAL: "true"
       DISABLE_REGISTRATION: "false"
+      # 新版 Postiz 后端依赖 Temporal 工作流引擎
+      TEMPORAL_ADDRESS: "temporal:7233"
     ports:
       - "5000:5000"
     depends_on:
       - postiz-postgres
       - postiz-redis
+      - temporal
     volumes:
       - postiz-config:/config
       - postiz-uploads:/uploads
+
+  # 最小化 Temporal:复用 postiz-postgres 做存储,关掉 elasticsearch(省内存)
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    container_name: temporal
+    restart: unless-stopped
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: postiz
+      POSTGRES_PWD: postiz
+      POSTGRES_SEEDS: postiz-postgres
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      ENABLE_ES: "false"
+      SKIP_DEFAULT_NAMESPACE_CREATION: "false"
+    ports:
+      - "7233:7233"
+    depends_on:
+      - postiz-postgres
 
   postiz-postgres:
     image: postgres:17-alpine
