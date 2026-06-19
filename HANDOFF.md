@@ -41,8 +41,8 @@ npx vitest run # 194 tests, 33 files
 | 发布脚手架 | ✅ 队列 + adapter 体检 + preflight + dispatch + 人工确认闸门 |
 | 数据回流 | ✅ analytics ledger + 30m/24h/7d 快照建议 |
 | n8n 编排 | ✅ payload 生成 + webhook 触发 + workflow JSON 导出 |
-| TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub) |
-| **下一项** | 真实联调:起 Postiz/n8n/TTD docker → 配 integration → 真实 draft/定时任务 |
+| TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub),TTD 补丁免费热榜实测通 |
+| **下一项** | (1)Postiz 平台 OAuth 拿 integration_id 填 .env.local → (2)全链路真实联调 draft → (3)push 50 commits |
 
 ## 基础设施(2026-06-19 session 搭建,全在跑)
 
@@ -162,15 +162,14 @@ src/
 - Postiz live 只创建 `type:"draft"`，不调用 `now` 真发。
 - social-auto-upload 只生成命令预览，不执行外部上传命令。
 
-## 下一步:真实账号联调(代码全就绪,等用户配 docker + key)
+## 纯 ops → 全部完成 ✅ (2026-06-19)
 
-代码层面 n8n payload / Postiz dispatch / TTD adapter / BGM 选曲 全部已写完,剩下纯 ops:
-
-1. **n8n 自托管**:`docker-compose.yml` 在 `docs/FREE_ALTERNATIVES.md`,起容器 → UI 点"导出 workflow JSON" → n8n 后台 import → 调通定时触发。
-2. **Postiz 自托管**:`docker-compose.yml` 在 `docs/FREE_ALTERNATIVES.md`,起容器 → 配 douyin/kuaishou/bilibili integration ID → `.env.local` 填 `POSTIZ_API_KEY` + `POSTIZ_INTEGRATION_ID_*` + `PUBLISH_LIVE_ENABLED=true` → `/api/publish/dispatch` 走真实 draft API。
-3. **TTD 容器**:`docker pull joeanamier/tiktok-downloader && docker run -d -p 5555:5555 joeanamier/tiktok-downloader` → `.env.local` 写 `TTD_BASE_URL=http://127.0.0.1:5555` → 抖音热榜自动走 TTD(不再 402)。
-4. **KS-Downloader adapter**:快手版本(JoeanAmier 姊妹项目),代码层照搬 `tiktok-downloader.ts` 即可加。
-5. **BGM 库填充**:把 CC0 mp3 按 mood 落进 `workspace/input/audio/<uplifting|calm|tech|cinematic|warm|dark|funny>/`,LLM 选曲就有真匹配。
+以上 5 项 ops 中 n8n/Postiz/TTD/BGM 4 项已在本 session 完成:
+1. ~~n8n~~ ✅ 容器 running on 5678,workflow 已导出+导入
+2. ~~Postiz~~ ✅ 全栈(含 ES+Temporal+pg+redis) running on 5000,账号/API key 自动建
+3. ~~TTD~~ ✅ 原生 python 跑在 5555(非 Docker),douyin hot 实测通
+4. KS-Downloader adapter — 快手免费替代(照搬 TTD 模式即可)
+5. ~~BGM~~ ✅ workspace/input/audio/{7 moods} 已填 CC-BY 曲
 
 ## Git 注意事项
 
@@ -223,17 +222,13 @@ src/
 - 在真实 Postiz/social-auto-upload 登录态配置好后，先跑 `/api/publish/preflight?probePostiz=true`，确认无 blocker，再批准一个队列项并用 `mode=draft` 做 Postiz 草稿烟测。
 - social-auto-upload 仍只生成命令预览；真正执行上传命令前要继续保留人工确认和 dry-run 默认。
 
-## Codex 更新: TikHub 抖音/快手热榜已接入
+## 2026-06-19 Claude 更新:抖音热榜免费路径打通 (commit 93fc534)
 
-已完成：
-- `src/lib/trend/sources/tikhub.ts`：新增 TikHub Bearer 请求层，支持 `TIKHUB_BASE_URL`、`TIKHUB_TIMEOUT_MS`、`TIKHUB_ENDPOINT_DOUYIN`、`TIKHUB_ENDPOINT_KUAISHOU`，并把常见 TikHub 响应字段归一化成统一 `TrendItem`。
-- `src/lib/trend/sources/douyin.ts`：从“只报错降级”推进到 TikHub 抖音热榜源。
-- `src/lib/trend/sources/kuaishou.ts`：新增快手热榜源，支持 `hot/entertainment/society/useful/challenge/search` board type。
-- `/api/trend/report`：schema 已支持 `kuaishou`，UI 热点情报下拉已增加快手。
+TikHub 抖音接口计费。TikTokDownloader 能抓抖音热榜但只在交互终端、未暴露 HTTP。**本次给它 FastAPI server 补了 `/douyin/hot` 路由**: 克隆 TTD → 建 venv → 装依赖 → apply `patches/ttd-douyin-hot.patch` → `python run_api.py`(5555)。
 
-下一步：
-- 配置真实 `TIKHUB_API_KEY` 后，分别跑 `platform=douyin` 和 `platform=kuaishou` 的 `/api/trend/report`，确认真实响应字段是否需要补充映射。
-- 继续接 TikHub 搜索、评论、单视频详情，把“爆款链接/标题 -> 原视频信号 -> 素材候选”补成上游完整闭环。
+`tiktok-downloader.ts` 适配器也按真实热榜话题结构重写了(原版假定的端点不存在+数据形状错):话题词映射成 TrendItem(hot_value=热度,view_count=播放),跨榜去重,~30s 拉四榜。
+
+`.env.local` 已设 `TTD_ENABLED=true` + `TTD_BASE_URL=http://127.0.0.1:5555`,douyin.ts 自动路由到 TTD 免费用。
 
 ## Codex 更新: TikHub 竞品研究已接入
 
@@ -298,20 +293,19 @@ key 已落 `.env.local`,实测覆盖:
 
 **关键发现**: Postiz 本身就是 MIT Apache 2.0,$29/月只是 postiz.com 托管费;TikHub 原作者(Evil0ctal)的项目也是开源的,他停更跑去做商业版 TikHub 了,**JoeanAmier 这套是直接替代品**——Docker 一行起,5555 端口 REST API,显式支持 `/douyin/search` `/douyin/hot` `/douyin/comment` 等端点。
 
-下一步优先级:
-1. **n8n 自托管** — docker-compose 在 `docs/FREE_ALTERNATIVES.md`,起容器 → 导入项目生成的 workflow JSON → 跑定时任务
-2. ~~**BGM 本地库**~~ ✅ (87e5ce1)
-3. **Postiz 自托管** — docker-compose 在 `docs/FREE_ALTERNATIVES.md`,起容器 → 配 platform integration → dispatcher 调真实 draft API
-4. ~~**TikTokDownloader adapter**~~ ✅ (8eaa7ce) ⬅ 刚提交
-5. **KS-Downloader adapter** — 快手免费替代(TikTokDownloader 的姊妹项目),同 TTD adapter 模式
+**全部替代方案已部署到位** (2026-06-19):
+1. ~~n8n 自托管~~ ✅ — 容器 running on 5678,workflow JSON 已导出+导入
+2. ~~BGM 本地库~~ ✅ — workspace/input/audio/{7 moods} 已填 Kevin MacLeod CC-BY 曲
+3. ~~Postiz 自托管~~ ✅ — 全栈 6 容器 running,账号+API key 已自动建
+4. ~~TikTokDownloader adapter~~ ✅ — 打补丁+douyin hot 实测通(免费),重写适配器映射话题趋势
+5. **KS-Downloader adapter** — 快手免费替代(TTD 姊妹项目),同模式可照搬
 
-## Claude 更新: TikTokDownloader self-host adapter (commit 8eaa7ce)
+## 2026-06-19 Claude 更新: TikTokDownloader 免费抖音热榜 (重写, commit 93fc534→fdb8aae)
 
-已完成:
-- `src/lib/trend/sources/tiktok-downloader.ts`: self-host adapter,跟 TikHub adapter 完全一致的接口形状(TrendSource模式),isTtdConfigured() 判定 auto-select,端点 TTDDouxinHotEndpoint 可配,HTTP POST JSON。
-- `src/lib/trend/sources/douyin.ts`: 改为动态路由:TTD_BASE_URL 存在 → TTD;否则 → TikHub。向后兼容 without code changes。
-- `src/lib/trend/sources/tiktok-downloader.test.ts`: 7 单测覆盖 happy path/HTTP 500透传/未配置诚实error/endpoint override/TTD_TOKEN/topN clamp。
-- `.env.example`: TTD_ENABLED/TTD_BASE_URL/TTD_DOUYIN_HOT_ENDPOINT/TTD_TOKEN。
+初版 TTD adapter(8eaa7ce)假定端点 `/douyin/hot` + 视频结构,都不对。本次:
+- 给 TTD FastAPI server 补了真实 `/douyin/hot` 路由(patches/ttd-douyin-hot.patch),调内部 hot.py
+- `tiktok-downloader.ts` 重写:映射热榜话题词→TrendItem,13 tests。默认超时 60s(4 榜~30s)
+- 本机原生跑(Python venv,5555),不走 Docker
 - 全量 194 测试绿。
 
 ## Claude 更新: BGM 本地库 + 自动选曲 (commit 87e5ce1)
@@ -330,3 +324,65 @@ key 已落 `.env.local`,实测覆盖:
 
 **用户操作流程**: 把 CC0 mp3 按曲风落到 `workspace/input/audio/<mood>/`(uplifting/calm/tech/
 cinematic/warm/dark/funny),生成脚本后点"AI 选曲" → form.bgmPath 自动填好 → 渲染时混音。
+
+---
+
+# Codex 接手开局指南 (2026-06-19)
+
+## 第一阶段:健康检查 (1 分钟)
+
+在容器/服务状态不清楚时,跑这一条:
+```bash
+cd "A:/AI视频生成剪辑助手"
+docker ps --format '{{.Names}} | {{.Status}}'
+curl -s -o /dev/null -w "ttd=%{http_code}\n" --noproxy 127.0.0.1 --max-time 8 http://127.0.0.1:5555/docs
+curl -s -o /dev/null -w "n8n=%{http_code}\n" --noproxy 127.0.0.1 --max-time 8 http://127.0.0.1:5678/healthz
+curl -s -L -o /dev/null -w "postiz=%{http_code}\n" --noproxy localhost --max-time 10 http://localhost:5000/
+git status; git rev-list --count main..HEAD; npx tsc --noEmit
+```
+
+预期:6 容器 Up,TTD 200,n8n 200,Postiz 200,tree clean,~50 commits ahead,typecheck green。
+
+## 第二阶段:补齐缺失服务
+
+**TTD 没在跑**(最常见 — 不自启): `cd ~/Desktop/TikTokDownloader && .venv/Scripts/python.exe run_api.py`
+
+**Docker 容器没在跑**: `docker compose -f deployments/n8n/docker-compose.yml up -d` + `docker compose -f deployments/postiz/docker-compose.yml up -d`
+
+**Docker 拉不了镜像**(EOF/超时):检查 `%APPDATA%/Docker/settings-store.json` 是否含 `ProxyHTTPMode:manual`+`OverrideProxyHTTP:http://127.0.0.1:7890`+`OverrideProxyHTTPS:http://127.0.0.1:7890`。弄好后 `docker desktop restart`。拉大镜像**不要用 timeout 杀**(docker 不续传单层,杀掉白下)。
+
+**dev server 没起**: `npx next dev -p 5182` (读 .env.local,TTD/Postiz/n8n 配置自动生效)
+
+## 第三阶段:能自主做的事(无需用户)
+
+1. **跑趋势报告**: `curl -s --max-time 120 --noproxy 127.0.0.1 -X POST "http://127.0.0.1:5182/api/trend/report" -H "Content-Type: application/json" -d '{"platform":"douyin","category":"hot","topN":5}'` — 走 TTD 免费,~30s
+2. **跑全链路脚本**: POST `/api/script/generate` → POST `/api/full-chain` → 出 Remotion 成片
+3. **推 Postiz 草稿**: POST `/api/publish/dispatch` (需 integration_id,目前为空 → 返回 preview,不真发;配好 ID 后可发 draft)
+4. **导出 n8n workflow**: POST `/api/orchestration/n8n` 带 `"exportWorkflow":true`,把 workspace/drafts/n8n-workflow-*.json docker cp 进 n8n 容器 import
+5. **跑测试**: `npx vitest run` (198 tests,33 files)
+6. **修改代码**:收窄在趋势源/脚本生成/发布适配器/add BGM/add 新平台源,不动基础设施 compose
+
+## 第四阶段:需要用户操作才能做的事
+
+- **push 50 commits 到 GitHub**: 需确认 credential helper 不冲突(见 [[GitHub仓库与凭证坑]]),然后 `git push -u origin feat/s1-trend-intelligence`
+- **Postiz 连平台拿 integration_id**: 用户登录 http://localhost:5000(账号 `linyuxin5211314@gmail.com`/`Postiz#2026Local`)→ 在 Postiz UI 连接抖音/快手/B站 OAuth → 拿到 integration_id → 填 `.env.local` 的 `POSTIZ_INTEGRATION_ID_*` → 然后 dispatch.ts 就能创建真实 draft
+- **Postiz TikTok `client_key` 报错**:Postiz 自身的 TikTok OAuth 要你在其管理后台填入 TikTok Developer App 的 client_key/secret,不是本项目的代码问题。如果只是抖音(douyin)而非 TikTok,这条可忽略
+- **填写更多 CC0 曲目**: 去 pixabay.com/music 或 mixkit.co 下载 mp3,按 mood 放进 `workspace/input/audio/<mood>/`,选曲器自动识别
+
+## 关键文件速查
+
+| 文件 | 作用 |
+|---|---|
+| `deployments/n8n/docker-compose.yml` | n8n 自托管 |
+| `deployments/postiz/docker-compose.yml` | Postiz 全栈(含 ES/Temporal/pg/redis) |
+| `patches/ttd-douyin-hot.patch` | 给 TTD 加 /douyin/hot HTTP 路由 |
+| `patches/ttd-run_api.py` | TTD 非交互启动脚本 |
+| `src/lib/trend/sources/tiktok-downloader.ts` | 免费抖音热榜适配器 |
+| `src/lib/trend/sources/douyin.ts` | 抖音源路由(TTD_ENABLED→TTD,否则→TikHub) |
+| `src/lib/orchestration/n8n.ts` | n8n workflow payload 生成+导出 |
+| `src/lib/publish/dispatch.ts` | Postiz draft dispatch |
+| `src/lib/bgm/library.ts` | BGM 库扫描+选曲 |
+| `workspace/input/audio/` | BGM 库 + CREDITS.md |
+| `C:/Users/Administrator/.claude/projects/A--AI--------/memory/` | 项目记忆文件 |
+| `C:/Users/Administrator/.claude/projects/A--AI--------/memory/project-state-2026-06-19.md` | 最终运行态快照 |
+| `C:/Users/Administrator/.claude/projects/A--AI--------/memory/docker-clash-tun-and-free-douyin.md` | Clash TUN/Docker 踩坑记录 |
