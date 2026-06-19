@@ -1,8 +1,8 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
 **最后更新**:2026-06-19(Claude Opus 4.8 — 本次 session 打通免费抖音热榜 + Docker 全栈 + Postiz 账号 + BGM 库)  
-**分支**:`feat/s1-trend-intelligence` — **54 commits,所有改动已提交,未 push**  
-**状态**:✅ production build 绿 / **214 tests 绿(35 files)** / typecheck 绿 / 全栈 Docker(重启机器后需手动拉起)/ 新增全链路自检面板(实测准确反映服务上下线)
+**分支**:`feat/s1-trend-intelligence` — **56 commits,已全部 push 到 origin**  
+**状态**:✅ **221 tests 绿(35 files)** / typecheck 绿 / 全链路自检面板 + 抖音搜索/评论免费路径(TTD,配 cookie 启用)/ Docker 全栈(AutoStart 需在 DD GUI 开)
 
 > **如果上一轮 session 跑过 push**,先 `git log --oneline origin/feat/s1-trend-intelligence..HEAD` 确认 delta。
 
@@ -44,7 +44,9 @@ npx vitest run # 194 tests, 33 files
 | TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub),TTD 补丁免费热榜实测通 |
 | KS-Downloader 适配 | ✅ ks-downloader.ts 快手详情免费路径(Codex) |
 | 全链路自检面板 | ✅ /api/health/self-check + 辅助面板,探 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 四态 |
-| **下一项** | (1)Postiz 平台 OAuth 拿 integration_id 填 .env.local → (2)全链路真实联调 draft → (3)push 54 commits |
+| 抖音搜索/评论免费路径 | ✅ research.ts 配 TTD_DOUYIN_COOKIE 走 TTD(/douyin/search,/comment),否则 TikHub(plumbing 已测,真实形状待 cookie 联调) |
+| 快手免费热榜 | ❌ 无可建免费源(TikHub 快手热榜计费 / KSD 无热榜端点)—— 保留 TikHub,诚实不伪造 |
+| **下一项** | (1)Postiz 平台 OAuth 拿 integration_id → 真草稿联调 → (2)TTD 配 douyin cookie 验证免费搜索真实形状 |
 
 ## 基础设施(2026-06-19 session 搭建,全在跑)
 
