@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "n8n:smoke": "node scripts/n8n-smoke-test.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

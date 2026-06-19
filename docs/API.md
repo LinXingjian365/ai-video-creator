@@ -623,6 +623,22 @@ Postiz adapter 依据官方 Public API：`Authorization` header、`POST /public/
 }
 ```
 
+### 本机 n8n 烟测
+
+```powershell
+npm run n8n:smoke
+```
+
+该命令会生成一个最小 n8n workflow，导入到 `n8n` Docker 容器，然后临时停止服务容器，用同一 compose volume 启动一次性 n8n CLI 容器执行 workflow。workflow 的 HTTP 节点会从容器内访问 `http://host.docker.internal:5182/api/orchestration/n8n`，执行结果写入 `workspace/drafts/n8n-smoke-result-*.json`。执行结束后会自动把主 `n8n` 容器重新启动。
+
+可选环境变量：
+
+```text
+N8N_CONTAINER=n8n
+N8N_SMOKE_APP_BASE_URL=http://host.docker.internal:5182
+N8N_SMOKE_N8N_BASE_URL=http://localhost:5678
+```
+
 ## 诊断
 
 ### GET `/api/system/diagnostics`

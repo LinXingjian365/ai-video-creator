@@ -358,7 +358,7 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 1. **跑趋势报告**: `curl -s --max-time 120 --noproxy 127.0.0.1 -X POST "http://127.0.0.1:5182/api/trend/report" -H "Content-Type: application/json" -d '{"platform":"douyin","category":"hot","topN":5}'` — 走 TTD 免费,~30s
 2. **跑全链路脚本**: POST `/api/script/generate` → POST `/api/full-chain` → 出 Remotion 成片
 3. **推 Postiz 草稿**: POST `/api/publish/dispatch` (需 integration_id,目前为空 → 返回 preview,不真发;配好 ID 后可发 draft)
-4. **导出 n8n workflow**: POST `/api/orchestration/n8n` 带 `"exportWorkflow":true`,把 workspace/drafts/n8n-workflow-*.json docker cp 进 n8n 容器 import
+4. **跑 n8n 烟测**: `npm run n8n:smoke` — 生成最小 workflow → 导入 n8n 容器 → 用一次性 n8n CLI 容器真实执行 HTTP 节点 → 结果写入 `workspace/drafts/n8n-smoke-result-*.json`
 5. **跑测试**: `npx vitest run` (198 tests,33 files)
 6. **修改代码**:收窄在趋势源/脚本生成/发布适配器/add BGM/add 新平台源,不动基础设施 compose
 
@@ -381,6 +381,7 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 | `src/lib/trend/sources/ks-downloader.ts` | 免费快手单视频详情适配器 |
 | `src/lib/trend/sources/douyin.ts` | 抖音源路由(TTD_ENABLED→TTD,否则→TikHub) |
 | `src/lib/orchestration/n8n.ts` | n8n workflow payload 生成+导出 |
+| `scripts/n8n-smoke-test.mjs` | n8n 自托管导入+真实执行烟测 |
 | `src/lib/publish/dispatch.ts` | Postiz draft dispatch |
 | `src/lib/bgm/library.ts` | BGM 库扫描+选曲 |
 | `workspace/input/audio/` | BGM 库 + CREDITS.md |
@@ -399,3 +400,19 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 边界:
 - KS-Downloader 当前没有 verified 快手热榜 API，所以没有把它伪装成热榜源；快手热榜仍由 TikHub 或后续新源负责。
 - 本轮验证: typecheck 绿，34 files / 207 tests 绿，production build 绿。
+
+## Codex 更新: n8n 自托管真实执行烟测已接入
+
+已完成:
+- `scripts/n8n-smoke-test.mjs`: 生成最小 n8n workflow，导入 `n8n` Docker 容器，再用同一 compose volume 启动一次性 n8n CLI 容器执行 workflow。
+- `package.json`: 新增 `npm run n8n:smoke`。
+- 烟测 workflow: `Manual smoke trigger` → `HTTP Request http://host.docker.internal:5182/api/orchestration/n8n`。
+- 执行结果落盘到 `workspace/drafts/n8n-smoke-result-*.json`，主 n8n 服务容器会在执行结束后自动重新启动。
+
+实测:
+- `npm run n8n:smoke` 成功，workflow id `39058362-94f7-4389-b2b7-661e0935090c`。
+- n8n 执行状态 `success`，HTTP 节点成功返回本项目 n8n blueprint JSON。
+
+边界:
+- n8n 2.26 CLI `execute` 会和正在运行的服务抢 5679 task broker 端口；脚本采用“临时停止服务容器 → compose run 一次性 CLI 容器 → 重启服务容器”的稳定路径。
+- CLI 导入后 active webhook 注册在本机 regular mode 下不稳定，因此当前 smoke 先验证真实 workflow 执行；完整生产 webhook 激活仍建议后续经 UI/API 方式联调。
