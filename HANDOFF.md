@@ -1,8 +1,8 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
 **最后更新**:2026-06-19(Claude Opus 4.8 — 本次 session 打通免费抖音热榜 + Docker 全栈 + Postiz 账号 + BGM 库)  
-**分支**:`feat/s1-trend-intelligence` — **49 commits,所有改动已提交,未 push**  
-**状态**:✅ production build 绿 / **198 tests 绿(33 files)** / typecheck 绿 / **全栈 6 容器+1 原生全部 running** / TTD 免费抖音热点实测通
+**分支**:`feat/s1-trend-intelligence` — **54 commits,所有改动已提交,未 push**  
+**状态**:✅ production build 绿 / **214 tests 绿(35 files)** / typecheck 绿 / 全栈 Docker(重启机器后需手动拉起)/ 新增全链路自检面板(实测准确反映服务上下线)
 
 > **如果上一轮 session 跑过 push**,先 `git log --oneline origin/feat/s1-trend-intelligence..HEAD` 确认 delta。
 
@@ -42,7 +42,9 @@ npx vitest run # 194 tests, 33 files
 | 数据回流 | ✅ analytics ledger + 30m/24h/7d 快照建议 |
 | n8n 编排 | ✅ payload 生成 + webhook 触发 + workflow JSON 导出 |
 | TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub),TTD 补丁免费热榜实测通 |
-| **下一项** | (1)Postiz 平台 OAuth 拿 integration_id 填 .env.local → (2)全链路真实联调 draft → (3)push 50 commits |
+| KS-Downloader 适配 | ✅ ks-downloader.ts 快手详情免费路径(Codex) |
+| 全链路自检面板 | ✅ /api/health/self-check + 辅助面板,探 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 四态 |
+| **下一项** | (1)Postiz 平台 OAuth 拿 integration_id 填 .env.local → (2)全链路真实联调 draft → (3)push 54 commits |
 
 ## 基础设施(2026-06-19 session 搭建,全在跑)
 
@@ -359,7 +361,8 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 2. **跑全链路脚本**: POST `/api/script/generate` → POST `/api/full-chain` → 出 Remotion 成片
 3. **推 Postiz 草稿**: POST `/api/publish/dispatch` (需 integration_id,目前为空 → 返回 preview,不真发;配好 ID 后可发 draft)
 4. **跑 n8n 烟测**: `npm run n8n:smoke` — 生成最小 workflow → 导入 n8n 容器 → 用一次性 n8n CLI 容器真实执行 HTTP 节点 → 结果写入 `workspace/drafts/n8n-smoke-result-*.json`
-5. **跑测试**: `npx vitest run` (198 tests,33 files)
+5. **跑测试**: `npx vitest run` (214 tests,35 files)
+6. **全链路自检**: 开 UI「辅助 → 全链路自检」,或 `curl http://127.0.0.1:5182/api/health/self-check`(dev server 在跑时),一眼看 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 状态
 6. **修改代码**:收窄在趋势源/脚本生成/发布适配器/add BGM/add 新平台源,不动基础设施 compose
 
 ## 第四阶段:需要用户操作才能做的事
