@@ -1,5 +1,12 @@
 import { mapTikHubTrendResponse } from "@/lib/trend/sources/tikhub";
 import { buildKsdDetailText, fetchKsdDetail, isKsdConfigured, ksdDetailEndpoint } from "@/lib/trend/sources/ks-downloader";
+import {
+  canUseTtdAuthed,
+  fetchTtdDouyinCommentsRaw,
+  fetchTtdDouyinSearchRaw,
+  ttdCommentEndpoint,
+  ttdSearchEndpoint
+} from "@/lib/trend/sources/tiktok-downloader";
 import type { Platform, TrendItem } from "@/lib/trend/types";
 
 export type ResearchPlatform = Extract<Platform, "douyin" | "kuaishou">;
@@ -80,21 +87,26 @@ export async function runTikHubResearch(input: TikHubResearchInput, deps: TikHub
 
   const wantsDetail = Boolean(input.url?.trim() || input.itemId?.trim());
   const canUseKsdDetail = input.platform === "kuaishou" && wantsDetail && isKsdConfigured(env);
-  const needsTikHub = Boolean(input.query?.trim()) || (wantsDetail && !canUseKsdDetail);
+  // 抖音 search/comment 在配了 TTD Cookie 时走 TTD 免费路径,否则 TikHub
+  const ttdAuthed = input.platform === "douyin" && canUseTtdAuthed(env);
+  const needsTikHubSearch = Boolean(input.query?.trim()) && !ttdAuthed;
+  const needsTikHubDetail = wantsDetail && !canUseKsdDetail;
+  const needsTikHub = needsTikHubSearch || needsTikHubDetail;
   if (needsTikHub && !token) {
-    throw new Error("TikHub research requires TIKHUB_API_KEY for search or TikHub detail. For free Kuaishou detail, start KS-Downloader and set KSD_BASE_URL or KSD_ENABLED=true.");
+    throw new Error("TikHub research requires TIKHUB_API_KEY for search or TikHub detail. For free Douyin search/comments start TikTokDownloader and set TTD_DOUYIN_COOKIE; for free Kuaishou detail start KS-Downloader and set KSD_BASE_URL or KSD_ENABLED=true.");
   }
 
   const limit = clampLimit(input.limit);
   const endpointCalls: ResearchEndpointCall[] = [];
   const searchItems = input.query?.trim()
-    ? await callSearch(input.platform, input.query.trim(), limit, env, requireTikHubToken(token), deps.fetch, endpointCalls)
+    ? await callSearch(input.platform, input.query.trim(), limit, env, token, deps.fetch, endpointCalls)
     : [];
   const detail = input.url?.trim() || input.itemId?.trim()
     ? await callDetail(input.platform, { url: input.url?.trim(), itemId: input.itemId?.trim() }, env, token, deps.fetch, endpointCalls)
     : undefined;
   const commentsItemId = input.itemId?.trim() || detail?.id;
-  const comments = input.includeComments && commentsItemId && token
+  const canUseTtdComments = ttdAuthed && Boolean(commentsItemId);
+  const comments = input.includeComments && commentsItemId && (token || canUseTtdComments)
     ? await callComments(input.platform, commentsItemId, limit, env, token, deps.fetch, endpointCalls)
     : [];
 
@@ -114,7 +126,7 @@ export async function runTikHubResearch(input: TikHubResearchInput, deps: TikHub
       detail,
       comments,
       includeComments: Boolean(input.includeComments),
-      skippedCommentsForMissingTikHubKey: Boolean(input.includeComments && commentsItemId && !token)
+      skippedCommentsForMissingTikHubKey: Boolean(input.includeComments && commentsItemId && !token && !canUseTtdComments)
     })
   };
 }
@@ -124,16 +136,22 @@ async function callSearch(
   query: string,
   limit: number,
   env: Record<string, string | undefined>,
-  token: string,
+  token: string | undefined,
   fetchImpl: typeof fetch | undefined,
   endpointCalls: ResearchEndpointCall[]
 ) {
+  if (platform === "douyin" && canUseTtdAuthed(env)) {
+    const endpoint = ttdSearchEndpoint(env);
+    endpointCalls.push({ kind: "search", endpoint, params: { keyword: query, count: String(limit), source: "ttd" } });
+    const raw = await fetchTtdDouyinSearchRaw(query, limit, { env, fetch: fetchImpl });
+    return mapTikHubTrendResponse(raw, platform, "search").slice(0, limit);
+  }
   const endpoint = endpointFor(platform === "douyin" ? "douyinSearch" : "kuaishouSearch", env);
   const params: Record<string, string> = platform === "douyin"
     ? { keyword: query, offset: "0", count: String(limit) }
     : { keyword: query, pcursor: "" };
   endpointCalls.push({ kind: "search", endpoint, params });
-  const raw = await requestTikHub(endpoint, params, env, token, fetchImpl);
+  const raw = await requestTikHub(endpoint, params, env, requireTikHubToken(token), fetchImpl);
   return mapTikHubTrendResponse(raw, platform, "search").slice(0, limit);
 }
 
@@ -167,16 +185,22 @@ async function callComments(
   itemId: string,
   limit: number,
   env: Record<string, string | undefined>,
-  token: string,
+  token: string | undefined,
   fetchImpl: typeof fetch | undefined,
   endpointCalls: ResearchEndpointCall[]
 ) {
+  if (platform === "douyin" && canUseTtdAuthed(env)) {
+    const endpoint = ttdCommentEndpoint(env);
+    endpointCalls.push({ kind: "comments", endpoint, params: { detail_id: itemId, count: String(Math.min(limit, 20)), source: "ttd" } });
+    const raw = await fetchTtdDouyinCommentsRaw(itemId, limit, { env, fetch: fetchImpl });
+    return normalizeComments(raw).slice(0, limit);
+  }
   const endpoint = endpointFor(platform === "douyin" ? "douyinComments" : "kuaishouComments", env);
   const params: Record<string, string> = platform === "douyin"
     ? { aweme_id: itemId, cursor: "0", count: String(Math.min(limit, 20)) }
     : { photo_id: itemId, pcursor: "", count: String(Math.min(limit, 20)) };
   endpointCalls.push({ kind: "comments", endpoint, params });
-  const raw = await requestTikHub(endpoint, params, env, token, fetchImpl);
+  const raw = await requestTikHub(endpoint, params, env, requireTikHubToken(token), fetchImpl);
   return normalizeComments(raw).slice(0, limit);
 }
 

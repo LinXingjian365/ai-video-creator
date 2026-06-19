@@ -108,6 +108,42 @@ describe("runTikHubResearch", () => {
     expect(JSON.parse(init.body as string).text).toBe("https://www.kuaishou.com/short-video/3xabc");
   });
 
+  it("uses TikTokDownloader for free Douyin search when TTD_DOUYIN_COOKIE is set, without TikHub key", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      data: {
+        list: [
+          { aweme_id: "999", desc: "TTD免费搜索命中", nickname: "作者", play_count: 12345, digg_count: 678, share_url: "https://www.douyin.com/video/999" }
+        ]
+      }
+    })));
+
+    const report = await runTikHubResearch({
+      platform: "douyin",
+      query: "AI",
+      limit: 3
+    }, {
+      env: { TTD_BASE_URL: "http://127.0.0.1:5555", TTD_DOUYIN_COOKIE: "sessionid=abc" },
+      fetch: fetchMock as unknown as typeof fetch
+    });
+
+    expect(report.searchItems).toHaveLength(1);
+    expect(report.searchItems[0].title).toBe("TTD免费搜索命中");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:5555/douyin/search/video");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toMatchObject({ keyword: "AI", cookie: "sessionid=abc", source: true });
+    expect(report.endpointCalls[0]).toMatchObject({ kind: "search", endpoint: "/douyin/search/video" });
+  });
+
+  it("still requires TikHub key for Douyin search when no TTD cookie is set", async () => {
+    await expect(
+      runTikHubResearch(
+        { platform: "douyin", query: "AI" },
+        { env: { TTD_BASE_URL: "http://127.0.0.1:5555" } } // TTD configured but no cookie → not free path
+      )
+    ).rejects.toThrow(/TIKHUB_API_KEY/);
+  });
+
   it("fails honestly without a key", async () => {
     await expect(runTikHubResearch({ platform: "douyin", query: "AI" }, { env: {} })).rejects.toThrow(/TIKHUB_API_KEY/);
   });

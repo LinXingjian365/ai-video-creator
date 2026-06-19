@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchTtdTrends, isTtdConfigured, mapTtdHotResponse } from "./tiktok-downloader";
+import {
+  canUseTtdAuthed,
+  fetchTtdDouyinCommentsRaw,
+  fetchTtdDouyinSearchRaw,
+  fetchTtdTrends,
+  isTtdConfigured,
+  mapTtdHotResponse
+} from "./tiktok-downloader";
 
 const HOT_RESPONSE = JSON.stringify({
   message: "获取数据成功！",
@@ -182,5 +189,51 @@ describe("fetchTtdTrends", () => {
       { env: { TTD_BASE_URL: "http://x" }, fetch: fetchMock as unknown as typeof fetch }
     );
     expect(items).toHaveLength(1);
+  });
+});
+
+describe("canUseTtdAuthed", () => {
+  it("true only when TTD configured AND douyin cookie present", () => {
+    expect(canUseTtdAuthed({ TTD_BASE_URL: "http://x", TTD_DOUYIN_COOKIE: "c" })).toBe(true);
+    expect(canUseTtdAuthed({ TTD_ENABLED: "true", TTD_DOUYIN_COOKIE: "c" })).toBe(true);
+  });
+  it("false when cookie missing (avoids regressing TikHub search path)", () => {
+    expect(canUseTtdAuthed({ TTD_BASE_URL: "http://x" })).toBe(false);
+    expect(canUseTtdAuthed({ TTD_DOUYIN_COOKIE: "c" })).toBe(false); // not configured
+    expect(canUseTtdAuthed({})).toBe(false);
+  });
+});
+
+describe("fetchTtdDouyinSearchRaw / CommentsRaw", () => {
+  it("POSTs search to /douyin/search/video with keyword + cookie, returns raw", async () => {
+    const payload = { data: { list: [{ aweme_id: "1", desc: "x" }] } };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 }));
+    const raw = await fetchTtdDouyinSearchRaw("AI剪辑", 5, {
+      env: { TTD_BASE_URL: "http://127.0.0.1:5555", TTD_DOUYIN_COOKIE: "sid=1" },
+      fetch: fetchMock as unknown as typeof fetch
+    });
+    expect(raw).toEqual(payload);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:5555/douyin/search/video");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toMatchObject({ keyword: "AI剪辑", count: 5, source: true, cookie: "sid=1" });
+  });
+
+  it("POSTs comments to /douyin/comment with detail_id, clamps count to 20", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { comments: [] } }), { status: 200 }));
+    await fetchTtdDouyinCommentsRaw("7777", 50, {
+      env: { TTD_BASE_URL: "http://x", TTD_DOUYIN_COMMENT_ENDPOINT: "/custom/comment" },
+      fetch: fetchMock as unknown as typeof fetch
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://x/custom/comment");
+    expect(JSON.parse(init.body as string)).toMatchObject({ detail_id: "7777", count: 20 });
+  });
+
+  it("surfaces HTTP errors verbatim", async () => {
+    const fetchMock = vi.fn(async () => new Response("boom", { status: 500 }));
+    await expect(
+      fetchTtdDouyinSearchRaw("x", 5, { env: { TTD_BASE_URL: "http://x" }, fetch: fetchMock as unknown as typeof fetch })
+    ).rejects.toThrow(/TikTokDownloader HTTP 500: boom/);
   });
 });

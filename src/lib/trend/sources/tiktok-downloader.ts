@@ -157,3 +157,76 @@ export function createTtdTrendSource(platform: TtdPlatform, deps: TtdSourceDeps 
     fetchTrends: (opts) => fetchTtdTrends(platform, opts, deps)
   };
 }
+
+// ── 抖音搜索 / 评论的免费路径 ───────────────────────────────────────────
+// 与热榜不同,抖音搜索/评论接口需要登录态(Cookie)抗风控。为避免在没 Cookie 时
+// 把能用的 TikHub 路径换成空结果,只有当 TTD_DOUYIN_COOKIE 已配置时才走 TTD 免费路径;
+// 否则 research.ts 仍退化到 TikHub。返回原始 JSON,交给上游既有归一化器复用。
+
+const DEFAULT_SEARCH_ENDPOINT = "/douyin/search/video";
+const DEFAULT_COMMENT_ENDPOINT = "/douyin/comment";
+
+export function canUseTtdAuthed(env: Record<string, string | undefined> = process.env): boolean {
+  return isTtdConfigured(env) && Boolean(env.TTD_DOUYIN_COOKIE?.trim());
+}
+
+export function ttdSearchEndpoint(env: Record<string, string | undefined> = process.env): string {
+  return env.TTD_DOUYIN_SEARCH_ENDPOINT || DEFAULT_SEARCH_ENDPOINT;
+}
+
+export function ttdCommentEndpoint(env: Record<string, string | undefined> = process.env): string {
+  return env.TTD_DOUYIN_COMMENT_ENDPOINT || DEFAULT_COMMENT_ENDPOINT;
+}
+
+async function postTtdRaw(
+  env: Record<string, string | undefined>,
+  fetchImpl: typeof fetch,
+  endpoint: string,
+  body: Record<string, unknown>
+): Promise<unknown> {
+  const response = await fetchImpl(`${baseUrl(env)}${endpoint}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      token: env.TTD_TOKEN ?? ""
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs(env))
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`TikTokDownloader HTTP ${response.status}: ${text}`);
+  }
+  return text ? JSON.parse(text) : {};
+}
+
+export async function fetchTtdDouyinSearchRaw(
+  query: string,
+  limit: number,
+  deps: TtdSourceDeps = {}
+): Promise<unknown> {
+  const env = deps.env ?? process.env;
+  return postTtdRaw(env, deps.fetch ?? fetch, ttdSearchEndpoint(env), {
+    keyword: query,
+    offset: 0,
+    count: limit,
+    source: true, // 返回抖音原始字段,复用 mapTikHubTrendResponse 归一化
+    cookie: env.TTD_DOUYIN_COOKIE ?? ""
+  });
+}
+
+export async function fetchTtdDouyinCommentsRaw(
+  detailId: string,
+  limit: number,
+  deps: TtdSourceDeps = {}
+): Promise<unknown> {
+  const env = deps.env ?? process.env;
+  return postTtdRaw(env, deps.fetch ?? fetch, ttdCommentEndpoint(env), {
+    detail_id: detailId,
+    cursor: 0,
+    count: Math.min(limit, 20),
+    source: true,
+    cookie: env.TTD_DOUYIN_COOKIE ?? ""
+  });
+}
