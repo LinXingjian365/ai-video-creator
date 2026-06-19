@@ -1,0 +1,47 @@
+diff --git a/src/application/main_server.py b/src/application/main_server.py
+index 06cf947..90ae39a 100644
+--- a/src/application/main_server.py
++++ b/src/application/main_server.py
+@@ -13,6 +13,7 @@ from ..custom import (
+     VERSION_BETA,
+     is_valid_token,
+ )
++from ..models.base import APIModel
+ from ..models import (
+     Account,
+     AccountTiktok,
+@@ -161,6 +162,34 @@ class APIServer(TikTok):
+         async def get_settings(token: str = Depends(token_dependency)):
+             return Settings(**self.parameter.get_settings_data())
+ 
++        @self.server.post(
++            "/douyin/hot",
++            summary=_("获取抖音热榜数据"),
++            description=_(
++                dedent("""
++                返回抖音热榜、娱乐榜、社会榜、挑战榜的热搜词数据。
++
++                **参数**:
++
++                - **cookie**: 抖音 Cookie；可选参数
++                - **proxy**: 代理；可选参数
++                """)
++            ),
++            tags=[_("抖音")],
++            response_model=DataResponse,
++        )
++        async def handle_hot(
++            extract: APIModel, token: str = Depends(token_dependency)
++        ):
++            time_, data = await self._deal_hot_data(
++                source=True,
++                cookie=extract.cookie or None,
++                proxy=extract.proxy or None,
++            )
++            if data:
++                return self.success_response(extract, data)
++            return self.failed_response(extract)
++
+         @self.server.post(
+             "/douyin/share",
+             summary=_("获取分享链接重定向的完整链接"),

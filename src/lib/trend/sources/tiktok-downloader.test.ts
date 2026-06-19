@@ -1,30 +1,49 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchTtdTrends, isTtdConfigured } from "./tiktok-downloader";
+import { fetchTtdTrends, isTtdConfigured, mapTtdHotResponse } from "./tiktok-downloader";
 
-const TTD_RESPONSE = JSON.stringify({
-  data: {
-    list: [
-      {
-        aweme_id: "ttd-1",
-        desc: "TikTokDownloader 抖音热榜样品标题",
-        nickname: "测试创作者",
-        play_count: 88000,
-        digg_count: 4200,
-        comment_count: 310,
-        share_count: 88,
-        share_url: "https://www.douyin.com/video/ttd-1"
-      },
-      {
-        aweme_id: "ttd-2",
-        desc: "第二条热榜",
-        nickname: "另一创作者",
-        play_count: 50000,
-        digg_count: 2000,
-        comment_count: 100,
-        share_url: "https://www.douyin.com/video/ttd-2"
-      }
-    ]
-  }
+const HOT_RESPONSE = JSON.stringify({
+  message: "获取数据成功！",
+  data: [
+    {
+      抖音热榜: [
+        {
+          word: "我的端午落地签",
+          sentence_id: "2539115",
+          hot_value: 12113643,
+          view_count: 64095513,
+          discuss_video_count: 5,
+          event_time: 1781757271,
+          word_cover: { url_list: ["https://p.example/cover1.jpeg"] }
+        },
+        {
+          word: "永远跟党走",
+          sentence_id: "2539817",
+          hot_value: 8000000,
+          view_count: 30000000,
+          discuss_video_count: 3
+        }
+      ]
+    },
+    {
+      娱乐榜: [
+        {
+          word: "某综艺official",
+          sentence_id: "9001",
+          hot_value: 5000000,
+          view_count: 1200000,
+          discuss_video_count: 2
+        },
+        // 与主榜重复 sentence_id,应被去重
+        {
+          word: "我的端午落地签",
+          sentence_id: "2539115",
+          hot_value: 12113643,
+          view_count: 64095513,
+          discuss_video_count: 5
+        }
+      ]
+    }
+  ]
 });
 
 describe("isTtdConfigured", () => {
@@ -39,34 +58,78 @@ describe("isTtdConfigured", () => {
   });
 });
 
+describe("mapTtdHotResponse", () => {
+  it("flattens all boards and dedups by sentence_id", () => {
+    const items = mapTtdHotResponse(JSON.parse(HOT_RESPONSE), "", 10);
+    // 3 unique topics (主榜 2 + 娱乐榜 1 unique; 1 重复被去重)
+    expect(items).toHaveLength(3);
+    expect(items[0]).toMatchObject({
+      platform: "douyin",
+      id: "2539115",
+      title: "我的端午落地签",
+      category: "抖音热榜",
+      author: "抖音热榜"
+    });
+    expect(items[0].metrics.views).toBe(64095513);
+    expect(items[0].metrics.likes).toBe(12113643);
+    expect(items[0].metrics.comments).toBe(5);
+    expect(items[0].url).toBe(
+      `https://www.douyin.com/search/${encodeURIComponent("我的端午落地签")}`
+    );
+    expect(items[0].thumbnail).toBe("https://p.example/cover1.jpeg");
+    expect(items[0].publishedAt).toBe(new Date(1781757271 * 1000).toISOString());
+  });
+
+  it("filters to a single board when category matches a board name", () => {
+    const items = mapTtdHotResponse(JSON.parse(HOT_RESPONSE), "娱乐榜", 10);
+    // 只取娱乐榜的两条(跨榜去重不参与,因为主榜被整体跳过)
+    expect(items).toHaveLength(2);
+    expect(items.every((i) => i.category === "娱乐榜")).toBe(true);
+    expect(items[0].title).toBe("某综艺official");
+  });
+
+  it("returns empty for malformed payloads", () => {
+    expect(mapTtdHotResponse({}, "", 10)).toEqual([]);
+    expect(mapTtdHotResponse({ data: null }, "", 10)).toEqual([]);
+  });
+});
+
 describe("fetchTtdTrends", () => {
-  it("posts to TTD hot endpoint and normalizes the response", async () => {
-    const fetchMock = vi.fn(async () => new Response(TTD_RESPONSE, { status: 200 }));
+  it("posts to /douyin/hot and normalizes the hot board", async () => {
+    const fetchMock = vi.fn(async () => new Response(HOT_RESPONSE, { status: 200 }));
     const items = await fetchTtdTrends(
       "douyin",
       { category: "hot", topN: 5 },
       { env: { TTD_BASE_URL: "http://127.0.0.1:5555" }, fetch: fetchMock as unknown as typeof fetch }
     );
 
-    expect(items).toHaveLength(2);
-    expect(items[0]).toMatchObject({
-      platform: "douyin",
-      id: "ttd-1",
-      title: "TikTokDownloader 抖音热榜样品标题",
-      author: "测试创作者"
-    });
-    expect(items[0].metrics.views).toBe(88000);
-    expect(items[0].metrics.likes).toBe(4200);
+    expect(items).toHaveLength(3);
+    expect(items[0]).toMatchObject({ platform: "douyin", id: "2539115", title: "我的端午落地签" });
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:5555/douyin/hot");
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
     expect((init.headers as Record<string, string>).token).toBe("");
+    expect(init.body).toBe("{}");
+  });
+
+  it("sends cookie in body when TTD_DOUYIN_COOKIE is set", async () => {
+    const fetchMock = vi.fn(async () => new Response(HOT_RESPONSE, { status: 200 }));
+    await fetchTtdTrends(
+      "douyin",
+      { category: "hot", topN: 1 },
+      {
+        env: { TTD_BASE_URL: "http://x", TTD_DOUYIN_COOKIE: "sessionid=abc" },
+        fetch: fetchMock as unknown as typeof fetch
+      }
+    );
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ cookie: "sessionid=abc" });
   });
 
   it("respects TTD_TOKEN env when configured", async () => {
-    const fetchMock = vi.fn(async () => new Response(TTD_RESPONSE, { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(HOT_RESPONSE, { status: 200 }));
     await fetchTtdTrends(
       "douyin",
       { category: "hot", topN: 1 },
@@ -77,7 +140,7 @@ describe("fetchTtdTrends", () => {
   });
 
   it("respects TTD_DOUYIN_HOT_ENDPOINT override", async () => {
-    const fetchMock = vi.fn(async () => new Response(TTD_RESPONSE, { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(HOT_RESPONSE, { status: 200 }));
     await fetchTtdTrends(
       "douyin",
       { category: "hot", topN: 1 },
@@ -112,7 +175,7 @@ describe("fetchTtdTrends", () => {
   });
 
   it("clamps results to topN", async () => {
-    const fetchMock = vi.fn(async () => new Response(TTD_RESPONSE, { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(HOT_RESPONSE, { status: 200 }));
     const items = await fetchTtdTrends(
       "douyin",
       { category: "hot", topN: 1 },
