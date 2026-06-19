@@ -1,8 +1,8 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-06-18(Claude Opus 4.8 收尾会话)  
-**分支**:`feat/s1-trend-intelligence` — 45 commits,所有改动**已提交,未 push**  
-**状态**:✅ production build 绿 / 194 tests 绿(33 files) / typecheck 绿
+**最后更新**:2026-06-19(Claude Opus 4.8 — 本次 session 打通免费抖音热榜 + Docker 全栈 + Postiz 账号 + BGM 库)  
+**分支**:`feat/s1-trend-intelligence` — **49 commits,所有改动已提交,未 push**  
+**状态**:✅ production build 绿 / **198 tests 绿(33 files)** / typecheck 绿 / **全栈 6 容器+1 原生全部 running** / TTD 免费抖音热点实测通
 
 > **如果上一轮 session 跑过 push**,先 `git log --oneline origin/feat/s1-trend-intelligence..HEAD` 确认 delta。
 
@@ -43,6 +43,19 @@ npx vitest run # 194 tests, 33 files
 | n8n 编排 | ✅ payload 生成 + webhook 触发 + workflow JSON 导出 |
 | TikTokDownloader 适配 | ✅ douyin.ts 自动路由(TTD/TikHub) |
 | **下一项** | 真实联调:起 Postiz/n8n/TTD docker → 配 integration → 真实 draft/定时任务 |
+
+## 基础设施(2026-06-19 session 搭建,全在跑)
+
+| 服务 | 端口 | 方式 | 启动/停止 |
+|---|---|---|---|
+| TikTokDownloader | 5555 | 原生 Python venv | `cd ~/Desktop/TikTokDownloader && .venv/Scripts/python.exe run_api.py`(不开机自启) |
+| n8n | 5678 | Docker compose | `docker compose -f deployments/n8n/docker-compose.yml up -d` |
+| Postiz + ES + Temporal + postgres + redis | 5000/7233 | Docker compose | `docker compose -f deployments/postiz/docker-compose.yml up -d` |
+
+- **Postiz 账号已建** `linyuxin5211314@gmail.com` / `Postiz#2026Local`,API key 已填 `.env.local`。TikTok OAuth 需在 Postiz UI 配 client_key(非本项代码问题)。
+- **Docker Desktop 须配代理** `settings-store.json`: `ProxyHTTPMode:manual` + Override 全指向 `http://127.0.0.1:7890`。无此 docker 出不了网(Clash TUN 劫持)。
+- **TTD 免费热榜实测通**: `patches/ttd-douyin-hot.patch` 给 TTD 补了 `/douyin/hot` HTTP 路由。数据是抖音热榜话题词。
+- **BGM 库**: `workspace/input/audio/{calm,cinematic,dark,funny,tech,uplifting,warm}/` 各1首 Kevin MacLeod CC-BY 曲,选曲器中文情绪词命中实测通过。
 
 ## 关键技术细节
 
