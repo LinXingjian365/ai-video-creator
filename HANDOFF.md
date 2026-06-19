@@ -1,8 +1,8 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
 **最后更新**:2026-06-19(Claude Opus 4.8 — 本次 session 打通免费抖音热榜 + Docker 全栈 + Postiz 账号 + BGM 库)  
-**分支**:`feat/s1-trend-intelligence` — **58 commits,已全部 push 到 origin**  
-**状态**:✅ **221 tests 绿(35 files)** / typecheck 绿 / **前端已做大厂级重设计(单一靛蓝、去双霓虹,浏览器实测通过)** / 全链路自检面板 + 抖音搜索/评论免费路径(TTD)/ Docker 全栈(AutoStart 需 DD GUI 开)
+**分支**:`feat/s1-trend-intelligence` — **60 commits,本轮待 push 到 origin**
+**状态**:✅ **223 tests 绿(36 files)** / typecheck 绿 / build 绿 / **前端已做大厂级重设计(单一靛蓝、去双霓虹,浏览器实测通过)** / 全链路自检面板 + 抖音搜索/评论免费路径(TTD)/ Docker 全栈(AutoStart 需 DD GUI 开)
 
 ## 前端大厂级重设计(2026-06-19,对标 Linear/Vercel)
 - **方案文档**:`docs/FRONTEND_REDESIGN.md`(诊断+设计令牌+布局/组件规范+落地优先级)
@@ -369,8 +369,8 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 1. **跑趋势报告**: `curl -s --max-time 120 --noproxy 127.0.0.1 -X POST "http://127.0.0.1:5182/api/trend/report" -H "Content-Type: application/json" -d '{"platform":"douyin","category":"hot","topN":5}'` — 走 TTD 免费,~30s
 2. **跑全链路脚本**: POST `/api/script/generate` → POST `/api/full-chain` → 出 Remotion 成片
 3. **推 Postiz 草稿**: POST `/api/publish/dispatch` (需 integration_id,目前为空 → 返回 preview,不真发;配好 ID 后可发 draft)
-4. **跑 n8n 烟测**: `npm run n8n:smoke` — 生成最小 workflow → 导入 n8n 容器 → 用一次性 n8n CLI 容器真实执行 HTTP 节点 → 结果写入 `workspace/drafts/n8n-smoke-result-*.json`
-5. **跑测试**: `npx vitest run` (214 tests,35 files)
+4. **跑 n8n 烟测**: `npm run n8n:smoke` — 生成最小 workflow → 导入 n8n 容器 → 用一次性 n8n CLI 容器真实执行 HTTP 节点 → 结果写入 `workspace/drafts/n8n-smoke-status-result-*.json`；更深验证用 `$env:N8N_SMOKE_MODE='orchestration'; npm run n8n:smoke; Remove-Item Env:\N8N_SMOKE_MODE`，会分阶段打蓝图/readiness/workspace assets/dry-run payload，不触发真实发布。
+5. **跑测试**: `npx vitest run` (223 tests,36 files)
 6. **全链路自检**: 开 UI「辅助 → 全链路自检」,或 `curl http://127.0.0.1:5182/api/health/self-check`(dev server 在跑时),一眼看 TTD/n8n/Postiz/KSD/LLM/BGM/FFmpeg/yt-dlp 状态
 6. **修改代码**:收窄在趋势源/脚本生成/发布适配器/add BGM/add 新平台源,不动基础设施 compose
 
@@ -419,7 +419,7 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 - `scripts/n8n-smoke-test.mjs`: 生成最小 n8n workflow，导入 `n8n` Docker 容器，再用同一 compose volume 启动一次性 n8n CLI 容器执行 workflow。
 - `package.json`: 新增 `npm run n8n:smoke`。
 - 烟测 workflow: `Manual smoke trigger` → `HTTP Request http://host.docker.internal:5182/api/orchestration/n8n`。
-- 执行结果落盘到 `workspace/drafts/n8n-smoke-result-*.json`，主 n8n 服务容器会在执行结束后自动重新启动。
+- 执行结果落盘到 `workspace/drafts/n8n-smoke-status-result-*.json`，主 n8n 服务容器会在执行结束后自动重新启动。
 
 实测:
 - `npm run n8n:smoke` 成功，workflow id `39058362-94f7-4389-b2b7-661e0935090c`。
@@ -428,3 +428,19 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 边界:
 - n8n 2.26 CLI `execute` 会和正在运行的服务抢 5679 task broker 端口；脚本采用“临时停止服务容器 → compose run 一次性 CLI 容器 → 重启服务容器”的稳定路径。
 - CLI 导入后 active webhook 注册在本机 regular mode 下不稳定，因此当前 smoke 先验证真实 workflow 执行；完整生产 webhook 激活仍建议后续经 UI/API 方式联调。
+
+## Codex 更新: n8n 分阶段 orchestration smoke 已接入
+
+已完成:
+- `scripts/n8n-smoke-test.mjs`: 增加 `N8N_SMOKE_MODE=orchestration`，默认 `status` 模式保持原最小 smoke。
+- orchestration smoke 节点: `Manual orchestration smoke trigger` → `01 n8n blueprint status` → `02 Creator readiness` → `03 Workspace assets` → `04 Build n8n dry-run payload`。
+- `scripts/n8n-smoke-test.test.mjs` + `vitest.config.ts`: 覆盖 status/orchestration 两种 workflow 构建，确保 dry-run payload 不带 secret。
+- `docs/API.md` / `docs/ROADMAP.md` / `docs/FULL_CHAIN_TOOLCHAIN.md`: 同步新验证模式。
+
+实测:
+- `npm run n8n:smoke` 成功，status workflow id `51b18f7b-40af-4d32-be89-70137020770e`。
+- `$env:N8N_SMOKE_MODE='orchestration'; npm run n8n:smoke; Remove-Item Env:\N8N_SMOKE_MODE` 成功，workflow id `eca14d17-f880-4172-92d0-7ee580401206`。
+- n8n 执行状态 `success`，最终节点成功返回 `/api/orchestration/n8n` dry-run task，`secretsIncluded=false`。
+
+边界:
+- 该 smoke 不跑 `/api/full-chain`，避免在验证编排时触发长渲染/外部上传；下一步是接失败重试、approved queue id 映射和真实 analytics 数据源映射。
