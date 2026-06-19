@@ -1521,6 +1521,76 @@ input[type="checkbox"] {
   color: var(--warn);
 }
 
+.pill.down {
+  background: rgba(251, 113, 133, 0.16);
+  color: var(--danger);
+}
+
+.pill.unconfigured {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+}
+
+.selfcheck-group {
+  margin-top: 18px;
+}
+
+.selfcheck-group h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.selfcheck-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  background: rgba(15, 23, 42, 0.4);
+  margin-bottom: 8px;
+}
+
+.selfcheck-row.status-ok {
+  border-left-color: var(--ok);
+}
+
+.selfcheck-row.status-down {
+  border-left-color: var(--danger);
+}
+
+.selfcheck-row.status-degraded {
+  border-left-color: var(--warn);
+}
+
+.selfcheck-row.status-unconfigured {
+  border-left-color: var(--muted);
+}
+
+.selfcheck-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selfcheck-row small {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.selfcheck-row code {
+  font-size: 11px;
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.08);
+  padding: 4px 8px;
+  border-radius: 8px;
+  word-break: break-all;
+}
+
 .asset-counts {
   display: flex;
   flex-wrap: wrap;

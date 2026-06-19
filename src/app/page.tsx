@@ -34,10 +34,11 @@ import type { PublishDispatchResult } from "@/lib/publish/dispatch";
 import type { PublishPreflightReport } from "@/lib/publish/preflight";
 import type { AnalyticsSnapshot } from "@/lib/analytics/ledger";
 import type { N8nOrchestrationResult } from "@/lib/orchestration/n8n";
+import type { SelfCheckReport, SelfCheckItem } from "@/lib/health/self-check";
 
 type TaskStatus = "pending" | "processing" | "completed" | "failed";
-type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict";
-type StageEndpoint = "trend-report" | "script-generate" | "integrations" | "auto-plan" | "auto-simulate" | "creator-suite" | "readiness";
+type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict" | "selfcheck";
+type StageEndpoint = "trend-report" | "script-generate" | "integrations" | "auto-plan" | "auto-simulate" | "creator-suite" | "readiness" | "self-check";
 
 interface TaskRecord {
   id: string;
@@ -173,6 +174,14 @@ const capabilities: Array<{
     body: "潜力分 · 置信度",
     action: "计算爆款指数",
     endpoint: "trend-report"
+  },
+  {
+    id: "selfcheck",
+    icon: Gauge,
+    title: "全链路自检",
+    body: "服务/依赖在线状态",
+    action: "运行自检",
+    endpoint: "self-check"
   }
 ];
 
@@ -216,6 +225,11 @@ const stageCopy: Record<WorkflowStage, { headline: string; description: string; 
     headline: "用真实榜单做潜力判断",
     description: "潜力分来自互动率和播放速度，置信度看数据完整度;AI 只负责解释套路。",
     proof: ["潜力分", "置信度", "共性套路", "选题卡"]
+  },
+  selfcheck: {
+    headline: "全链路自检",
+    description: "一次性探测 TTD/n8n/Postiz 在线状态与 KSD/LLM/BGM/FFmpeg/yt-dlp 可用性,缺什么、怎么修一眼看到。",
+    proof: ["在线探活", "四态诊断", "修复指引", "零计费"]
   }
 };
 
@@ -332,6 +346,8 @@ export default function Home() {
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const [evidenceReport, setEvidenceReport] = useState<EvidenceReport | null>(null);
   const [bgmPickBusy, setBgmPickBusy] = useState(false);
+  const [selfCheckBusy, setSelfCheckBusy] = useState(false);
+  const [selfCheckReport, setSelfCheckReport] = useState<SelfCheckReport | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -421,6 +437,8 @@ export default function Home() {
           materialDir: "workspace/input",
           instructions: `参考这些爆款，只拆方法不搬运内容：${form.references}\n目标：生成强钩子、核心演示、结尾转化三段 decision JSON。`
         }, "爆款拆解计划已生成");
+      } else if (activeCapability.endpoint === "self-check") {
+        await runSelfCheckAction();
       } else {
         await runPost("/api/creator/suite", creatorSuitePayload(form), `${activeCapability.title}已生成`);
       }
@@ -430,6 +448,25 @@ export default function Home() {
       setMessage(error instanceof Error ? error.message : "请求失败");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runSelfCheckAction() {
+    setSelfCheckBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/health/self-check", { cache: "no-store" });
+      const data = (await response.json()) as SelfCheckReport;
+      if (!response.ok) {
+        throw new Error("自检请求失败");
+      }
+      setSelfCheckReport(data);
+      setResult(data);
+      setMessage(`自检完成:${data.summary.ok}/${data.summary.total} 项可用`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "自检失败");
+    } finally {
+      setSelfCheckBusy(false);
     }
   }
 
@@ -1244,6 +1281,9 @@ export default function Home() {
             onRunPublishPreflight={runPublishPreflight}
             onImportAnalytics={importAnalytics}
             onTriggerN8n={triggerN8n}
+            selfCheckBusy={selfCheckBusy}
+            selfCheckReport={selfCheckReport}
+            onRunSelfCheck={runSelfCheckAction}
           />
 
           <footer className="form-actions">
@@ -1315,7 +1355,10 @@ function StageWorkspace({
   onDispatchPublishQueue,
   onRunPublishPreflight,
   onImportAnalytics,
-  onTriggerN8n
+  onTriggerN8n,
+  selfCheckBusy,
+  selfCheckReport,
+  onRunSelfCheck
 }: {
   activeStage: WorkflowStage;
   busy: boolean;
@@ -1375,6 +1418,9 @@ function StageWorkspace({
   onRunPublishPreflight: () => void;
   onImportAnalytics: () => void;
   onTriggerN8n: (mode: "dry-run" | "webhook", exportWorkflow?: boolean) => void;
+  selfCheckBusy: boolean;
+  selfCheckReport: SelfCheckReport | null;
+  onRunSelfCheck: () => void;
 }) {
   const copy = stageCopy[activeStage];
   const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
@@ -1491,7 +1537,107 @@ function StageWorkspace({
           update={update}
         />
       ) : null}
+      {activeStage === "selfcheck" ? (
+        <SelfCheckPanel busy={selfCheckBusy} report={selfCheckReport} onRun={onRunSelfCheck} />
+      ) : null}
     </section>
+  );
+}
+
+function SelfCheckPanel({
+  busy,
+  report,
+  onRun
+}: {
+  busy: boolean;
+  report: SelfCheckReport | null;
+  onRun: () => void;
+}) {
+  useEffect(() => {
+    if (!report) {
+      void onRun();
+    }
+    // 仅在面板首次打开时自动跑一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const statusLabel: Record<string, string> = {
+    ok: "可用",
+    down: "已断",
+    degraded: "未接线",
+    unconfigured: "未配置"
+  };
+  const pillClass: Record<string, string> = {
+    ok: "ok",
+    down: "down",
+    degraded: "missing",
+    unconfigured: "unconfigured"
+  };
+  const services = report?.items.filter((item) => item.category === "service") ?? [];
+  const localCaps = report?.items.filter((item) => item.category === "capability") ?? [];
+
+  return (
+    <div className="material-import">
+      <div className="material-import-actions">
+        <button className="primary-button" disabled={busy} onClick={onRun} type="button">
+          {busy ? <Loader2 className="spin" size={18} /> : <Gauge size={18} />}
+          {busy ? "自检中…" : "重新自检"}
+        </button>
+        {report ? (
+          <span className="hint-pill">
+            {report.summary.ok}/{report.summary.total} 可用
+            {report.summary.down ? ` · ${report.summary.down} 断` : ""}
+            {report.summary.degraded ? ` · ${report.summary.degraded} 未接线` : ""}
+            {report.summary.unconfigured ? ` · ${report.summary.unconfigured} 未配置` : ""}
+          </span>
+        ) : null}
+      </div>
+
+      {report ? (
+        <>
+          <SelfCheckGroup title="在线服务" items={services} statusLabel={statusLabel} pillClass={pillClass} />
+          <SelfCheckGroup title="本地能力" items={localCaps} statusLabel={statusLabel} pillClass={pillClass} />
+          <p className="check-detail" style={{ marginTop: 12 }}>
+            检查时间 {new Date(report.checkedAt).toLocaleString()}
+          </p>
+        </>
+      ) : (
+        <p className="check-detail">{busy ? "正在探测各服务…" : "点击运行自检。"}</p>
+      )}
+    </div>
+  );
+}
+
+function SelfCheckGroup({
+  title,
+  items,
+  statusLabel,
+  pillClass
+}: {
+  title: string;
+  items: SelfCheckItem[];
+  statusLabel: Record<string, string>;
+  pillClass: Record<string, string>;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <div className="selfcheck-group">
+      <h4>{title}</h4>
+      {items.map((item) => (
+        <div key={item.id} className={`selfcheck-row status-${item.status}`}>
+          <div className="selfcheck-row-head">
+            <span className={`pill ${pillClass[item.status] ?? "missing"}`}>
+              {statusLabel[item.status] ?? item.status}
+            </span>
+            <strong>{item.label}</strong>
+          </div>
+          <small>{item.detail}</small>
+          {item.hint ? <code>{item.hint}</code> : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
