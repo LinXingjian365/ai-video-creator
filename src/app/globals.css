@@ -1751,6 +1751,7 @@ input[type="checkbox"] {
   border-left: 3px solid var(--border);
   background: rgba(15, 23, 42, 0.4);
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .selfcheck-row.status-ok {
@@ -1773,6 +1774,12 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.selfcheck-row-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .selfcheck-row small {
@@ -1781,12 +1788,276 @@ input[type="checkbox"] {
 }
 
 .selfcheck-row code {
+  display: block;
+  max-width: 100%;
   font-size: 11px;
   color: var(--cyan);
   background: rgba(99, 102, 241, 0.08);
   padding: 4px 8px;
   border-radius: 8px;
+  overflow-wrap: anywhere;
+  white-space: normal;
   word-break: break-all;
+}
+
+.selfcheck-live-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 18px;
+  align-items: center;
+  margin-top: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.selfcheck-live-run > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.selfcheck-live-run strong {
+  font-size: 14px;
+}
+
+.selfcheck-live-run small {
+  color: var(--muted);
+}
+
+.selfcheck-live-run > code {
+  grid-column: 1 / -1;
+  color: var(--cyan);
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.config-center {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.config-center-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 72px;
+  margin-top: 20px;
+  color: var(--muted);
+}
+
+.config-center-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.config-center-head p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 4px;
+  color: var(--magenta-deep);
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.config-center-head h3 {
+  font-size: 19px;
+}
+
+.config-security {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  color: var(--ok);
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.config-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.config-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--card-2);
+  color: var(--muted);
+}
+
+.config-tabs button:last-child {
+  border-right: 0;
+}
+
+.config-tabs button:hover,
+.config-tabs button.active {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.config-tabs button.active {
+  box-shadow: inset 0 -2px 0 var(--magenta);
+}
+
+.config-tabs button span {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-tabs button small {
+  color: var(--faint);
+  font-family: var(--ff-mono);
+  font-size: 10px;
+}
+
+.config-workspace {
+  padding-top: 18px;
+}
+
+.config-group-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.config-group-copy strong {
+  font-size: 14px;
+}
+
+.config-group-copy span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.config-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 14px 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.config-field:nth-child(2n) {
+  padding-right: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+
+.config-field > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.config-field > span strong {
+  font-size: 12px;
+}
+
+.config-field > span code {
+  overflow: hidden;
+  color: var(--faint);
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-field > span svg {
+  flex: 0 0 auto;
+  color: var(--cyan);
+}
+
+.config-field > span i {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.config-field > span i.configured {
+  color: var(--ok);
+}
+
+.config-field > span i.missing {
+  color: var(--faint);
+}
+
+.config-field input,
+.config-field select {
+  width: 100%;
+  min-width: 0;
+  height: 39px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  outline: none;
+  background: #0b0d0a;
+  color: var(--ink);
+}
+
+.config-field input:focus,
+.config-field select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(91, 192, 235, 0.12);
+}
+
+.config-field > small {
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.config-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.config-message,
+.config-probe {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.config-probe.ok {
+  color: var(--ok);
+}
+
+.config-probe.failed {
+  color: var(--danger);
 }
 
 .asset-counts {
@@ -2520,6 +2791,47 @@ pre {
   .material-import-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .selfcheck-live-run {
+    grid-template-columns: 1fr;
+  }
+
+  .selfcheck-live-run > code {
+    grid-column: auto;
+  }
+
+  .config-center-head,
+  .config-group-copy {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .config-tabs,
+  .config-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .config-tabs button {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .config-tabs button:last-child {
+    border-bottom: 0;
+  }
+
+  .config-field,
+  .config-field:nth-child(2n) {
+    padding: 12px 0;
+    border-left: 0;
+  }
+
+  .config-actions,
+  .config-actions button,
+  .selfcheck-live-run button {
+    width: 100%;
   }
 
   .action-buttons,

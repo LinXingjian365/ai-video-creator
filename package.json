@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "n8n:smoke": "node scripts/n8n-smoke-test.mjs",
     "smoke:live": "node scripts/live-smoke.mjs",

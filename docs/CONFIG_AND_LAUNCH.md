@@ -33,6 +33,17 @@
 
 ## 1. 唯一必做的手动配置:Postiz 连平台
 
+### 先用页面配置中心补齐其余项目
+
+打开 [http://127.0.0.1:5182](http://127.0.0.1:5182)，进入「辅助工具 → 全链路自检 → 本机配置中心」。页面按四组管理 AI 模型、热点/联网证据、编排/发布、本地媒体工具：
+
+- 敏感字段只显示“已配置/未配置”，永不回显原值。
+- 保存只写入白名单变量，并要求本机同源请求与显式确认。
+- 「实测当前模型」会真实调用一次当前 LLM；普通自检不调用模型，避免无意计费。
+- 「运行真实链路」会创建真实 `/api/full-chain` 后台任务，生成 MP4 与多平台变体，但不会自动发布。
+
+2026-06-20 最新实测：配置中心成功写入 `APP_BASE_URL=http://127.0.0.1:5182` 和安全默认 `PUBLISH_LIVE_ENABLED=false`；DeepSeek 最小生成探针成功。
+
 不能代办的就这一项。三步:
 
 1. 打开 http://localhost:5000(账号 `linyuxin5211314@gmail.com` / 密码 `Postiz#2026Local`)
@@ -120,6 +131,7 @@ curl -s -X POST http://127.0.0.1:5182/api/script/generate \
 | 发布草稿(Postiz) | `/api/publish/dispatch` | ⏳ 等 integration_id |
 | n8n 编排 | webhook `ai-video-full-chain` | ✅(已导入 workflow) |
 | 全链路自检 | `/api/health/self-check` + 辅助面板 | ✅ |
+| 本机配置中心 | `/api/config/local` + `/api/config/probe` | ✅(密钥不回显，DeepSeek 实测通过) |
 
 ---
 

@@ -657,6 +657,39 @@ N8N_SMOKE_N8N_BASE_URL=http://localhost:5678
 
 ## 诊断
 
+### GET `/api/config/local`
+
+返回本机配置向导的安全快照。敏感字段只返回 `configured: true/false`，不会返回 API Key、Cookie、Token 或 Webhook secret 的原值。
+
+### POST `/api/config/local`
+
+从本机同源页面更新白名单内的 `.env.local` 配置。请求必须来自 `127.0.0.1`、`localhost` 或 `::1`，并带显式确认：
+
+```json
+{
+  "confirm": "CONFIRM_LOCAL_CONFIG_WRITE",
+  "values": {
+    "APP_BASE_URL": "http://127.0.0.1:5182",
+    "PUBLISH_LIVE_ENABLED": "false"
+  }
+}
+```
+
+写入采用临时文件 + rename，响应只返回更新的变量名和脱敏快照。
+
+### POST `/api/config/probe`
+
+显式运行一次最小 LLM 生成探针：
+
+```json
+{
+  "target": "llm",
+  "confirm": "CONFIRM_PROVIDER_PROBE"
+}
+```
+
+该接口会产生一次极小的模型调用，只允许本机同源页面触发；错误信息会脱敏，不转发上游响应体。
+
 ### GET `/api/system/diagnostics`
 
 返回系统诊断信息，适合判断本地 FFmpeg、工作区路径和环境变量是否正常。

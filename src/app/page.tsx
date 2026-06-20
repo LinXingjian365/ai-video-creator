@@ -7,7 +7,6 @@ import {
   Clock3,
   DownloadCloud,
   FileJson,
-  Files,
   Flame,
   Gauge,
   Loader2,
@@ -22,6 +21,7 @@ import {
   Wand2,
   XCircle
 } from "lucide-react";
+import { ConfigCenter } from "@/app/components/ConfigCenter";
 import type { IntelligenceReport } from "@/lib/trend/types";
 import type { TikHubResearchReport } from "@/lib/trend/research";
 import type { EvidenceReport } from "@/lib/trend/evidence";
@@ -363,6 +363,8 @@ export default function Home() {
   const [bgmPickBusy, setBgmPickBusy] = useState(false);
   const [selfCheckBusy, setSelfCheckBusy] = useState(false);
   const [selfCheckReport, setSelfCheckReport] = useState<SelfCheckReport | null>(null);
+  const [smokeBusy, setSmokeBusy] = useState(false);
+  const [smokeTaskId, setSmokeTaskId] = useState<string | null>(null);
 
   const activeCapability = useMemo(
     () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
@@ -488,6 +490,35 @@ export default function Home() {
       setMessage(error instanceof Error ? error.message : "自检失败");
     } finally {
       setSelfCheckBusy(false);
+    }
+  }
+
+  async function runEndToEndSmokeAction() {
+    setSmokeBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/full-chain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: "端到端实测 · " + new Date().toLocaleTimeString(),
+          platform: "douyin",
+          durationSec: 20,
+          narrated: false
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.task?.error ?? data.error ?? "实测启动失败");
+      }
+      const id = data.task?.id ?? null;
+      setSmokeTaskId(id);
+      setMessage(`端到端实测已启动(任务 ${id?.slice(0, 8)}…)。约 5-10 分钟,完成后右侧"最近任务"会显示;成果在 workspace/output/publish/。`);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "实测启动失败");
+    } finally {
+      setSmokeBusy(false);
     }
   }
 
@@ -1376,6 +1407,9 @@ export default function Home() {
             selfCheckBusy={selfCheckBusy}
             selfCheckReport={selfCheckReport}
             onRunSelfCheck={runSelfCheckAction}
+            smokeBusy={smokeBusy}
+            smokeTaskId={smokeTaskId}
+            onRunEndToEndSmoke={runEndToEndSmokeAction}
           />
 
           <footer className="form-actions">
@@ -1450,7 +1484,10 @@ function StageWorkspace({
   onTriggerN8n,
   selfCheckBusy,
   selfCheckReport,
-  onRunSelfCheck
+  onRunSelfCheck,
+  smokeBusy,
+  smokeTaskId,
+  onRunEndToEndSmoke
 }: {
   activeStage: WorkflowStage;
   busy: boolean;
@@ -1513,6 +1550,9 @@ function StageWorkspace({
   selfCheckBusy: boolean;
   selfCheckReport: SelfCheckReport | null;
   onRunSelfCheck: () => void;
+  smokeBusy: boolean;
+  smokeTaskId: string | null;
+  onRunEndToEndSmoke: () => void;
 }) {
   const copy = stageCopy[activeStage];
   const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
@@ -1630,7 +1670,14 @@ function StageWorkspace({
         />
       ) : null}
       {activeStage === "selfcheck" ? (
-        <SelfCheckPanel busy={selfCheckBusy} report={selfCheckReport} onRun={onRunSelfCheck} />
+        <SelfCheckPanel
+          busy={selfCheckBusy}
+          report={selfCheckReport}
+          onRun={onRunSelfCheck}
+          smokeBusy={smokeBusy}
+          smokeTaskId={smokeTaskId}
+          onRunEndToEndSmoke={onRunEndToEndSmoke}
+        />
       ) : null}
     </section>
   );
@@ -1639,11 +1686,17 @@ function StageWorkspace({
 function SelfCheckPanel({
   busy,
   report,
-  onRun
+  onRun,
+  smokeBusy,
+  smokeTaskId,
+  onRunEndToEndSmoke
 }: {
   busy: boolean;
   report: SelfCheckReport | null;
   onRun: () => void;
+  smokeBusy: boolean;
+  smokeTaskId: string | null;
+  onRunEndToEndSmoke: () => void;
 }) {
   useEffect(() => {
     if (!report) {
@@ -1696,6 +1749,20 @@ function SelfCheckPanel({
       ) : (
         <p className="check-detail">{busy ? "正在探测各服务…" : "点击运行自检。"}</p>
       )}
+
+      <div className="selfcheck-live-run">
+        <div>
+          <strong>真实端到端成片实测</strong>
+          <small>启动文案生成、Remotion 渲染与多平台变体任务，产物写入 workspace/output/publish。</small>
+        </div>
+        <button className="secondary-button" disabled={smokeBusy} onClick={onRunEndToEndSmoke} type="button">
+          {smokeBusy ? <Loader2 className="spin" size={17} /> : <Rocket size={17} />}
+          {smokeBusy ? "启动中" : "运行真实链路"}
+        </button>
+        {smokeTaskId ? <code>任务 {smokeTaskId}</code> : null}
+      </div>
+
+      <ConfigCenter onSaved={onRun} />
     </div>
   );
 }

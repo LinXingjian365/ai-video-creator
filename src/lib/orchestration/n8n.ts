@@ -222,7 +222,6 @@ export function buildN8nImportableWorkflow(
   env: Record<string, string | undefined> = process.env
 ): N8nImportableWorkflow {
   const payload = buildN8nWorkflowPayload({ ...input, mode: "dry-run" }, env);
-  const note = "Import this JSON into n8n, then review APP_BASE_URL, webhook path, schedules, and approval gates before activating.";
   const cronId = randomUUID();
   const webhookId = randomUUID();
   const trendId = randomUUID();

@@ -458,3 +458,23 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 边界:
 - 这仍然不会自动发布；dispatch 节点必须人工启用，且后端仍要求 approved 队列项和 `CONFIRM_DRY_RUN_ONLY`。
 - 下一步是把 Postiz/TikHub/手动导入的数据源映射到 analytics 节点，而不是跳过人工发布闸门。
+
+## Codex 更新: 本机配置中心与真实恢复 smoke 已完成 (2026-06-20)
+
+已完成:
+- `src/app/components/ConfigCenter.tsx`: 自检面板新增四组真实配置中心，覆盖 LLM、热点/联网证据、n8n/Postiz、媒体生成与本地工具。
+- `src/lib/config/local-config.ts` + `/api/config/local`: 只允许白名单变量，使用临时文件原子更新 `.env.local`；POST 只允许本机同源并要求 `CONFIRM_LOCAL_CONFIG_WRITE`。
+- 所有 secret 字段只返回 `configured`，前端保存后清空输入，API/错误响应均不回显 Key。
+- `src/lib/config/probe.ts` + `/api/config/probe`: 显式点击后做一次最小 LLM 真实生成，错误脱敏。
+- 自检页补完中断的一键真实 `/api/full-chain` 入口；移动端 390px 宽度无横向溢出。
+
+验证:
+- lint、typecheck、production build 全绿；38 files / 231 tests 全绿。
+- `npm audit --audit-level=moderate` 仍报告 2 个 Next 间接 PostCSS moderate；自动修复建议会破坏性降级到 Next 9.3.3，因此未执行 `--force`，等待上游安全版本。
+- Playwright: 模块切换、四组配置、真实 DeepSeek 探针、配置写入、390px 响应式均通过；0 console error / 0 warning。
+- Docker 6 容器与 TTD 已恢复；`npm run smoke:live` 成功：self-check 7/8、TTD 真实热榜 3 条、DeepSeek 分析/脚本成功、Postiz probe=ok。
+- 唯一发布 blocker：`POSTIZ_INTEGRATION_ID_DOUYIN/KUAISHOU/BILIBILI` 仍为空，必须由用户在 Postiz UI 完成渠道 OAuth 后获得；不得伪造或绕过。
+
+下一步:
+- 用户完成 Postiz 渠道 OAuth 后，把三个 integration id 填进配置中心，再跑 `npm run smoke:live`，目标 blockers=0。
+- 然后从发布队列选择一个真实成片，人工批准后只创建 Postiz draft，不自动正式发布。

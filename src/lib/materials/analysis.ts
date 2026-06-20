@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { getVideoInfo, type VideoInfo } from "@/lib/ffmpeg";
-import { defaultDraftPath, inputRoot, resolveLocalPath } from "@/lib/paths";
+import { defaultDraftPath, resolveLocalPath } from "@/lib/paths";
 import { getVideoToolsPython } from "@/lib/python-tools";
-import type { ImportedMaterialFile, MaterialImportManifest } from "./yt-dlp";
+import type { MaterialImportManifest } from "./yt-dlp";
 
 export interface TranscriptSegment {
   index: number;

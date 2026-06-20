@@ -3,8 +3,6 @@
 // 使用:npm run smoke:live  (dev server 必须在 5182 上跑)
 
 const BASE = process.env.APP_BASE_URL || "http://127.0.0.1:5182";
-const NO_PROXY = { dispatcher: undefined }; // node 原生 fetch 不读 HTTP_PROXY
-
 const log = (...a) => console.log("·", ...a);
 const ok = (m) => console.log("\x1b[32m✔\x1b[0m", m);
 const bad = (m) => console.log("\x1b[31m✘\x1b[0m", m);
