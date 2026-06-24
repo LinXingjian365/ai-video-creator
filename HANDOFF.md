@@ -1,8 +1,8 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-06-19(Codex — A 方案任务指挥舱、剪辑执行轨、n8n 重试与审批映射)
-**分支**:`feat/s1-trend-intelligence` — **61 commits,本轮待 push 到 origin**
-**状态**:✅ **225 tests 绿(36 files)** / typecheck 绿 / build 绿 / **前端已切换 A 方案“AI 视频任务指挥舱”并完成桌面/移动截图验证** / 全链路自检面板 + 抖音搜索/评论免费路径(TTD)/ Docker 全栈(AutoStart 需 DD GUI 开)
+**最后更新**:2026-06-19(Claude Opus 4.8 — 同步 Compaction 前最终状态)  
+**分支**:`feat/s1-trend-intelligence` — **65 commits,已全部 push 到 origin**  
+**状态**:✅ **235 tests 绿(36 files)** / typecheck 绿 / **真实端到端实测产出 4 平台 mp4(ffprobe 验证, ~7 分钟全链路)** / ConfigCenter 安全本地配置 / 全链路自检 + 抖音搜索/评论免费(TTD) / 前端 A 方案七阶段指挥舱(Codex) + 大厂级重设计
 
 ## 前端 A 方案：AI 视频任务指挥舱(2026-06-19)
 - **方案文档**:`docs/FRONTEND_REDESIGN.md`；项目级设计系统:`.interface-design/system.md`。
