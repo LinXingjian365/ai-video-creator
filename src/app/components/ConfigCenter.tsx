@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { EyeOff, Loader2, PlugZap, Save, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { EyeOff, Loader2, PlugZap, RefreshCcw, Save, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 interface ConfigField {
   key: string;
@@ -32,6 +32,37 @@ interface ProbeResult {
   detail: string;
 }
 
+interface PostizIntegrationSummary {
+  id: string;
+  name: string;
+  provider?: string;
+  type?: string;
+  platformHint: "douyin" | "kuaishou" | "bilibili" | "unknown";
+}
+
+interface PostizPlatformBinding {
+  platform: "douyin" | "kuaishou" | "bilibili";
+  envKey: string;
+  configured: boolean;
+  configuredId?: string;
+  candidateIds: string[];
+}
+
+interface PostizProbeResult {
+  ok: boolean;
+  configured: boolean;
+  baseUrl: string;
+  detail: string;
+  integrations: PostizIntegrationSummary[];
+  platforms: PostizPlatformBinding[];
+}
+
+const platformLabels: Record<PostizPlatformBinding["platform"], string> = {
+  douyin: "抖音",
+  kuaishou: "快手",
+  bilibili: "B站"
+};
+
 export function ConfigCenter({ onSaved }: { onSaved?: () => void }) {
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
   const [activeGroupId, setActiveGroupId] = useState("llm");
@@ -39,8 +70,10 @@ export function ConfigCenter({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [probing, setProbing] = useState(false);
+  const [postizProbing, setPostizProbing] = useState(false);
   const [message, setMessage] = useState("");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [postizProbe, setPostizProbe] = useState<PostizProbeResult | null>(null);
 
   async function loadSnapshot() {
     setLoading(true);
@@ -125,6 +158,28 @@ export function ConfigCenter({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
+  async function probePostiz() {
+    setPostizProbing(true);
+    setPostizProbe(null);
+    setMessage("");
+    try {
+      const response = await fetch("/api/config/postiz", { cache: "no-store" });
+      const data = await response.json();
+      if (typeof data.ok !== "boolean") throw new Error(data.error ?? "Postiz 探针失败");
+      setPostizProbe(data);
+      if (!response.ok && data.detail) setMessage(data.detail);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Postiz 探针失败");
+    } finally {
+      setPostizProbing(false);
+    }
+  }
+
+  function fillPostizId(envKey: string, id: string) {
+    setDrafts((current) => ({ ...current, [envKey]: id }));
+    setMessage(`已填入 ${envKey}，确认无误后保存当前分组。`);
+  }
+
   if (loading && !snapshot) {
     return <div className="config-center-loading"><Loader2 className="spin" size={18} />读取本机配置状态</div>;
   }
@@ -206,9 +261,56 @@ export function ConfigCenter({ onSaved }: { onSaved?: () => void }) {
                 {probing ? "探测中" : "实测当前模型"}
               </button>
             ) : null}
+            {activeGroup.id === "automation" ? (
+              <button className="secondary-button" disabled={postizProbing} onClick={probePostiz} type="button">
+                {postizProbing ? <Loader2 className="spin" size={17} /> : <RefreshCcw size={17} />}
+                {postizProbing ? "读取中" : "读取 Postiz 渠道"}
+              </button>
+            ) : null}
             {message ? <span className="config-message">{message}</span> : null}
             {probe ? <span className={`config-probe ${probe.ok ? "ok" : "failed"}`}>{probe.provider} · {probe.detail}</span> : null}
           </div>
+          {activeGroup.id === "automation" && postizProbe ? (
+            <div className={`postiz-probe ${postizProbe.ok ? "ok" : "failed"}`}>
+              <div className="postiz-probe-head">
+                <strong>Postiz 渠道读取</strong>
+                <span>{postizProbe.detail}</span>
+              </div>
+              <div className="postiz-platforms">
+                {postizProbe.platforms.map((platform) => (
+                  <div className="postiz-platform" key={platform.platform}>
+                    <span>
+                      <strong>{platformLabels[platform.platform]}</strong>
+                      <code>{platform.envKey}</code>
+                    </span>
+                    <small>{platform.configured ? `已保存 ${platform.configuredId}` : "尚未保存渠道 ID"}</small>
+                    {platform.candidateIds.length ? (
+                      <div className="postiz-candidates">
+                        {platform.candidateIds.map((id) => (
+                          <button key={id} onClick={() => fillPostizId(platform.envKey, id)} type="button">
+                            填入 {id}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <em>未识别到候选 ID</em>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {postizProbe.integrations.length ? (
+                <div className="postiz-integrations">
+                  {postizProbe.integrations.map((integration) => (
+                    <span key={integration.id}>
+                      <strong>{integration.name}</strong>
+                      <code>{integration.id}</code>
+                      <small>{integration.platformHint === "unknown" ? "未知平台" : platformLabels[integration.platformHint]}</small>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

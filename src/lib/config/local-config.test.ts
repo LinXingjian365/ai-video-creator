@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildConfigSnapshot,
+  isAllowedLocalConfigReadRequest,
   isAllowedLocalConfigRequest,
   updateDotEnvContent
 } from "./local-config";
@@ -45,5 +46,12 @@ describe("local config", () => {
     expect(isAllowedLocalConfigRequest({ host: "localhost:5182", origin: "http://localhost:5182" })).toBe(true);
     expect(isAllowedLocalConfigRequest({ host: "192.168.1.20:5182", origin: "http://192.168.1.20:5182" })).toBe(false);
     expect(isAllowedLocalConfigRequest({ host: "127.0.0.1:5182", origin: "https://evil.example" })).toBe(false);
+  });
+
+  it("allows loopback read probes without an origin header", () => {
+    expect(isAllowedLocalConfigReadRequest({ host: "127.0.0.1:5182", origin: null })).toBe(true);
+    expect(isAllowedLocalConfigReadRequest({ host: "localhost:5182", origin: "http://localhost:5182" })).toBe(true);
+    expect(isAllowedLocalConfigReadRequest({ host: "192.168.1.20:5182", origin: null })).toBe(false);
+    expect(isAllowedLocalConfigReadRequest({ host: "127.0.0.1:5182", origin: "https://evil.example" })).toBe(false);
   });
 });

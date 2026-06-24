@@ -690,6 +690,40 @@ N8N_SMOKE_N8N_BASE_URL=http://localhost:5678
 
 该接口会产生一次极小的模型调用，只允许本机同源页面触发；错误信息会脱敏，不转发上游响应体。
 
+### GET `/api/config/postiz`
+
+读取自托管 Postiz Public API 的 integrations 列表，用于最后配置 `POSTIZ_INTEGRATION_ID_DOUYIN/KUAISHOU/BILIBILI`。该接口只允许本机控制台调用，使用 `.env.local` 中的 `POSTIZ_API_KEY` 请求 Postiz，但响应不会返回 API Key。
+
+返回字段：
+
+```json
+{
+  "ok": true,
+  "configured": true,
+  "baseUrl": "http://localhost:5000/api/public/v1",
+  "detail": "已读取 3 个 Postiz integration。",
+  "integrations": [
+    {
+      "id": "integration-id",
+      "name": "账号名称",
+      "provider": "tiktok",
+      "type": "tiktok",
+      "platformHint": "douyin"
+    }
+  ],
+  "platforms": [
+    {
+      "platform": "douyin",
+      "envKey": "POSTIZ_INTEGRATION_ID_DOUYIN",
+      "configured": false,
+      "candidateIds": ["integration-id"]
+    }
+  ]
+}
+```
+
+`platformHint` 是基于 integration 的 id/name/provider/type 做的辅助识别，不会自动保存；在前端配置中心点击候选 ID 后仍需人工确认并保存当前分组。
+
 ### GET `/api/system/diagnostics`
 
 返回系统诊断信息，适合判断本地 FFmpeg、工作区路径和环境变量是否正常。

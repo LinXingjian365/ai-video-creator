@@ -478,3 +478,20 @@ git status; git rev-list --count main..HEAD; npx tsc --noEmit
 下一步:
 - 用户完成 Postiz 渠道 OAuth 后，把三个 integration id 填进配置中心，再跑 `npm run smoke:live`，目标 blockers=0。
 - 然后从发布队列选择一个真实成片，人工批准后只创建 Postiz draft，不自动正式发布。
+
+## Codex 更新: Postiz 渠道 ID 读取向导已接入 (2026-06-20)
+
+已完成:
+- `src/lib/config/postiz.ts` + `/api/config/postiz`: 用本地 `POSTIZ_API_KEY` 读取 Postiz Public API `/integrations`，只返回 integration id/name/provider/type 和平台候选识别，不返回任何 Key。
+- `src/app/components/ConfigCenter.tsx`: 「编排与发布」分组新增「读取 Postiz 渠道」按钮；读到候选后可把 id 填回 `POSTIZ_INTEGRATION_ID_DOUYIN/KUAISHOU/BILIBILI` 表单，再由用户点击保存写入 `.env.local`。
+- `src/lib/config/local-config.ts`: 新增只读本机请求守卫，支持同源浏览器 GET 现实行为，同时拒绝非 loopback 与跨源。
+- `docs/API.md` / `docs/CONFIG_AND_LAUNCH.md`: 同步新探针和最终配置流程。
+
+验证:
+- 新增/相关单测通过：8 tests。
+- typecheck 通过。
+- 真实本机 `GET http://127.0.0.1:5182/api/config/postiz` 返回 200：Postiz API key 有效，但 integrations 仍为空。
+
+边界:
+- 这一步不能替代平台 OAuth；它只在用户完成 Postiz 渠道连接后帮忙读取和填入 ID。
+- 仍不绕过发布人工闸门；`/api/publish/dispatch` 只有 approved 队列项 + 显式确认 + draft 模式才会调用 Postiz。

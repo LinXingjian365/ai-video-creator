@@ -2060,6 +2060,129 @@ input[type="checkbox"] {
   color: var(--danger);
 }
 
+.postiz-probe {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--card-2);
+}
+
+.postiz-probe.ok {
+  border-left-color: var(--ok);
+}
+
+.postiz-probe.failed {
+  border-left-color: var(--danger);
+}
+
+.postiz-probe-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.postiz-probe-head strong {
+  font-family: var(--ff-display);
+  font-size: 13px;
+}
+
+.postiz-probe-head span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.postiz-platforms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.postiz-platform {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--raised);
+}
+
+.postiz-platform > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.postiz-platform strong {
+  font-size: 12px;
+}
+
+.postiz-platform code,
+.postiz-integrations code {
+  overflow-wrap: anywhere;
+  color: var(--faint);
+  font-family: var(--ff-mono);
+  font-size: 9px;
+}
+
+.postiz-platform small,
+.postiz-integrations small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.postiz-platform em {
+  color: var(--faint);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.postiz-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.postiz-candidates button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(91, 192, 235, 0.42);
+  border-radius: var(--r-sm);
+  background: rgba(91, 192, 235, 0.1);
+  color: var(--cyan);
+  font-family: var(--ff-mono);
+  font-size: 10px;
+}
+
+.postiz-integrations {
+  display: grid;
+  gap: 7px;
+}
+
+.postiz-integrations > span {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(140px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.postiz-integrations strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .asset-counts {
   display: flex;
   flex-wrap: wrap;
@@ -2832,6 +2955,17 @@ pre {
   .config-actions button,
   .selfcheck-live-run button {
     width: 100%;
+  }
+
+  .postiz-probe-head,
+  .postiz-platforms,
+  .postiz-integrations > span {
+    grid-template-columns: 1fr;
+  }
+
+  .postiz-probe-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .action-buttons,

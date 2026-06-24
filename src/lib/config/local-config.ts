@@ -181,6 +181,18 @@ export function isAllowedLocalConfigRequest(input: { host: string | null; origin
   }
 }
 
+export function isAllowedLocalConfigReadRequest(input: { host: string | null; origin: string | null }): boolean {
+  if (!input.host) return false;
+  try {
+    const host = new URL(`http://${input.host}`);
+    const loopback = new Set(["127.0.0.1", "localhost", "::1"]);
+    if (!loopback.has(host.hostname)) return false;
+    return input.origin ? isAllowedLocalConfigRequest(input) : true;
+  } catch {
+    return false;
+  }
+}
+
 export async function writeLocalConfig(updates: Record<string, string>, envPath = path.join(process.cwd(), ".env.local")) {
   let current = "";
   try {

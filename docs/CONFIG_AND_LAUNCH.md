@@ -13,7 +13,7 @@
 | Step 0 自检 | ✅ 7/8 | TTD/n8n/Postiz/LLM/BGM/FFmpeg/yt-dlp ok;KSD unconfigured(可选) |
 | Step 1 抖音热榜(免费 TTD) | ✅ 3 真话题 / 49s | "端午节一桌封神挑战" 等;DeepSeek 解读病毒逻辑 ✓ |
 | Step 2 脚本生成(DeepSeek) | ✅ 11s | 真 hook + 6 beats + 8 tags |
-| Step 3 Postiz 探活 | ⚠️ 1 blocker | API key 有效,integrations=0 |
+| Step 3 Postiz 探活 | ⚠️ 1 blocker | API key 有效,配置中心可读取 integrations;当前 integrations=0 |
 
 ### 完整含渲染 smoke(`npm run smoke:live:full`,~7 分钟)— **已实证全链路出真视频**
 
@@ -40,22 +40,25 @@
 - 敏感字段只显示“已配置/未配置”，永不回显原值。
 - 保存只写入白名单变量，并要求本机同源请求与显式确认。
 - 「实测当前模型」会真实调用一次当前 LLM；普通自检不调用模型，避免无意计费。
+- 「读取 Postiz 渠道」会调用本地 Postiz `/public/v1/integrations`，列出已连接渠道与候选 `integration_id`，可一键填回表单后再保存。
 - 「运行真实链路」会创建真实 `/api/full-chain` 后台任务，生成 MP4 与多平台变体，但不会自动发布。
 
-2026-06-20 最新实测：配置中心成功写入 `APP_BASE_URL=http://127.0.0.1:5182` 和安全默认 `PUBLISH_LIVE_ENABLED=false`；DeepSeek 最小生成探针成功。
+2026-06-20 最新实测：配置中心成功写入 `APP_BASE_URL=http://127.0.0.1:5182` 和安全默认 `PUBLISH_LIVE_ENABLED=false`；DeepSeek 最小生成探针成功；Postiz integrations 探针返回 API 可用但渠道列表为空，说明仍需先在 Postiz UI 完成平台 OAuth。
 
 不能代办的就这一项。三步:
 
 1. 打开 http://localhost:5000(账号 `linyuxin5211314@gmail.com` / 密码 `Postiz#2026Local`)
 2. 进 Settings → Channels(或"Add channel") → 分别连接 **抖音 / 快手 / B站**(用 OAuth 走完平台授权)
    - 抖音 TikTok 报 `client_key` 错:见 [3. 排查表](#3-排查表)
-3. 连接成功后,每个平台会有一个 `integration_id`(在 Settings → Integrations 或 API endpoint `/api/public/v1/integrations` 可查),把三个 id 填进 `.env.local`:
+3. 连接成功后,回到本项目配置中心的「编排与发布」→ 点「读取 Postiz 渠道」：
+   - 如果系统能识别平台候选，点对应的「填入 id」按钮，再点「保存当前分组」。
+   - 如果平台识别为未知，就把列表里对应账号的 id 手动填进下面三个字段。
    ```
    POSTIZ_INTEGRATION_ID_DOUYIN=<拿到的 id>
    POSTIZ_INTEGRATION_ID_KUAISHOU=<拿到的 id>
    POSTIZ_INTEGRATION_ID_BILIBILI=<拿到的 id>
    ```
-4. 重启 dev server(让 Next 读新 env):`npm run dev`
+4. 如果你直接改 `.env.local` 而不是通过配置中心保存，重启 dev server(让 Next 读新 env):`npm run dev`
 5. 再跑 `npm run smoke:live`,blockers 应为 0。
 
 ---
@@ -128,10 +131,10 @@ curl -s -X POST http://127.0.0.1:5182/api/script/generate \
 | Remotion 成片 + 字幕 + BGM | `/api/full-chain` | ✅ |
 | 自动选曲 | `workspace/input/audio/` 8 首 CC-BY | ✅ |
 | 多平台变体 | `/api/video/variants` | ✅ |
-| 发布草稿(Postiz) | `/api/publish/dispatch` | ⏳ 等 integration_id |
+| 发布草稿(Postiz) | `/api/publish/dispatch` | ⏳ 等平台 OAuth 后的 integration_id |
 | n8n 编排 | webhook `ai-video-full-chain` | ✅(已导入 workflow) |
 | 全链路自检 | `/api/health/self-check` + 辅助面板 | ✅ |
-| 本机配置中心 | `/api/config/local` + `/api/config/probe` | ✅(密钥不回显，DeepSeek 实测通过) |
+| 本机配置中心 | `/api/config/local` + `/api/config/probe` + `/api/config/postiz` | ✅(密钥不回显，DeepSeek 与 Postiz 探针实测通过) |
 
 ---
 
