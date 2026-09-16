@@ -11,6 +11,7 @@
 // 因此这里把每个话题映射成一条 TrendItem:title=话题词,likes=hot_value,views=view_count,
 // comments=讨论视频数,url=该话题的抖音搜索页。与 TikHub 视频结构不同,故单独归一化。
 
+import { fetchWithTarget } from "@/lib/net/fetch-target";
 import type { Platform, TrendItem, TrendSource } from "../types";
 
 type TtdPlatform = Extract<Platform, "douyin">;
@@ -131,18 +132,29 @@ export async function fetchTtdTrends(
     );
   }
   const url = `${baseUrl(env)}${endpointFor(env)}`;
-  const response = await (deps.fetch ?? fetch)(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      // is_valid_token() 默认放行,留空即可;若部署端设了 token 可走 env 注入
-      token: env.TTD_TOKEN ?? ""
+  // 裸 fetch 失败只有一句 "fetch failed",排查时看不出连的是谁、为什么。
+  // 统一走 fetchWithTarget,补上目标地址、真实原因、超时与两条可执行的出路。
+  const response = await fetchWithTarget(
+    {
+      service: "TikTokDownloader",
+      url,
+      timeoutMs: timeoutMs(env),
+      hint: "请启动 TTD(cd <TikTokDownloader> && .venv/Scripts/python.exe run_api.py);或改用 TikHub——设置 TIKHUB_API_KEY 并关闭 TTD_ENABLED。",
+      fetchImpl: deps.fetch
     },
-    // 热榜接口可选 cookie(抗风控)/proxy;默认空 body 即可拉到公开热榜
-    body: JSON.stringify(env.TTD_DOUYIN_COOKIE ? { cookie: env.TTD_DOUYIN_COOKIE } : {}),
-    signal: AbortSignal.timeout(timeoutMs(env))
-  });
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        // is_valid_token() 默认放行,留空即可;若部署端设了 token 可走 env 注入
+        token: env.TTD_TOKEN ?? ""
+      },
+      // 热榜接口可选 cookie(抗风控)/proxy;默认空 body 即可拉到公开热榜
+      body: JSON.stringify(env.TTD_DOUYIN_COOKIE ? { cookie: env.TTD_DOUYIN_COOKIE } : {}),
+      signal: AbortSignal.timeout(timeoutMs(env))
+    }
+  );
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`TikTokDownloader ${platform} HTTP ${response.status}: ${text}`);

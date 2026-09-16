@@ -2,6 +2,7 @@
 // It does not expose a verified Kuaishou hot-list endpoint, so this file only
 // covers detail lookup for reference videos. Trend hot lists still use TikHub.
 
+import { fetchWithTarget } from "@/lib/net/fetch-target";
 import type { TrendItem } from "../types";
 
 interface KsdSourceDeps {
@@ -55,19 +56,28 @@ export async function fetchKsdDetail(input: KsdDetailInput, deps: KsdSourceDeps 
   }
 
   const endpoint = ksdDetailEndpoint(env);
-  const response = await (deps.fetch ?? fetch)(`${baseUrl(env)}${endpoint}`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json"
+  const response = await fetchWithTarget(
+    {
+      service: "KS-Downloader",
+      url: `${baseUrl(env)}${endpoint}`,
+      timeoutMs: timeoutMs(env),
+      hint: "请确认 KS-Downloader 已启动并可访问,或改用 TikHub 快手路径(设置 TIKHUB_API_KEY)。",
+      fetchImpl: deps.fetch
     },
-    body: JSON.stringify({
-      text: textInput,
-      cookie: env.KSD_COOKIE ?? "",
-      proxy: env.KSD_PROXY ?? ""
-    }),
-    signal: AbortSignal.timeout(timeoutMs(env))
-  });
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text: textInput,
+        cookie: env.KSD_COOKIE ?? "",
+        proxy: env.KSD_PROXY ?? ""
+      }),
+      signal: AbortSignal.timeout(timeoutMs(env))
+    }
+  );
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`KS-Downloader kuaishou HTTP ${response.status}: ${text}`);

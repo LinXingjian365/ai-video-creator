@@ -1,3 +1,4 @@
+import { fetchWithTarget } from "@/lib/net/fetch-target";
 import type { TrendItem, TrendSource } from "../types";
 
 interface YoutubeThumbnails {
@@ -103,7 +104,12 @@ export const youtubeSource: TrendSource = {
     }
     const url = `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`;
 
-    const response = await fetch(url, { signal: AbortSignal.timeout(fetchTimeoutMs()) });
+    const response = await fetchWithTarget({
+      service: "YouTube Data API",
+      url,
+      timeoutMs: fetchTimeoutMs(),
+      hint: "请检查 YOUTUBE_API_KEY 与网络(YouTube 已下线免登录 Trending 页,必须走 Data API v3)。"
+    }, { signal: AbortSignal.timeout(fetchTimeoutMs()) });
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as YoutubeResponse | null;
       throw new Error(`YouTube API HTTP ${response.status}: ${body?.error?.message ?? response.statusText}`);

@@ -237,3 +237,45 @@ describe("fetchTtdDouyinSearchRaw / CommentsRaw", () => {
     ).rejects.toThrow(/TikTokDownloader HTTP 500: boom/);
   });
 });
+
+describe("fetchTtdTrends 连接失败", () => {
+  it("裸 fetch failed 时应带上目标地址与可执行指引,而不是只抛 fetch failed", async () => {
+    const cause = new Error("connect ECONNREFUSED 127.0.0.1:5555");
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("fetch failed", { cause });
+    });
+    await expect(
+      fetchTtdTrends("douyin", { category: "hot", topN: 3 }, {
+        env: { TTD_BASE_URL: "http://127.0.0.1:5555" },
+        fetch: fetchMock as unknown as typeof fetch
+      })
+    ).rejects.toThrow(/无法连接 TikTokDownloader\(http:\/\/127\.0\.0\.1:5555\/douyin\/hot\)/);
+  });
+
+  it("错误信息里包含 ECONNREFUSED 真实原因与 TikHub 退路", async () => {
+    const cause = new Error("connect ECONNREFUSED 127.0.0.1:5555");
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("fetch failed", { cause });
+    });
+    await expect(
+      fetchTtdTrends("douyin", { category: "hot", topN: 3 }, {
+        env: { TTD_BASE_URL: "http://127.0.0.1:5555" },
+        fetch: fetchMock as unknown as typeof fetch
+      })
+    ).rejects.toThrow(/ECONNREFUSED[\s\S]*TIKHUB_API_KEY/);
+  });
+
+  it("超时错误应注明超时与毫秒数", async () => {
+    const fetchMock = vi.fn(async () => {
+      const error = new Error("The operation was aborted due to timeout");
+      error.name = "TimeoutError";
+      throw error;
+    });
+    await expect(
+      fetchTtdTrends("douyin", { category: "hot", topN: 3 }, {
+        env: { TTD_BASE_URL: "http://127.0.0.1:5555", TTD_TIMEOUT_MS: "1234" },
+        fetch: fetchMock as unknown as typeof fetch
+      })
+    ).rejects.toThrow(/请求超时\(1234ms\)/);
+  });
+});

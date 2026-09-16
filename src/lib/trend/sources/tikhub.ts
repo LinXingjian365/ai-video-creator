@@ -1,3 +1,4 @@
+import { fetchWithTarget } from "@/lib/net/fetch-target";
 import type { Platform, TrendItem, TrendSource } from "../types";
 
 type TikHubPlatform = Extract<Platform, "douyin" | "kuaishou">;
@@ -56,13 +57,23 @@ export async function fetchTikHubTrends(
   }
 
   const url = buildTikHubUrl(platform, opts.category, env);
-  const response = await (deps.fetch ?? fetch)(url, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`
+  const urlText = typeof url === "string" ? url : url.toString();
+  const response = await fetchWithTarget(
+    {
+      service: "TikHub",
+      url: urlText,
+      timeoutMs: timeoutMs(env),
+      hint: "请检查 TIKHUB_API_KEY 与网络(该接口按次计费);抖音也可改用自托管 TTD 免费路径。",
+      fetchImpl: deps.fetch
     },
-    signal: AbortSignal.timeout(timeoutMs(env))
-  });
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      signal: AbortSignal.timeout(timeoutMs(env))
+    }
+  );
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`TikHub ${platform} HTTP ${response.status}: ${text}`);
