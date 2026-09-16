@@ -1,8 +1,24 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-06-19(Claude Opus 4.8 — 同步 Compaction 前最终状态)  
-**分支**:`feat/s1-trend-intelligence` — **65 commits,已全部 push 到 origin**  
-**状态**:✅ **235 tests 绿(36 files)** / typecheck 绿 / **真实端到端实测产出 4 平台 mp4(ffprobe 验证, ~7 分钟全链路)** / ConfigCenter 安全本地配置 / 全链路自检 + 抖音搜索/评论免费(TTD) / 前端 A 方案七阶段指挥舱(Codex) + 大厂级重设计
+**最后更新**:2026-09-16(全功能复验 + 成果并入 main)  
+**分支**:`feat/s1-trend-intelligence` — 已在服务端合并进 `main`(merge commit a6c1ace),主分支含全部成果  
+**状态**:✅ **235 tests 绿(39 files)** / typecheck 绿 / lint 绿 / production build 绿(2m15s,40+ API 路由) / 真实浏览器验证指挥舱首页渲染正常
+
+## 2026-09-16 全功能复验记录
+
+| 检查项 | 结果 |
+|---|---|
+| vitest 全量 | ✅ 235/235 通过(39 文件,4.3s) |
+| `tsc --noEmit` | ✅ 0 错误 |
+| `eslint --max-warnings=0` | ✅ 0 警告 |
+| `next build`(生产) | ✅ 通过,40+ 路由全部编译 |
+| 真实浏览器(Chrome) | ✅ 指挥舱首页完整渲染,七阶段轨道/AI 执行塔/真实任务数据(103 条历史任务)全部正常 |
+| API 冒烟 | ✅ `/api/tasks` 返回真实任务;`/api/health/self-check` 诚实报告 8 项依赖状态(3 ok / 3 down / 1 degraded / 1 unconfigured——TTD、n8n、Postiz 未启动属预期,体现诚实降级设计) |
+
+注意事项(本次实测确认):
+- `npm run build` 直接构建**仍会成功**,HANDOFF 旧记录的 PageNotFoundError 假失败在当前代码下未复现;保险起见构建前清 `.next` 仍是最佳实践
+- 外部服务(TTD/n8n/Postiz)按需启动即可,不启动不影响测试与构建,自检面板会如实标注 down
+
 
 ## 前端 A 方案：AI 视频任务指挥舱(2026-06-19)
 - **方案文档**:`docs/FRONTEND_REDESIGN.md`；项目级设计系统:`.interface-design/system.md`。
