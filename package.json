@@ -12,6 +12,7 @@
     "smoke:live": "node scripts/live-smoke.mjs",
     "smoke:live:full": "node scripts/live-smoke-full.mjs",
     "postiz:channels": "node scripts/config-postiz.mjs",
+    "tools:setup": "node scripts/setup-video-tools.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

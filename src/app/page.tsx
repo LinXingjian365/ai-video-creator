@@ -56,8 +56,17 @@ interface TaskRecord {
 
 interface Readiness {
   commands: Array<{ id: string; ok: boolean; output?: string; error?: string; stage: string }>;
+  /** HTTP-reachable integrations such as n8n, which have no local CLI. */
+  services?: Array<{ id: string; ok: boolean; url: string; output?: string; error?: string; stage: string }>;
   env: Array<{ name: string; ok: boolean; hint: string }>;
   llm?: { provider: string; keyName: string; ok: boolean; hint: string };
+  python?: {
+    command: string;
+    source: string;
+    configured: string | null;
+    configuredUsable: boolean | null;
+    warning: string | null;
+  };
   nextSteps: string[];
 }
 
@@ -2942,14 +2951,19 @@ function TaskPanel({
           <summary>
             环境就绪
             <span className="fold-count">
-              {[...readiness.commands, ...readiness.env, ...(readiness.llm ? [readiness.llm] : [])].filter((c) => c.ok).length}
-              /{readiness.commands.length + readiness.env.length + (readiness.llm ? 1 : 0)}
+              {[...readiness.commands, ...(readiness.services ?? []), ...readiness.env, ...(readiness.llm ? [readiness.llm] : [])].filter((c) => c.ok).length}
+              /{readiness.commands.length + (readiness.services?.length ?? 0) + readiness.env.length + (readiness.llm ? 1 : 0)}
             </span>
           </summary>
           <div className="readiness-grid">
             {readiness.commands.map((item) => (
-              <span className={item.ok ? "pill ok" : "pill missing"} key={item.id}>
+              <span className={item.ok ? "pill ok" : "pill missing"} key={item.id} title={item.error ?? item.output ?? item.id}>
                 {item.ok ? "OK" : "MISS"} {item.id}
+              </span>
+            ))}
+            {(readiness.services ?? []).map((item) => (
+              <span className={item.ok ? "pill ok" : "pill missing"} key={item.id} title={item.error ?? item.output ?? item.url}>
+                {item.ok ? "OK" : "DOWN"} {item.id}
               </span>
             ))}
             {readiness.env.map((item) => (
@@ -2963,6 +2977,9 @@ function TaskPanel({
               </span>
             ) : null}
           </div>
+          {readiness.python?.warning ? (
+            <p className="readiness-warning">{readiness.python.warning}</p>
+          ) : null}
         </details>
       ) : null}
 

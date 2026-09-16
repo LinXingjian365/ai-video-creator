@@ -7,6 +7,22 @@ import type { PublishPlatform } from "@/lib/publish/dry-run";
 export const N8N_CONFIRM_TEXT = "CONFIRM_N8N_WEBHOOK";
 export const N8N_HTTP_MAX_TRIES = 3;
 export const N8N_HTTP_WAIT_BETWEEN_TRIES_MS = 10_000;
+export const N8N_DEFAULT_BASE_URL = "http://127.0.0.1:5678";
+
+/**
+ * Origin of the n8n instance the app talks to.
+ *
+ * n8n is integrated over HTTP webhooks only — there is no local `n8n` binary to
+ * shell out to — so readiness is judged by this origin's reachability.
+ */
+export function n8nBaseUrl(env: Record<string, string | undefined> = process.env): string {
+  const raw = env.N8N_WEBHOOK_URL || env.N8N_BASE_URL || N8N_DEFAULT_BASE_URL;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return N8N_DEFAULT_BASE_URL;
+  }
+}
 
 export type N8nOrchestrationMode = "dry-run" | "webhook";
 export type N8nOrchestrationStatus = "preview" | "sent" | "blocked";

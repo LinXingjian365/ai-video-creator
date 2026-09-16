@@ -1,10 +1,46 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-09-16(全功能复验 + 成果并入 main)  
-**分支**:`feat/s1-trend-intelligence` — 已在服务端合并进 `main`(merge commit a6c1ace),主分支含全部成果  
-**状态**:✅ **235 tests 绿(39 files)** / typecheck 绿 / lint 绿 / production build 绿(2m15s,40+ API 路由) / 真实浏览器验证指挥舱首页渲染正常
+**最后更新**:2026-09-16(工具链可移植化 + n8n/yt-dlp 打通)  
+**分支**:`main`(`feat/s1-trend-intelligence` 已并入,merge commit a6c1ace)  
+**状态**:✅ **261 tests 绿(41 files)** / typecheck 绿 / lint 绿 / production build 绿 / 环境体检 9/9 命令 + n8n HTTP 全绿
 
-## 2026-09-16 全功能复验记录
+## 2026-09-16 第二轮：工具链可移植化与真实联调
+
+| 检查项 | 结果 |
+|---|---|
+| vitest 全量 | ✅ 261/261 通过(41 文件) |
+| `tsc --noEmit` | ✅ 0 错误 |
+| `eslint --max-warnings=0` | ✅ 0 警告 |
+| `next build`(生产) | ✅ 通过,40+ 路由全部编译 |
+| `/api/creator/readiness` | ✅ 9/9 本地命令 OK(node/npm/python/uv/yt-dlp/pyscenedetect/auto-editor/faster-whisper/ffmpeg)+ n8n HTTP 200 |
+
+本轮修掉的两个真实缺陷：
+
+1. **Python 解释器被硬编码到某台机器的 conda 路径**。`src/lib/python-tools.ts` 默认
+   `C:/Users/Administrator/.conda/envs/py312/python.exe`，`.env.local` 里也配了同一个值；
+   该环境不存在时，显式配置被原样采用，导致 yt-dlp / PySceneDetect / Auto-Editor /
+   faster-whisper 全部报 `spawnSync ... ENOENT`。
+   现在改成**实际启动 `--version` 探测**候选（显式配置 → 项目内 `.venv-tools` → `py`/`python3`/`python`），
+   显式配置只在能跑时才生效，否则回退并在体检接口返回 `python.warning` 说明被替换的原因。
+
+2. **n8n 用本地 CLI 探测**。项目只通过 HTTP webhook 调用 n8n，从不执行 `n8n` 命令；
+   容器化部署下本地没有 CLI，体检永远误报 DOWN。现在改为探测
+   `N8N_WEBHOOK_URL` 指向地址的 `/healthz`。
+
+新增：
+
+- `npm run tools:setup`（`scripts/setup-video-tools.mjs`）：建项目内 `.venv-tools` 并安装
+  yt-dlp / PySceneDetect / Auto-Editor；`--with-asr` 加 faster-whisper，
+  `--with-jianying` 装 `scripts/requirements.txt`。
+- `.venv-tools` 已加入 `.gitignore` 与 ESLint ignores。
+
+注意事项(本次实测确认):
+- `npm run build` 直接构建**仍会成功**,HANDOFF 旧记录的 PageNotFoundError 假失败在当前代码下未复现;保险起见构建前清 `.next` 仍是最佳实践
+- 外部服务按需启动即可,不启动不影响测试与构建,自检面板会如实标注 down
+- n8n 已通过 `deployments/n8n/docker-compose.yml` 起在 5678,`/healthz` 返回 `{"status":"ok"}`
+- Postiz 仍需在 UI 完成平台 OAuth 后 `npm run postiz:channels -- --write` 回填渠道 ID
+
+## 2026-09-16 第一轮：全功能复验记录
 
 | 检查项 | 结果 |
 |---|---|
@@ -13,11 +49,7 @@
 | `eslint --max-warnings=0` | ✅ 0 警告 |
 | `next build`(生产) | ✅ 通过,40+ 路由全部编译 |
 | 真实浏览器(Chrome) | ✅ 指挥舱首页完整渲染,七阶段轨道/AI 执行塔/真实任务数据(103 条历史任务)全部正常 |
-| API 冒烟 | ✅ `/api/tasks` 返回真实任务;`/api/health/self-check` 诚实报告 8 项依赖状态(3 ok / 3 down / 1 degraded / 1 unconfigured——TTD、n8n、Postiz 未启动属预期,体现诚实降级设计) |
-
-注意事项(本次实测确认):
-- `npm run build` 直接构建**仍会成功**,HANDOFF 旧记录的 PageNotFoundError 假失败在当前代码下未复现;保险起见构建前清 `.next` 仍是最佳实践
-- 外部服务(TTD/n8n/Postiz)按需启动即可,不启动不影响测试与构建,自检面板会如实标注 down
+| API 冒烟 | ✅ `/api/tasks` 返回真实任务;`/api/health/self-check` 诚实报告 8 项依赖状态 |
 
 
 ## 前端 A 方案：AI 视频任务指挥舱(2026-06-19)

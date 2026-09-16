@@ -14,6 +14,7 @@
 cd "A:/AI视频生成剪辑助手"
 cp .env.example .env.local   # 填入需要的 Key，见下方表格
 npm install
+npm run tools:setup          # 建本地 Python 工具链（.venv-tools）
 npm run dev                  # 打开 http://127.0.0.1:3000
 ```
 
@@ -21,10 +22,28 @@ npm run dev                  # 打开 http://127.0.0.1:3000
 
 | 命令 | 作用 |
 |---|---|
-| `npm test` | vitest 全量单测（235 项） |
+| `npm test` | vitest 全量单测 |
 | `npm run typecheck` | TypeScript 全量类型检查 |
 | `npm run lint` | ESLint，零警告策略 |
 | `npm run build` | 生产构建（构建前建议先停 dev 并清理 `.next`） |
+| `npm run tools:setup` | 建 `.venv-tools` 并装 yt-dlp / PySceneDetect / Auto-Editor |
+| `npm run tools:setup -- --with-asr` | 额外装 faster-whisper（本地 ASR，包体较大） |
+| `npm run tools:setup -- --with-jianying` | 额外装 `scripts/requirements.txt`（剪映草稿） |
+| `npm run postiz:channels` | 识别 Postiz 已连接渠道 |
+| `npm run smoke:live` | 对运行中的 dev server 跑真实链路冒烟 |
+
+### Python 工具链
+
+应用只以 `python -m <module>` 方式调用 yt-dlp / PySceneDetect / Auto-Editor /
+faster-whisper，因此解释器解析顺序是：
+
+1. `VIDEO_TOOLS_PYTHON`（或 `JIANYING_PYTHON`）环境变量——显式指定，不再探测；
+2. 项目内 `.venv-tools`（`npm run tools:setup` 生成）；
+3. 系统 `py` / `python3` / `python`。
+
+> 候选解释器是**实际启动 `--version` 探测**出来的，不是只看文件存在。
+> Windows 上 PATH 里的 `python` 常是 `C:\Windows\System32` 下的 Microsoft Store
+> 存根——文件存在但无法执行，这类解释器会被自动跳过。
 
 ## 七阶段生产轨道
 
@@ -49,6 +68,8 @@ npm run dev                  # 打开 http://127.0.0.1:3000
 | `YOUTUBE_API_KEY` | YouTube Data API v3 | YouTube 热点不可用（已下线免登录 Trending） |
 | `POSTIZ_API_KEY` / `POSTIZ_URL` | 发布网关 | 发布 preflight 报 unconfigured |
 | `POSTIZ_INTEGRATION_ID_DOUYIN` / `_KUAISHOU` / `_BILIBILI` | 已连接渠道 | 无法 dispatch 到对应平台 |
+| `TTD_ENABLED` / `TTD_BASE_URL` | TikTokDownloader 自托管免费路径 | 抖音热榜改走 TikHub |
+| `VIDEO_TOOLS_PYTHON` | Python 工具链解释器 | 自动探测，见上文「Python 工具链」 |
 
 配置发布渠道只需一条命令（需先在 Postiz UI 完成平台 OAuth）:
 
@@ -57,7 +78,6 @@ docker compose -f deployments/postiz/docker-compose.yml up -d
 npm run postiz:channels            # 查看识别到的渠道
 npm run postiz:channels -- --write # 确认后自动回填 .env.local
 ```
-| `TTD_ENABLED` / `TTD_BASE_URL` | TikTokDownloader 自托管免费路径 | 抖音热榜走 TikHub |
 
 > **诚实降级**：任何外部 Key 缺失都不会让界面报错或伪造数据，而是在对应面板明确标注状态。`/api/health/self-check` 会一次性探 TTD / n8n / Postiz / KSD / LLM / BGM / FFmpeg / yt-dlp 的真实可用情况。
 
@@ -67,15 +87,19 @@ npm run postiz:channels -- --write # 确认后自动回填 .env.local
 
 | 服务 | 端口 | 启动方式 |
 |---|---|---|
-| TikTokDownloader | 5555 | Python venv 运行 `run_api.py` |
 | n8n | 5678 | `docker compose -f deployments/n8n/docker-compose.yml up -d` |
+| TikTokDownloader | 5555 | Python venv 运行 `run_api.py`（抖音热榜的免费路径） |
 | Postiz | 5000 | `docker compose -f deployments/postiz/docker-compose.yml up -d` |
+
+> n8n 只通过 HTTP webhook 集成，项目不调用 `n8n` 命令行。环境体检因此探测
+> `N8N_WEBHOOK_URL` 指向地址的 `/healthz`，而不是本地 CLI——容器化部署下本地没有 CLI，
+> 探测 CLI 会永远误报不可用。
 
 ## 测试与质量
 
 | 项 | 状态 |
 |---|---|
-| vitest | 235 passed / 39 files |
+| vitest | 261 passed / 41 files |
 | typecheck | 通过 |
 | lint | 通过（零警告） |
 | production build | 通过 |

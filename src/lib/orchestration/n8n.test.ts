@@ -7,8 +7,24 @@ import {
   N8N_CONFIRM_TEXT,
   N8N_HTTP_MAX_TRIES,
   N8N_HTTP_WAIT_BETWEEN_TRIES_MS,
+  n8nBaseUrl,
   triggerN8nOrchestration
 } from "@/lib/orchestration/n8n";
+
+describe("n8nBaseUrl", () => {
+  it("derives the origin from the configured webhook URL", () => {
+    expect(n8nBaseUrl({ N8N_WEBHOOK_URL: "http://localhost:5678/webhook/abc123" })).toBe("http://localhost:5678");
+  });
+
+  it("falls back to N8N_BASE_URL then the local default", () => {
+    expect(n8nBaseUrl({ N8N_BASE_URL: "https://n8n.example.com/" })).toBe("https://n8n.example.com");
+    expect(n8nBaseUrl({})).toBe("http://127.0.0.1:5678");
+  });
+
+  it("falls back when the configured value is not a valid URL", () => {
+    expect(n8nBaseUrl({ N8N_WEBHOOK_URL: "not a url" })).toBe("http://127.0.0.1:5678");
+  });
+});
 
 describe("n8n orchestration", () => {
   it("builds a full-chain payload without secrets", () => {

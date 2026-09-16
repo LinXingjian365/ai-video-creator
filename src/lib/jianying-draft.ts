@@ -3,11 +3,19 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { projectRoot } from "@/lib/paths";
+import { getVideoToolsPython } from "@/lib/python-tools";
 
 const SCRIPT_PATH = path.join(projectRoot, "scripts", "gen_jianying_draft.py");
 
-export const jianyingPython =
-  process.env.JIANYING_PYTHON ?? "C:/Users/Administrator/.conda/envs/py312/python.exe";
+/**
+ * Resolved lazily instead of at import time: the interpreter is discovered by
+ * probing candidates, and doing that during module load would freeze whatever
+ * `.env.local` happened to contain at that moment.
+ */
+export function jianyingPython(): string {
+  return process.env.JIANYING_PYTHON || getVideoToolsPython();
+}
+
 export const jianyingDraftsDir =
   process.env.JIANYING_DRAFTS_DIR ?? "D:/JianyingPro Drafts";
 
@@ -36,7 +44,7 @@ export async function generateJianyingDraft({
     "utf8"
   );
 
-  onLog?.(`调用 ${jianyingPython} 生成草稿到 ${jianyingDraftsDir}`);
+  onLog?.(`调用 ${jianyingPython()} 生成草稿到 ${jianyingDraftsDir}`);
 
   try {
     const { stdout, stderr, code } = await runPython([SCRIPT_PATH, configPath]);
@@ -62,7 +70,7 @@ export async function generateJianyingDraft({
 
 function runPython(args: string[]) {
   return new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
-    const child = spawn(jianyingPython, args, {
+    const child = spawn(jianyingPython(), args, {
       env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" }
     });
 

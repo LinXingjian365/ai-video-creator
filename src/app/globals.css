@@ -2751,6 +2751,17 @@ pre {
   margin: 0 20px 16px;
 }
 
+.readiness-warning {
+  margin: 10px 20px 16px;
+  padding: 9px 12px;
+  border-left: 3px solid #f0c040;
+  border-radius: 0 8px 8px 0;
+  background: rgba(240, 192, 64, 0.1);
+  color: var(--text-secondary, #c8ccd4);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 /* ---------- 任务列表头 ---------- */
 .task-list-head {
   display: flex;

@@ -2,7 +2,8 @@ import { spawnSync } from "node:child_process";
 import { NextResponse } from "next/server";
 import { creatorToolkit, requiredEnvVars } from "@/lib/creator-toolkit";
 import { getYtDlpInvocation } from "@/lib/materials/yt-dlp";
-import { getVideoToolsPython } from "@/lib/python-tools";
+import { n8nBaseUrl } from "@/lib/orchestration/n8n";
+import { getVideoToolsPython, resolveVideoToolsPython } from "@/lib/python-tools";
 
 export const runtime = "nodejs";
 
@@ -20,8 +21,7 @@ export async function GET() {
     { id: "pyscenedetect", command: sceneDetect.command, args: sceneDetect.args, stage: "analyze" },
     { id: "auto-editor", command: autoEditor.command, args: autoEditor.args, stage: "edit" },
     { id: "faster-whisper", command: fasterWhisper.command, args: fasterWhisper.args, stage: "transcribe" },
-    { id: "ffmpeg", command: "ffmpeg", args: ["-version"], stage: "edit" },
-    { id: "n8n", command: "n8n", args: ["--version"], stage: "orchestrate" }
+    { id: "ffmpeg", command: "ffmpeg", args: ["-version"], stage: "edit" }
   ];
 
   const commands = commandChecks.map((check) => {
@@ -64,18 +64,62 @@ export async function GET() {
     return acc;
   }, {});
 
-  return NextResponse.json({
+  // n8n is integrated over HTTP webhooks only — the app never shells out to an
+  // `n8n` binary. Probing the CLI reported "down" even when the containerised
+  // n8n was up, so reachability is checked over HTTP instead.
+  const services = [await probeHttpService("n8n", n8nBaseUrl(), "/healthz", "orchestrate")];
+
+  const pythonResolution = resolveVideoToolsPython();
+
+    return NextResponse.json({
     commands,
+    services,
     env,
     llm,
     stages,
+    python: {
+      command: pythonResolution.command,
+      source: pythonResolution.source,
+      configured: pythonResolution.configured ?? null,
+      configuredUsable: pythonResolution.configuredUsable,
+      warning: pythonResolution.warning ?? null
+    },
     nextSteps: [
-      "Install missing local commands first: python, uv, yt-dlp, PySceneDetect, faster-whisper, ffmpeg, and n8n.",
+      "Install missing local commands first: python, uv, yt-dlp, PySceneDetect, faster-whisper, and ffmpeg.",
+      "n8n is reached over HTTP webhooks, so start it with docker compose -f deployments/n8n/docker-compose.yml up -d and set N8N_WEBHOOK_URL.",
       "For trend intelligence, configure LLM_PROVIDER plus the matching provider key such as DEEPSEEK_API_KEY, ARK_API_KEY, ANTHROPIC_API_KEY, or GPT_GATEWAY_API_KEY.",
       "Use dry-run publishing before any real platform upload.",
       "After credentials are configured, test one Bilibili category report before expanding to Douyin/Kuaishou."
     ]
   });
+}
+
+async function probeHttpService(
+  id: string,
+  baseUrl: string,
+  path: string,
+  stage: string
+): Promise<{ id: string; stage: string; url: string; ok: boolean; output: string; error?: string }> {
+  const url = `${baseUrl}${path}`;
+  const started = Date.now();
+
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(4000),
+      headers: { accept: "application/json" }
+    });
+    const body = await response.text();
+    return {
+      id,
+      stage,
+      url,
+      ok: response.ok,
+      output: `${response.status} ${body.slice(0, 120)} (${Date.now() - started}ms)`
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? (error.cause as { message?: string } | undefined)?.message ?? error.message : String(error);
+    return { id, stage, url, ok: false, output: "", error: detail };
+  }
 }
 
 function commandInvocation(command: string, args: string[]) {
