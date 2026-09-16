@@ -47,18 +47,24 @@
 
 不能代办的就这一项。三步:
 
-1. 打开 http://localhost:5000(账号 `linyuxin5211314@gmail.com` / 密码 `Postiz#2026Local`)
+1. 打开 http://localhost:5000(用**你自己在首次安装时创建**的本地 Postiz 账号登录；不要使用任何写在文档里的示例凭据)
 2. 进 Settings → Channels(或"Add channel") → 分别连接 **抖音 / 快手 / B站**(用 OAuth 走完平台授权)
    - 抖音 TikTok 报 `client_key` 错:见 [3. 排查表](#3-排查表)
-3. 连接成功后,回到本项目配置中心的「编排与发布」→ 点「读取 Postiz 渠道」：
-   - 如果系统能识别平台候选，点对应的「填入 id」按钮，再点「保存当前分组」。
-   - 如果平台识别为未知，就把列表里对应账号的 id 手动填进下面三个字段。
+3. 连接成功后，一条命令自动回填:
+   ```bash
+   npm run postiz:channels          # 先查看识别到的渠道
+   npm run postiz:channels -- --write  # 确认无误后写回 .env.local
+   ```
+   脚本会调用本地 Postiz `/public/v1/integrations`，按平台关键词(douyin / kuaishou / bilibili 及中文名)匹配渠道，
+   并写入 `POSTIZ_INTEGRATION_ID_DOUYIN` / `_KUAISHOU` / `_BILIBILI`。
+   若某平台识别为 unknown，脚本会列出全部渠道 id，手动填进这三个字段即可;
+   也可以走页面配置中心的「读取 Postiz 渠道」点「填入 id」。
    ```
    POSTIZ_INTEGRATION_ID_DOUYIN=<拿到的 id>
    POSTIZ_INTEGRATION_ID_KUAISHOU=<拿到的 id>
    POSTIZ_INTEGRATION_ID_BILIBILI=<拿到的 id>
    ```
-4. 如果你直接改 `.env.local` 而不是通过配置中心保存，重启 dev server(让 Next 读新 env):`npm run dev`
+4. 改完 `.env.local` 后重启 dev server(让 Next 读新 env):`npm run dev`
 5. 再跑 `npm run smoke:live`,blockers 应为 0。
 
 ---

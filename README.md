@@ -48,6 +48,15 @@ npm run dev                  # 打开 http://127.0.0.1:3000
 | `TIKHUB_API_KEY` | 抖音/快手第三方数据 | 抖音可切 TTD 免费路径，快手不可用 |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 | YouTube 热点不可用（已下线免登录 Trending） |
 | `POSTIZ_API_KEY` / `POSTIZ_URL` | 发布网关 | 发布 preflight 报 unconfigured |
+| `POSTIZ_INTEGRATION_ID_DOUYIN` / `_KUAISHOU` / `_BILIBILI` | 已连接渠道 | 无法 dispatch 到对应平台 |
+
+配置发布渠道只需一条命令（需先在 Postiz UI 完成平台 OAuth）:
+
+```bash
+docker compose -f deployments/postiz/docker-compose.yml up -d
+npm run postiz:channels            # 查看识别到的渠道
+npm run postiz:channels -- --write # 确认后自动回填 .env.local
+```
 | `TTD_ENABLED` / `TTD_BASE_URL` | TikTokDownloader 自托管免费路径 | 抖音热榜走 TikHub |
 
 > **诚实降级**：任何外部 Key 缺失都不会让界面报错或伪造数据，而是在对应面板明确标注状态。`/api/health/self-check` 会一次性探 TTD / n8n / Postiz / KSD / LLM / BGM / FFmpeg / yt-dlp 的真实可用情况。

@@ -11,6 +11,7 @@
     "n8n:smoke": "node scripts/n8n-smoke-test.mjs",
     "smoke:live": "node scripts/live-smoke.mjs",
     "smoke:live:full": "node scripts/live-smoke-full.mjs",
+    "postiz:channels": "node scripts/config-postiz.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
