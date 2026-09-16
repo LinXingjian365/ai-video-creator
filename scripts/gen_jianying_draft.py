@@ -30,10 +30,12 @@ TYPE_TO_TRACK = {
 
 
 def us(ms):
+    """毫秒转微秒(剪映时间轴单位)。"""
     return int(round(float(ms) * 1000))
 
 
-def main():
+def main():  # pylint: disable=too-many-locals
+    """按 config JSON 生成真实剪映草稿，并向 stdout 打印一行结果 JSON。"""
     with open(sys.argv[1], encoding="utf-8") as fh:
         config = json.load(fh)
 
@@ -73,22 +75,24 @@ def main():
             materials[path] = mat
         return materials[path]
 
+    def source_timerange(seg):
+        """片段声明了 sourceInMs / sourceOutMs 时返回裁切区间，否则返回 None。"""
+        if seg.get("sourceInMs") is None or seg.get("sourceOutMs") is None:
+            return None
+        return Timerange(us(seg["sourceInMs"]), us(seg["sourceOutMs"] - seg["sourceInMs"]))
+
     for seg in segments:
         track_name = seg.get("track") or "main"
         target = Timerange(us(seg["startMs"]), us(seg["durationMs"]))
 
         if seg["type"] == "video":
             mat = get_video_material(seg["source"])
-            source_tr = None
-            if seg.get("sourceInMs") is not None and seg.get("sourceOutMs") is not None:
-                source_tr = Timerange(us(seg["sourceInMs"]), us(seg["sourceOutMs"] - seg["sourceInMs"]))
-            script.add_segment(draft.VideoSegment(mat, target, source_timerange=source_tr), track_name)
+            segment = draft.VideoSegment(mat, target, source_timerange=source_timerange(seg))
+            script.add_segment(segment, track_name)
         elif seg["type"] == "audio":
             mat = get_audio_material(seg["source"])
-            source_tr = None
-            if seg.get("sourceInMs") is not None and seg.get("sourceOutMs") is not None:
-                source_tr = Timerange(us(seg["sourceInMs"]), us(seg["sourceOutMs"] - seg["sourceInMs"]))
-            script.add_segment(draft.AudioSegment(mat, target, source_timerange=source_tr), track_name)
+            segment = draft.AudioSegment(mat, target, source_timerange=source_timerange(seg))
+            script.add_segment(segment, track_name)
         elif seg["type"] == "text":
             script.add_segment(draft.TextSegment(seg.get("text", ""), target), track_name)
 

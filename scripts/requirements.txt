@@ -1,0 +1,7 @@
+# 剪映草稿生成脚本的依赖
+#
+# ⚠️ pyJianYingDraft 必须锁定 0.2.6：
+#    脚本 scripts/gen_jianying_draft.py 调用的是 ScriptFile.add_track(track_type, track_name)，
+#    该 API 在 0.3.0 已被移除（改为 append_track(TrackSpec)，签名完全不同）。
+#    裸 pip install 会装到 0.3.0，运行时直接 AttributeError。
+pyJianYingDraft==0.2.6
