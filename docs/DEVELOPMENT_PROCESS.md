@@ -33,8 +33,25 @@ Copy-Item .env.example .env.local
 FIRECRAWL_API_KEY=
 EXA_API_KEY=
 TIKHUB_API_KEY=
+BILI_COOKIE=
+BILI_TIMEOUT_MS=10000
 DASHSCOPE_API_KEY=
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_THINKING=disabled
+DEEPSEEK_REASONING_EFFORT=medium
 OPENAI_API_KEY=
+OPENAI_BASE_URL=https://bmapi.020212.xyz/v1
+OPENAI_MODEL=gpt-5.5
+ARK_API_KEY=
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+ARK_MODEL=doubao-seed-1-6
+GPT_GATEWAY_API_KEY=
+GPT_GATEWAY_BASE_URL=https://bmapi.020212.xyz/v1
+GPT_GATEWAY_MODEL=gpt-5.5
+LLM_TIMEOUT_MS=45000
 POSTIZ_URL=http://127.0.0.1:5000/api
 POSTIZ_API_KEY=
 N8N_WEBHOOK_URL=
@@ -48,26 +65,29 @@ JIANying_MCP_PATH=
 ## 日常开发命令
 
 ```powershell
+npm run test
 npm run typecheck
 npm run build
-npm run dev -- -p 5177
+npm run dev -- --hostname 127.0.0.1 --port 5182
 ```
 
 访问：
 
 ```text
-http://127.0.0.1:5177
+http://127.0.0.1:5182
 ```
 
 ## 每次改动后的验证顺序
 
-1. 跑 `npm run typecheck`。
-2. 跑 `npm run build`。
-3. 启动 `npm run dev -- -p 5177`。
-4. 浏览器打开本地控制台。
-5. 点击“联网素材 -> 查看集成目录”，确认 API 可用。
-6. 点击“自动剪辑 -> 立即模拟剪辑”，确认能生成粗剪视频。
-7. 查看 `/api/tasks`，确认任务日志、进度、结果正常。
+1. 跑 `npm run test`。
+2. 跑 `npm run typecheck`。
+3. 跑 `npm run build`。
+4. 启动 `npm run dev -- --hostname 127.0.0.1 --port 5182`。
+5. 浏览器打开本地控制台。
+6. 点击“热点趋势 -> 生成热点情报”，确认 B站真实榜单、潜力分、置信度和 AI/降级状态正常。
+7. 点击“联网素材 -> 查看集成目录”，确认 API 可用。
+8. 点击“自动剪辑 -> 立即模拟剪辑”，确认能生成粗剪视频。
+9. 查看 `/api/tasks`，确认任务日志、进度、结果正常。
 
 ## 已完成开发记录
 
@@ -81,6 +101,8 @@ http://127.0.0.1:5177
 - 实现自动剪辑计划、真实粗剪、模拟剪辑。
 - 实现可点击的 Web 控制台。
 - 实现 MCP/JianYing plan JSON 生成。
+- 实现 B站真实趋势情报：公开排行榜/热门 fallback、确定性评分、可选 LLM 分析。
+- 修复趋势报告执行方式：短任务在 API 请求内完成并返回最终 task，避免 Next route 后台执行挂起。
 - 完成 typecheck、build、浏览器点击验证。
 
 ## 技能/能力补充记录
@@ -98,7 +120,7 @@ http://127.0.0.1:5177
 ## 开发规范
 
 - 新 API 必须补 Zod schema。
-- 长任务必须走 `tasks.ts`，不要让 UI 等同步请求。
+- 长任务必须走 `tasks.ts`。趋势报告这类短任务可以在 API 请求内完成并返回最终 task，避免 Next route 后台执行不稳定。
 - 文件路径必须走 `resolveLocalPath`。
 - 输出文件必须落到 `workspace/output` 或 `workspace/drafts`。
 - 外部发布必须先 dry-run。

@@ -1,34 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
   Clock3,
   DownloadCloud,
   FileJson,
-  Files,
   Flame,
   Gauge,
-  ListChecks,
   Loader2,
   Megaphone,
   Network,
-  PlayCircle,
   Rocket,
   Scissors,
   Search,
-  Settings2,
   Sparkles,
   Target,
   UploadCloud,
   Wand2,
   XCircle
 } from "lucide-react";
+import { ConfigCenter } from "@/app/components/ConfigCenter";
+import type { IntelligenceReport } from "@/lib/trend/types";
+import type { TikHubResearchReport } from "@/lib/trend/research";
+import type { EvidenceReport } from "@/lib/trend/evidence";
+import type { ScriptDraft } from "@/lib/script/generate";
+import type { FullChainResult } from "@/lib/full-chain";
+import type { PublishDryRunResult } from "@/lib/publish/dry-run";
+import type { PublishAdapterStatus } from "@/lib/publish/adapters";
+import type { PublishQueueItem } from "@/lib/publish/queue";
+import type { PublishDispatchResult } from "@/lib/publish/dispatch";
+import type { PublishPreflightReport } from "@/lib/publish/preflight";
+import type { AnalyticsSnapshot } from "@/lib/analytics/ledger";
+import type { N8nOrchestrationResult } from "@/lib/orchestration/n8n";
+import type { SelfCheckReport, SelfCheckItem } from "@/lib/health/self-check";
 
 type TaskStatus = "pending" | "processing" | "completed" | "failed";
-type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict";
-type StageEndpoint = "suite" | "integrations" | "plan" | "simulate" | "readiness";
+type WorkflowStage = "trend" | "collect" | "analyze" | "script" | "edit" | "publish" | "review" | "predict" | "selfcheck";
+type StageEndpoint = "trend-report" | "script-generate" | "integrations" | "auto-plan" | "auto-simulate" | "creator-suite" | "readiness" | "self-check";
 
 interface TaskRecord {
   id: string;
@@ -47,123 +57,262 @@ interface TaskRecord {
 interface Readiness {
   commands: Array<{ id: string; ok: boolean; output?: string; error?: string; stage: string }>;
   env: Array<{ name: string; ok: boolean; hint: string }>;
+  llm?: { provider: string; keyName: string; ok: boolean; hint: string };
   nextSteps: string[];
 }
 
-const cn = (value: string) => decodeURIComponent(value);
+type WorkspaceAssetKind =
+  | "video"
+  | "audio"
+  | "image"
+  | "subtitle"
+  | "manifest"
+  | "material-analysis"
+  | "jianying-plan"
+  | "auto-plan"
+  | "task-state"
+  | "other-json"
+  | "other";
 
-const text = {
-  app: cn("%E8%87%AA%E5%AA%92%E4%BD%93%E8%B6%85%E7%BA%A7%E5%8A%A9%E6%89%8B"),
-  subtitle: cn("%E7%83%AD%E7%82%B9%E8%B6%8B%E5%8A%BF / %E7%B4%A0%E6%9D%90%E6%94%B6%E9%9B%86 / %E7%88%86%E6%AC%BE%E6%8B%86%E8%A7%A3 / AI%E5%89%AA%E8%BE%91 / %E5%8F%91%E5%B8%83%E5%A4%8D%E7%9B%98"),
-  heroKicker: cn("%E6%8A%96%E9%9F%B3%E3%80%81%E5%BF%AB%E6%89%8B%E3%80%81B%E7%AB%99%E5%85%A8%E9%93%BE%E8%B7%AF%E5%B7%A5%E4%BD%9C%E5%8F%B0"),
-  heroTitle: cn("AI%E6%8A%93%E7%83%AD%E7%82%B9%E8%B6%8B%E5%8A%BF%EF%BC%8C%E6%8B%86%E7%88%86%E6%AC%BE%E9%80%BB%E8%BE%91%EF%BC%8C%E7%94%9F%E6%88%90%E4%BB%8E%E9%80%89%E9%A2%98%E5%88%B0%E5%A4%8D%E7%9B%98%E7%9A%84%E5%AE%8C%E6%95%B4%E6%89%A7%E8%A1%8C%E6%96%B9%E6%A1%88"),
-  heroText: cn("%E8%BE%93%E5%85%A5%E8%B4%A6%E5%8F%B7%E6%96%B9%E5%90%91%E3%80%81%E7%9B%AE%E6%A0%87%E4%BA%BA%E7%BE%A4%E3%80%81%E5%8F%82%E8%80%83%E7%88%86%E6%AC%BE%E5%92%8C%E7%B4%A0%E6%9D%90%E9%9C%80%E6%B1%82%EF%BC%8C%E7%B3%BB%E7%BB%9F%E4%BC%9A%E8%BE%93%E5%87%BA%E9%80%89%E9%A2%98%E6%B1%A0%E3%80%81%E8%A7%82%E4%BC%97%E9%92%A9%E5%AD%90%E3%80%81%E8%A7%86%E9%A2%91%E7%BB%93%E6%9E%84%E3%80%81%E7%B4%A0%E6%9D%90%E6%B8%85%E5%8D%95%E3%80%81%E4%BB%BF%E5%89%AA%E8%93%9D%E5%9B%BE%E3%80%81%E5%8F%91%E5%B8%83%E7%9F%A9%E9%98%B5%E5%92%8C%E7%88%86%E7%81%AB%E9%A2%84%E6%B5%8B%E3%80%82"),
-  run: cn("%E7%94%9F%E6%88%90%E5%85%A8%E9%93%BE%E8%B7%AF%E6%96%B9%E6%A1%88"),
-  refresh: cn("%E5%88%B7%E6%96%B0%E4%BB%BB%E5%8A%A1"),
-  workspace: cn("%E5%B7%A5%E4%BD%9C%E5%8C%BA"),
-  result: cn("%E6%9C%80%E6%96%B0%E7%BB%93%E6%9E%9C"),
-  tasks: cn("%E4%BB%BB%E5%8A%A1%E7%9B%91%E6%8E%A7"),
-  empty: cn("%E6%9A%82%E6%97%A0%E4%BB%BB%E5%8A%A1"),
-  niche: cn("%E8%A1%8C%E4%B8%9A%E8%B5%9B%E9%81%93"),
-  audience: cn("%E7%9B%AE%E6%A0%87%E4%BA%BA%E7%BE%A4"),
-  persona: cn("%E6%A0%B8%E5%BF%83%E4%BA%BA%E8%AE%BE/%E4%BA%A7%E5%93%81"),
-  platforms: cn("%E5%B9%B3%E5%8F%B0"),
-  keywords: cn("%E7%83%AD%E7%82%B9%E5%85%B3%E9%94%AE%E8%AF%8D%EF%BC%88%E6%AF%8F%E8%A1%8C%E4%B8%80%E4%B8%AA%EF%BC%89"),
-  references: cn("%E5%8F%82%E8%80%83%E7%88%86%E6%AC%BE%E9%93%BE%E6%8E%A5/%E6%A0%87%E9%A2%98%EF%BC%88%E6%AF%8F%E8%A1%8C%E4%B8%80%E4%B8%AA%EF%BC%89"),
-  materials: cn("%E7%B4%A0%E6%9D%90%E9%9C%80%E6%B1%82"),
-  goal: cn("%E8%BF%90%E8%90%A5%E7%9B%AE%E6%A0%87"),
-  competitor: cn("%E6%83%B3%E6%A8%A1%E4%BB%BF%E7%9A%84%E7%88%86%E6%AC%BE%E9%A3%8E%E6%A0%BC"),
-  web: cn("%E5%90%AF%E7%94%A8%E8%81%94%E7%BD%91%E6%90%9C%E7%B4%A2%E9%80%82%E9%85%8D%E5%99%A8"),
-  created: cn("%E6%96%B9%E6%A1%88%E5%B7%B2%E7%94%9F%E6%88%90"),
-  failed: cn("%E8%AF%B7%E6%B1%82%E5%A4%B1%E8%B4%A5")
-};
+interface WorkspaceAsset {
+  id: string;
+  kind: WorkspaceAssetKind;
+  role: "input" | "output" | "draft" | "workspace";
+  fileName: string;
+  relativePath: string;
+  sizeBytes: number;
+  updatedAt: string;
+}
 
-const capabilities = [
-  { id: "trend", icon: Flame, title: cn("%E7%83%AD%E7%82%B9%E8%B6%8B%E5%8A%BF"), body: cn("%E6%8A%8A%E8%A1%8C%E4%B8%9A%E8%AF%8D%E3%80%81%E4%BA%BA%E7%BE%A4%E3%80%81%E5%B9%B3%E5%8F%B0%E8%BD%AC%E6%88%90%E7%83%AD%E7%82%B9%E6%90%9C%E7%B4%A2%E8%AF%8D%E5%92%8C%E9%80%89%E9%A2%98%E8%A7%92%E5%BA%A6"), action: cn("%E7%94%9F%E6%88%90%E7%83%AD%E7%82%B9%E6%96%B9%E6%A1%88"), endpoint: "suite" },
-  { id: "collect", icon: Network, title: cn("%E8%81%94%E7%BD%91%E7%B4%A0%E6%9D%90"), body: cn("%E7%94%9F%E6%88%90%E5%8F%AF%E6%8E%A5Exa/Tavily/Firecrawl/%E5%B9%B3%E5%8F%B0API%E7%9A%84%E6%90%9C%E7%B4%A2%E5%92%8C%E7%B4%A0%E6%9D%90%E7%9B%AE%E5%BD%95"), action: cn("%E6%9F%A5%E7%9C%8B%E9%9B%86%E6%88%90%E7%9B%AE%E5%BD%95"), endpoint: "integrations" },
-  { id: "analyze", icon: Search, title: cn("%E7%88%86%E6%AC%BE%E6%8B%86%E8%A7%A3"), body: cn("%E6%8B%86%E5%89%8D3%E7%A7%92%E3%80%81%E8%8A%82%E5%A5%8F%E3%80%81%E5%AE%8C%E6%92%AD%E7%82%B9%E3%80%81%E8%AF%84%E8%AE%BA%E5%BC%95%E5%AF%BC%EF%BC%8C%E5%8F%AA%E5%AD%A6%E9%80%BB%E8%BE%91%E4%B8%8D%E6%90%AC%E8%BF%90"), action: cn("%E7%94%9F%E6%88%90%E6%8B%86%E8%A7%A3%E8%AE%A1%E5%88%92"), endpoint: "plan" },
-  { id: "script", icon: Sparkles, title: cn("%E6%96%87%E6%A1%88%E8%84%9A%E6%9C%AC"), body: cn("%E7%94%9F%E6%88%90%E9%92%A9%E5%AD%90%E3%80%81%E8%84%9A%E6%9C%AC%E8%8A%82%E7%82%B9%E3%80%81%E5%AD%97%E5%B9%95%E6%A0%B7%E5%BC%8F%E5%92%8C%E7%BB%93%E5%B0%BE%E8%BD%AC%E5%8C%96"), action: cn("%E7%94%9F%E6%88%90%E8%84%9A%E6%9C%AC%E8%93%9D%E5%9B%BE"), endpoint: "suite" },
-  { id: "edit", icon: Scissors, title: cn("%E8%87%AA%E5%8A%A8%E5%89%AA%E8%BE%91"), body: cn("%E7%9C%9F%E6%AD%A3%E8%B7%91FFmpeg%EF%BC%9A%E7%94%9F%E6%88%90%E7%B4%A0%E6%9D%90%E3%80%81%E8%A3%81%E5%89%AA%E4%B8%89%E6%AE%B5%E3%80%81%E5%90%88%E6%88%90rough cut%E3%80%81%E8%BE%93%E5%87%BA%E5%89%AA%E6%98%A0%E8%8D%89%E7%A8%BF"), action: cn("%E7%AB%8B%E5%8D%B3%E6%A8%A1%E6%8B%9F%E5%89%AA%E8%BE%91"), endpoint: "simulate" },
-  { id: "publish", icon: UploadCloud, title: cn("%E5%8F%91%E5%B8%83%E7%9F%A9%E9%98%B5"), body: cn("%E7%94%9F%E6%88%90%E6%8A%96%E9%9F%B3%E3%80%81%E5%BF%AB%E6%89%8B%E3%80%81B%E7%AB%99%E7%9A%84%E6%A0%87%E9%A2%98%E3%80%81%E6%A0%87%E7%AD%BE%E3%80%81%E6%97%B6%E9%95%BF%E3%80%81%E5%8F%91%E5%B8%83%E5%8C%85"), action: cn("%E7%94%9F%E6%88%90%E5%8F%91%E5%B8%83%E5%8C%85"), endpoint: "suite" },
-  { id: "review", icon: BarChart3, title: cn("%E8%BF%90%E8%90%A5%E5%A4%8D%E7%9B%98"), body: cn("%E5%AE%8C%E6%92%AD%E3%80%815%E7%A7%92%E7%95%99%E5%AD%98%E3%80%81%E7%82%B9%E8%B5%9E%E3%80%81%E8%AF%84%E8%AE%BA%E3%80%81%E6%B6%A8%E7%B2%89%E7%9A%84%E5%A4%8D%E7%9B%98%E5%86%B3%E7%AD%96"), action: cn("%E6%A3%80%E6%9F%A5%E7%8E%AF%E5%A2%83"), endpoint: "readiness" },
-  { id: "predict", icon: Rocket, title: cn("%E7%88%86%E7%81%AB%E9%A2%84%E6%B5%8B"), body: cn("%E6%A0%B9%E6%8D%AE%E5%85%B3%E9%94%AE%E8%AF%8D%E3%80%81%E5%B9%B3%E5%8F%B0%E3%80%81%E5%8F%82%E8%80%83%E7%88%86%E6%AC%BE%E3%80%81%E7%B4%A0%E6%9D%90%E5%AE%8C%E6%95%B4%E5%BA%A6%E4%BC%B0%E7%AE%97%E6%88%90%E5%8A%9F%E6%A6%82%E7%8E%87"), action: cn("%E8%AE%A1%E7%AE%97%E7%88%86%E6%AC%BE%E6%8C%87%E6%95%B0"), endpoint: "suite" }
-] satisfies Array<{ id: WorkflowStage; icon: typeof Flame; title: string; body: string; action: string; endpoint: StageEndpoint }>;
+interface WorkspaceAssetIndex {
+  total: number;
+  counts: Record<WorkspaceAssetKind, number>;
+  assets: WorkspaceAsset[];
+}
 
-const stageCopy: Record<WorkflowStage, {
-  eyebrow: string;
-  headline: string;
-  description: string;
-  output: string;
-  proof: string[];
-}> = {
+interface PublishQueueResponse {
+  queue: {
+    items: PublishQueueItem[];
+  };
+  adapters: PublishAdapterStatus[];
+}
+
+interface AnalyticsLedgerResponse {
+  ledger: {
+    snapshots: AnalyticsSnapshot[];
+  };
+}
+
+const capabilities: Array<{
+  id: WorkflowStage;
+  icon: typeof Flame;
+  title: string;
+  body: string;
+  action: string;
+  endpoint: StageEndpoint;
+}> = [
+  {
+    id: "trend",
+    icon: Flame,
+    title: "热点趋势",
+    body: "B站榜单 · 打分 · 解读",
+    action: "生成热点情报",
+    endpoint: "trend-report"
+  },
+  {
+    id: "collect",
+    icon: Network,
+    title: "联网素材",
+    body: "导入 · ASR · 场景信号",
+    action: "查看工具目录",
+    endpoint: "integrations"
+  },
+  {
+    id: "analyze",
+    icon: Search,
+    title: "爆款拆解",
+    body: "方法 → decision JSON",
+    action: "生成拆解计划",
+    endpoint: "auto-plan"
+  },
+  {
+    id: "script",
+    icon: Sparkles,
+    title: "文案脚本",
+    body: "钩子 · 分镜 · 字幕",
+    action: "生成脚本方案",
+    endpoint: "script-generate"
+  },
+  {
+    id: "edit",
+    icon: Scissors,
+    title: "自动剪辑",
+    body: "FFmpeg 裁剪合并 · 剪映",
+    action: "立即模拟剪辑",
+    endpoint: "auto-simulate"
+  },
+  {
+    id: "publish",
+    icon: UploadCloud,
+    title: "发布矩阵",
+    body: "多平台包 · dry-run",
+    action: "生成发布包",
+    endpoint: "creator-suite"
+  },
+  {
+    id: "review",
+    icon: BarChart3,
+    title: "运营复盘",
+    body: "命令 · Key · 网关体检",
+    action: "检查环境",
+    endpoint: "readiness"
+  },
+  {
+    id: "predict",
+    icon: Rocket,
+    title: "爆火预测",
+    body: "潜力分 · 置信度",
+    action: "计算爆款指数",
+    endpoint: "trend-report"
+  },
+  {
+    id: "selfcheck",
+    icon: Gauge,
+    title: "全链路自检",
+    body: "服务/依赖在线状态",
+    action: "运行自检",
+    endpoint: "self-check"
+  }
+];
+
+const pipelineStages = [
+  capabilities.find((item) => item.id === "trend"),
+  capabilities.find((item) => item.id === "analyze"),
+  capabilities.find((item) => item.id === "collect"),
+  capabilities.find((item) => item.id === "script"),
+  capabilities.find((item) => item.id === "edit"),
+  capabilities.find((item) => item.id === "publish"),
+  capabilities.find((item) => item.id === "review")
+].filter(Boolean) as typeof capabilities;
+
+const supportStages = [
+  capabilities.find((item) => item.id === "predict"),
+  capabilities.find((item) => item.id === "selfcheck")
+].filter(Boolean) as typeof capabilities;
+
+const stageCopy: Record<WorkflowStage, { headline: string; description: string; proof: string[] }> = {
   trend: {
-    eyebrow: "趋势雷达",
-    headline: "从账号方向反推出可拍的热点选题池",
-    description: "这里不是剪辑表单，而是用赛道、人群、关键词和平台生成搜索角度、话题池、爆点假设和验证计划。",
-    output: "输出：趋势关键词、选题池、搜索 query、爆点测试计划",
-    proof: ["赛道词", "目标人群", "平台差异", "热点关键词"]
+    headline: "B站真实热点情报",
+    description: "抓 B站公开榜单，本地算潜力分与置信度；无 LLM Key 时只出榜单，不伪装 AI 分析。",
+    proof: ["B站公开榜单", "确定性评分", "LLM 可选", "诚实降级"]
   },
   collect: {
-    eyebrow: "素材采集",
-    headline: "把参考链接、B-roll、口播素材整理成可执行素材清单",
-    description: "这一屏关注素材来源和工具接入，展示 Exa、Firecrawl、yt-dlp、平台 API、Whisper 等成熟工具的接入位。",
-    output: "输出：素材目录、采集工具清单、待配置 API/CLI 项",
-    proof: ["Exa/Firecrawl", "yt-dlp", "素材目录", "授权检查"]
+    headline: "素材导入与信号分析",
+    description: "把合法参考素材落到本地 workspace，再转成可剪辑信号:字幕/ASR、场景切点、静音段。",
+    proof: ["yt-dlp", "faster-whisper", "PySceneDetect", "Auto-Editor"]
   },
   analyze: {
-    eyebrow: "爆款拆解",
-    headline: "只拆逻辑，不搬运内容：开头、节奏、完播点、评论钩子",
-    description: "这一屏把参考爆款变成自动剪辑决策 JSON 的输入，适合接 PySceneDetect、Auto-Editor、OpenTimelineIO。",
-    output: "输出：三段式剪辑计划、镜头用途、节奏和转化点",
-    proof: ["前 3 秒", "节奏点", "完播点", "评论引导"]
+    headline: "爆款拆解到剪辑计划",
+    description: "只拆方法不搬运:从参考标题/链接生成结构化 decision JSON，供粗剪与草稿复用。",
+    proof: ["参考链接", "开头节奏", "decision JSON", "创作边界"]
   },
   script: {
-    eyebrow: "脚本工厂",
-    headline: "生成口播钩子、字幕节奏和结尾转化",
-    description: "这一屏服务文案脚本，不再展示通用参数堆砌，而是围绕标题、钩子、脚本段落、字幕风格组织输入。",
-    output: "输出：标题模板、开头钩子、脚本节拍、字幕样式",
-    proof: ["钩子", "脚本节拍", "大字幕", "转化结尾"]
+    headline: "仿创作脚本工厂",
+    description: "按赛道、人群、参考视频生成可执行脚本、钩子、字幕风格和素材清单。",
+    proof: ["钩子", "脚本节拍", "素材需求", "转化结尾"]
   },
   edit: {
-    eyebrow: "自动剪辑",
-    headline: "真实跑 FFmpeg，生成素材、裁三段、合成 rough cut",
-    description: "这一屏是执行区：可以一键模拟真实剪辑，也可以后续接入用户素材、ASR、场景检测和 Remotion 包装。",
-    output: "输出：rough cut MP4、decision JSON、JianYing plan JSON",
-    proof: ["FFmpeg", "clip", "merge", "剪映计划"]
+    headline: "本地 FFmpeg 自动剪辑",
+    description: "真实生成测试素材、裁剪片段、合并 rough cut，并输出剪映 plan JSON。",
+    proof: ["FFmpeg", "clip", "merge", "JianYing plan"]
   },
   publish: {
-    eyebrow: "发布矩阵",
-    headline: "按抖音、快手、B站生成标题、标签、比例、发布时间",
-    description: "这一屏关注发布包，不直接真发；生产化后先接 social-auto-upload、Postiz 和 n8n dry-run。",
-    output: "输出：多平台发布包、标题、标签、封面要求、发布时间",
+    headline: "多平台发布包",
+    description: "生成标题、标签、比例和平台策略;真发前必须 dry-run，绝不静默上传。",
     proof: ["抖音", "快手", "B站", "dry-run"]
   },
   review: {
-    eyebrow: "运营复盘",
-    headline: "检查工具链健康度，并把数据回流成下一轮动作",
-    description: "这一屏不是脚本生成，而是看 FFmpeg、API Key、发布工具、MCP 是否准备好，以及复盘指标怎么驱动下一轮。",
-    output: "输出：环境体检、缺失项、复盘指标和下一步动作",
-    proof: ["完播率", "5 秒留存", "互动率", "涨粉"]
+    headline: "全链路环境体检",
+    description: "检查本机命令、API Key、LLM provider 与编排工具，缺什么直接显示。",
+    proof: ["本地命令", "API Key", "LLM 网关", "下一步"]
   },
   predict: {
-    eyebrow: "爆火预测",
-    headline: "根据选题、人群、素材完整度估算爆款概率",
-    description: "这一屏把关键词、参考爆款、平台和素材完整度变成风险评分，帮助先选题再开剪。",
-    output: "输出：爆款指数、风险点、A/B 测试建议",
-    proof: ["关键词强度", "素材完整度", "平台匹配", "测试计划"]
+    headline: "用真实榜单做潜力判断",
+    description: "潜力分来自互动率和播放速度，置信度看数据完整度;AI 只负责解释套路。",
+    proof: ["潜力分", "置信度", "共性套路", "选题卡"]
+  },
+  selfcheck: {
+    headline: "全链路自检",
+    description: "一次性探测 TTD/n8n/Postiz 在线状态与 KSD/LLM/BGM/FFmpeg/yt-dlp 可用性,缺什么、怎么修一眼看到。",
+    proof: ["在线探活", "四态诊断", "修复指引", "零计费"]
   }
 };
 
+const biliCategories = [
+  { value: "all", label: "综合" },
+  { value: "game", label: "游戏" },
+  { value: "animation", label: "动画" },
+  { value: "knowledge", label: "知识" },
+  { value: "music", label: "音乐" },
+  { value: "life", label: "生活" },
+  { value: "tech", label: "科技" },
+  { value: "dance", label: "舞蹈" },
+  { value: "food", label: "美食" },
+  { value: "movie", label: "影视" },
+  { value: "entertainment", label: "快手-文娱" },
+  { value: "society", label: "快手-社会" },
+  { value: "useful", label: "快手-有用" },
+  { value: "challenge", label: "快手-挑战" },
+  { value: "search", label: "快手-搜索" }
+];
+
 const defaultForm = {
-  niche: cn("%E6%9C%AC%E5%9C%B0%E7%94%9F%E6%B4%BB/%E7%9F%A5%E8%AF%86%E5%8F%A3%E6%92%AD/%E5%A5%BD%E7%89%A9%E5%B8%A6%E8%B4%A7"),
-  audience: cn("25-40%E5%B2%81%E6%83%B3%E6%8F%90%E5%8D%87%E6%94%B6%E5%85%A5%E7%9A%84%E6%99%AE%E9%80%9A%E4%BA%BA"),
-  persona: cn("%E6%87%82AI%E5%B7%A5%E5%85%B7%E7%9A%84%E5%AE%9E%E6%88%98%E5%9E%8B%E5%88%9B%E4%BD%9C%E8%80%85"),
-  keywords: cn("AI%E5%89%AA%E8%BE%91\n%E8%87%AA%E5%AA%92%E4%BD%93%E5%89%AF%E4%B8%9A\n%E7%88%86%E6%AC%BE%E8%A7%86%E9%A2%91\n%E6%8A%96%E9%9F%B3%E6%B5%81%E9%87%8F"),
-  references: cn("%E7%B2%98%E8%B4%B4%E4%BD%A0%E4%B8%8B%E8%BD%BD%E7%9A%84%E6%8A%96%E9%9F%B3/%E5%BF%AB%E6%89%8B/B%E7%AB%99%E7%88%86%E6%AC%BE%E9%93%BE%E6%8E%A5%E6%88%96%E6%A0%87%E9%A2%98"),
-  materialNeeds: cn("%E5%8F%A3%E6%92%AD%E7%B4%A0%E6%9D%90%E3%80%81%E5%B1%8F%E5%B9%95%E5%BD%95%E5%88%B6%E3%80%81%E7%88%86%E6%AC%BE%E5%8F%82%E8%80%83%E3%80%81%E5%8F%AF%E5%95%86%E7%94%A8B-roll"),
-  campaignGoal: cn("%E6%B6%A8%E7%B2%89%E3%80%81%E5%AE%8C%E6%92%AD%E3%80%81%E5%BC%95%E6%B5%81%E3%80%81%E8%BD%AC%E5%8C%96"),
-  competitorStyle: cn("%E9%AB%98%E5%AF%86%E5%BA%A6%E5%B9%B2%E8%B4%A7+%E5%89%8D3%E7%A7%92%E5%BC%BA%E5%8F%8D%E5%B7%AE+%E5%A4%A7%E5%AD%97%E5%B9%95"),
+  niche: "本地生活/知识口播/好物带货",
+  audience: "25-40岁想提升收入的普通人",
+  persona: "懂 AI 工具的实战型创作者",
+  keywords: "AI剪辑\n自媒体副业\n爆款视频\n抖音流量",
+  references: "粘贴你下载的抖音/快手/B站爆款链接或标题",
+  materialUrl: "https://www.bilibili.com/video/",
+  materialCollection: "爆款参考素材",
+  materialQuality: "720p",
+  researchPlatform: "douyin",
+  researchQuery: "AI剪辑",
+  researchUrl: "",
+  researchItemId: "",
+  researchIncludeComments: true,
+  evidenceProvider: "auto",
+  materialAnalysisPath: "workspace/input/references",
+  materialTranscriptionMode: "auto",
+  whisperModel: "tiny",
+  whisperLanguage: "zh",
+  sceneBackend: "auto",
+  autoEditorEnabled: true,
+  roughCutAnalysisPath: "workspace/drafts",
+  publishSourcePath: "workspace/output",
+  publishDryRunPlatform: "douyin",
+  publishDryRunTitle: "99%的人不知道的3个剪映神操作",
+  publishManualConfirm: "CONFIRM_DRY_RUN_ONLY",
+  analyticsPostId: "",
+  analyticsPostUrl: "",
+  analyticsWindow: "30m",
+  analyticsViews: 1000,
+  analyticsLikes: 80,
+  analyticsComments: 12,
+  analyticsShares: 8,
+  analyticsFavorites: 20,
+  analyticsFollowersDelta: 3,
+  analyticsCompletionRate: 0.42,
+  n8nManualConfirm: "",
+  bgmPath: "",
+  bgmVolume: 0.18,
+  narrationVolume: 1,
+  materialNeeds: "口播素材、屏幕录制、爆款参考、可商用 B-roll",
+  campaignGoal: "涨粉、完播、引流、转化",
+  competitorStyle: "高密度干货 + 前3秒强反差 + 大字幕",
+  scriptTopic: "在AI里抛硬币，正面概率真的是50%吗？",
   webSearchEnabled: "true",
+  narrated: true,
+  ttsProvider: "edge",
   douyin: true,
   kuaishou: true,
   bilibili: true
@@ -173,14 +322,78 @@ type CreatorForm = typeof defaultForm;
 
 export default function Home() {
   const [form, setForm] = useState<CreatorForm>(defaultForm);
-  const [activeStage, setActiveStage] = useState<WorkflowStage>("edit");
-  const [submitting, setSubmitting] = useState(false);
-  const [simulating, setSimulating] = useState(false);
-  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [activeStage, setActiveStage] = useState<WorkflowStage>("trend");
+  const [busy, setBusy] = useState(false);
+  const [materialBusy, setMaterialBusy] = useState(false);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [renderAnalysisBusy, setRenderAnalysisBusy] = useState(false);
+  const [variantBusy, setVariantBusy] = useState(false);
+  const [scriptPlanBusy, setScriptPlanBusy] = useState(false);
+  const [remotionBusy, setRemotionBusy] = useState(false);
+  const [fullChainBusy, setFullChainBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [result, setResult] = useState<unknown>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [workspaceAssets, setWorkspaceAssets] = useState<WorkspaceAssetIndex | null>(null);
+  const [trendReport, setTrendReport] = useState<IntelligenceReport | null>(null);
+  const [trendCategory, setTrendCategory] = useState("all");
+  const [trendPlatform, setTrendPlatform] = useState("bilibili");
+  const [topN, setTopN] = useState(20);
+  const [scriptDraft, setScriptDraft] = useState<ScriptDraft | null>(null);
+  const [fullChainResult, setFullChainResult] = useState<FullChainResult | null>(null);
+  const [publishDryRunBusy, setPublishDryRunBusy] = useState(false);
+  const [publishQueueBusy, setPublishQueueBusy] = useState(false);
+  const [publishApproveBusy, setPublishApproveBusy] = useState(false);
+  const [publishDispatchBusy, setPublishDispatchBusy] = useState(false);
+  const [publishPreflightBusy, setPublishPreflightBusy] = useState(false);
+  const [analyticsBusy, setAnalyticsBusy] = useState(false);
+  const [n8nBusy, setN8nBusy] = useState(false);
+  const [publishDryRunResult, setPublishDryRunResult] = useState<PublishDryRunResult | null>(null);
+  const [publishDispatchResult, setPublishDispatchResult] = useState<PublishDispatchResult | null>(null);
+  const [publishPreflightResult, setPublishPreflightResult] = useState<PublishPreflightReport | null>(null);
+  const [n8nResult, setN8nResult] = useState<N8nOrchestrationResult | null>(null);
+  const [publishQueue, setPublishQueue] = useState<PublishQueueItem[]>([]);
+  const [publishAdapters, setPublishAdapters] = useState<PublishAdapterStatus[]>([]);
+  const [analyticsSnapshots, setAnalyticsSnapshots] = useState<AnalyticsSnapshot[]>([]);
+  const [researchBusy, setResearchBusy] = useState(false);
+  const [researchReport, setResearchReport] = useState<TikHubResearchReport | null>(null);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [evidenceReport, setEvidenceReport] = useState<EvidenceReport | null>(null);
+  const [bgmPickBusy, setBgmPickBusy] = useState(false);
+  const [selfCheckBusy, setSelfCheckBusy] = useState(false);
+  const [selfCheckReport, setSelfCheckReport] = useState<SelfCheckReport | null>(null);
+  const [smokeBusy, setSmokeBusy] = useState(false);
+  const [smokeTaskId, setSmokeTaskId] = useState<string | null>(null);
+
+  const activeCapability = useMemo(
+    () => capabilities.find((item) => item.id === activeStage) ?? capabilities[0],
+    [activeStage]
+  );
+  const activePipelineIndex = pipelineStages.findIndex((item) => item.id === activeStage);
+  const runningTaskCount = tasks.filter((task) => task.status === "pending" || task.status === "processing").length;
+  const approvedQueueCount = publishQueue.filter((item) => item.status === "approved").length;
+  const readyQueueCount = publishQueue.filter((item) => item.status === "ready").length;
+  const systemOkCount = selfCheckReport?.summary.ok ?? readiness?.commands.filter((item) => item.ok).length ?? 0;
+  const systemTotalCount = selfCheckReport?.summary.total ?? readiness?.commands.length ?? 0;
+
+  useEffect(() => {
+    void refreshTasks();
+    void refreshReadiness();
+    void refreshWorkspaceAssets();
+    void refreshPublishQueue();
+    void refreshAnalyticsLedger();
+    const timer = window.setInterval(refreshTasks, 1500);
+    const assetTimer = window.setInterval(refreshWorkspaceAssets, 5000);
+    return () => {
+      window.clearInterval(timer);
+      window.clearInterval(assetTimer);
+    };
+  }, []);
+
+  function update<K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
   async function refreshTasks() {
     const response = await fetch("/api/tasks", { cache: "no-store" });
@@ -197,183 +410,835 @@ export default function Home() {
     }
   }
 
-  useEffect(() => {
-    void refreshTasks();
-    void refreshReadiness();
-    const timer = window.setInterval(refreshTasks, 1500);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  function update<K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
-  }
-
-  async function submitSuite() {
-    setSubmitting(true);
-    setMessage("");
-    setResult(null);
-
-    const platforms = [
-      form.douyin ? "douyin" : "",
-      form.kuaishou ? "kuaishou" : "",
-      form.bilibili ? "bilibili" : ""
-    ].filter(Boolean);
-
-    try {
-      const response = await fetch("/api/creator/suite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          niche: form.niche,
-          audience: form.audience,
-          persona: form.persona,
-          platforms,
-          keywords: splitLines(form.keywords),
-          references: splitLines(form.references),
-          materialNeeds: form.materialNeeds,
-          campaignGoal: form.campaignGoal,
-          competitorStyle: form.competitorStyle,
-          webSearchEnabled: form.webSearchEnabled === "true",
-          riskTolerance: "medium"
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setMessage(data.error ?? text.failed);
-        setResult(data);
-        return;
-      }
-      setMessage(text.created);
-      setResult(data);
-      await refreshTasks();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : text.failed);
-    } finally {
-      setSubmitting(false);
+  async function refreshWorkspaceAssets() {
+    const response = await fetch("/api/workspace/assets?limit=80", { cache: "no-store" });
+    if (response.ok) {
+      setWorkspaceAssets(await response.json());
     }
   }
 
-  async function runSimulation() {
-    setSimulating(true);
-    setMessage("");
-    setResult(null);
-
-    try {
-      const response = await fetch("/api/auto/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectTitle: cn("%E4%B8%80%E9%94%AE%E6%A8%A1%E6%8B%9F%E8%87%AA%E5%8A%A8%E5%89%AA%E8%BE%91"),
-          instructions: cn("%E7%94%9F%E6%88%9012%E7%A7%92%E6%B5%8B%E8%AF%95%E7%B4%A0%E6%9D%90%EF%BC%8C%E4%BF%9D%E7%95%99%E5%BC%BA%E9%92%A9%E5%AD%90%E3%80%81%E6%A0%B8%E5%BF%83%E6%BC%94%E7%A4%BA%E3%80%81%E7%BB%93%E5%B0%BE%E8%A1%8C%E5%8A%A8%E4%B8%89%E6%AE%B5%EF%BC%8C%E8%BE%93%E5%87%BArough cut mp4%E5%92%8C%E5%89%AA%E6%98%A0%E8%8D%89%E7%A8%BF%E8%AE%A1%E5%88%92%E3%80%82")
-        })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setMessage(data.error ?? text.failed);
-        setResult(data);
-        return;
-      }
-
-      setMessage(cn("%E6%A8%A1%E6%8B%9F%E5%89%AA%E8%BE%91%E4%BB%BB%E5%8A%A1%E5%B7%B2%E5%90%AF%E5%8A%A8%EF%BC%8C%E5%8F%B3%E4%BE%A7%E4%BC%9A%E6%98%BE%E7%A4%BA%E8%BE%93%E5%87%BA%E8%A7%86%E9%A2%91%E5%92%8C%E8%8D%89%E7%A8%BF%E8%B7%AF%E5%BE%84%E3%80%82"));
-      setResult(data);
-      await refreshTasks();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : text.failed);
-    } finally {
-      setSimulating(false);
+  async function refreshPublishQueue() {
+    const response = await fetch("/api/publish/queue", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json() as PublishQueueResponse;
+      setPublishQueue(data.queue?.items ?? []);
+      setPublishAdapters(data.adapters ?? []);
     }
   }
 
-  async function generateDraft() {
-    const planPath = latestDraftPlanPath(tasks);
-    if (!planPath) {
-      setMessage("请先用「一键真实模拟剪辑」生成剪辑计划，再生成剪映草稿。");
-      return;
-    }
-
-    setGeneratingDraft(true);
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/jianying/draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planPath, draftName: `AI助手草稿-${Date.now()}` })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setMessage(data.error ?? text.failed);
-        setResult(data);
-        return;
-      }
-      setMessage("剪映草稿已生成，打开剪映即可在草稿列表看到并继续编辑。");
-      setResult(data);
-      await refreshTasks();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : text.failed);
-    } finally {
-      setGeneratingDraft(false);
+  async function refreshAnalyticsLedger() {
+    const response = await fetch("/api/analytics/import", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json() as AnalyticsLedgerResponse;
+      setAnalyticsSnapshots(data.ledger?.snapshots ?? []);
     }
   }
 
   async function runStageAction() {
-    const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
-    if (stage.endpoint === "simulate") {
-      await runSimulation();
-      return;
-    }
-
-    setSubmitting(true);
+    setBusy(true);
     setMessage("");
     setResult(null);
 
     try {
-      const response = await fetch(stageEndpoint(stage.endpoint), {
-        method: stage.endpoint === "integrations" || stage.endpoint === "readiness" ? "GET" : "POST",
+      if (activeCapability.endpoint === "trend-report") {
+        await generateTrendReport();
+      } else if (activeCapability.endpoint === "script-generate") {
+        await generateScript();
+      } else if (activeCapability.endpoint === "integrations") {
+        await runGet("/api/integrations", "集成目录已加载");
+      } else if (activeCapability.endpoint === "readiness") {
+        const data = await runGet("/api/creator/readiness", "环境体检已完成");
+        setReadiness(data as Readiness);
+      } else if (activeCapability.endpoint === "auto-simulate") {
+        await runPost("/api/auto/simulate", {
+          projectTitle: "一键模拟自动剪辑",
+          instructions: "生成 12 秒测试素材，保留强钩子、核心演示、结尾行动三段，输出 rough cut mp4 和剪映草稿计划。"
+        }, "自动剪辑任务已启动，右侧任务面板会显示输出路径");
+      } else if (activeCapability.endpoint === "auto-plan") {
+        await runPost("/api/auto/plan", {
+          projectTitle: "爆款拆解到初剪",
+          materialDir: "workspace/input",
+          instructions: `参考这些爆款，只拆方法不搬运内容：${form.references}\n目标：生成强钩子、核心演示、结尾转化三段 decision JSON。`
+        }, "爆款拆解计划已生成");
+      } else if (activeCapability.endpoint === "self-check") {
+        await runSelfCheckAction();
+      } else {
+        await runPost("/api/creator/suite", creatorSuitePayload(form), `${activeCapability.title}已生成`);
+      }
+
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "请求失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runSelfCheckAction() {
+    setSelfCheckBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/health/self-check", { cache: "no-store" });
+      const data = (await response.json()) as SelfCheckReport;
+      if (!response.ok) {
+        throw new Error("自检请求失败");
+      }
+      setSelfCheckReport(data);
+      setResult(data);
+      setMessage(`自检完成:${data.summary.ok}/${data.summary.total} 项可用`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "自检失败");
+    } finally {
+      setSelfCheckBusy(false);
+    }
+  }
+
+  async function runEndToEndSmokeAction() {
+    setSmokeBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/full-chain", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: stage.endpoint === "integrations" || stage.endpoint === "readiness" ? undefined : JSON.stringify(stagePayload(stage.endpoint, form))
+        body: JSON.stringify({
+          topic: "端到端实测 · " + new Date().toLocaleTimeString(),
+          platform: "douyin",
+          durationSec: 20,
+          narrated: false
+        })
       });
       const data = await response.json();
       if (!response.ok) {
-        setMessage(data.error ?? text.failed);
-      } else {
-        setMessage(`${stage.title}：${cn("%E5%B7%B2%E6%89%A7%E8%A1%8C")}`);
-        setMessage(`${stage.title}：${cn("%E5%B7%B2%E6%89%A7%E8%A1%8C")}`);
-        if (stage.endpoint === "readiness") {
-          setReadiness(data);
-        }
-        await refreshTasks();
+        throw new Error(data.task?.error ?? data.error ?? "实测启动失败");
       }
-      setResult(data);
+      const id = data.task?.id ?? null;
+      setSmokeTaskId(id);
+      setMessage(`端到端实测已启动(任务 ${id?.slice(0, 8)}…)。约 5-10 分钟,完成后右侧"最近任务"会显示;成果在 workspace/output/publish/。`);
+      await refreshTasks();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : text.failed);
+      setMessage(error instanceof Error ? error.message : "实测启动失败");
     } finally {
-      setSubmitting(false);
+      setSmokeBusy(false);
+    }
+  }
+
+  async function runGet(url: string, okMessage: string) {
+    const response = await fetch(url, { cache: "no-store" });
+    const data = await response.json();
+    setResult(data);
+    if (!response.ok) {
+      throw new Error(data.task?.error ?? data.error ?? "请求失败");
+    }
+    setMessage(okMessage);
+    return data;
+  }
+
+  async function runPost(url: string, payload: unknown, okMessage: string) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    setResult(data);
+    if (!response.ok) {
+      throw new Error(data.task?.error ?? data.error ?? "请求失败");
+    }
+    setMessage(okMessage);
+    return data;
+  }
+
+  async function generateTrendReport() {
+    const response = await fetch("/api/trend/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform: trendPlatform, category: trendCategory, topN })
+    });
+    const data = await response.json();
+    setResult(data);
+    if (!response.ok) {
+      throw new Error(data.task?.error ?? data.error ?? "热点情报请求失败");
+    }
+
+    const final = data.task?.status === "completed" || data.task?.status === "failed"
+      ? data.task as TaskRecord
+      : await pollTaskUntilDone(data.task.id);
+    if (!final) {
+      throw new Error("热点情报任务超时");
+    }
+    if (final.status === "failed") {
+      throw new Error(final.error ?? "热点情报任务失败");
+    }
+
+    const report = final.result as IntelligenceReport;
+    setTrendReport(report);
+    setResult(report);
+    setMessage(report.aiStatus === "ok"
+      ? "热点情报已生成，包含 AI 爆火逻辑分析"
+      : "热点情报已生成：LLM 未配置或分析失败，仅展示真实榜单和客观评分");
+  }
+
+  async function generateScript() {
+    const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
+    const references = form.references.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const evidence = (evidenceReport?.results ?? []).slice(0, 6).map((item) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.snippet,
+      publishedAt: item.publishedAt
+    }));
+    const response = await fetch("/api/script/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: form.scriptTopic, platform, audience: form.audience, references, evidence })
+    });
+    const data = await response.json();
+    setResult(data);
+    if (!response.ok) {
+      throw new Error(data.task?.error ?? data.error ?? "文案脚本请求失败");
+    }
+
+    const final = data.task?.status === "completed" || data.task?.status === "failed"
+      ? data.task as TaskRecord
+      : await pollTaskUntilDone(data.task.id);
+    if (!final) {
+      throw new Error("文案脚本任务超时");
+    }
+    if (final.status === "failed") {
+      throw new Error(final.error ?? "文案脚本任务失败");
+    }
+
+    const draft = final.result as ScriptDraft;
+    setScriptDraft(draft);
+    setResult(draft);
+    setMessage(`文案脚本已生成：${draft.titles[0] ?? form.scriptTopic}`);
+  }
+
+  async function createPlanFromScript() {
+    if (!scriptDraft) {
+      setMessage("先生成文案脚本，再转自动剪辑计划");
+      return;
+    }
+
+    setScriptPlanBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost(
+        "/api/auto/plan",
+        scriptDraftToAutoPlanPayload(scriptDraft, form),
+        "脚本已转成自动剪辑 decision JSON"
+      );
+      setResult(data.task?.result ?? data);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "脚本转剪辑计划失败");
+    } finally {
+      setScriptPlanBusy(false);
+    }
+  }
+
+  async function renderScriptPackage() {
+    if (!scriptDraft) {
+      setMessage("先生成文案脚本，再渲染 Remotion 包装视频");
+      return;
+    }
+
+    setRemotionBusy(true);
+    setMessage("");
+    try {
+      const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
+      const data = await runPost("/api/remotion/render", {
+        title: scriptDraft.titles[0] ?? form.scriptTopic,
+        hook: scriptDraft.hook,
+        beats: scriptDraft.beats,
+        tags: scriptDraft.tags,
+        bgm: scriptDraft.bgm,
+        ...(form.bgmPath.trim() ? { bgmPath: form.bgmPath.trim(), bgmVolume: form.bgmVolume } : {}),
+        platform,
+        aspectRatio: form.bilibili && !form.douyin && !form.kuaishou ? "16:9" : "9:16"
+      }, "Remotion 包装视频已启动渲染");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id, 900000);
+      if (!final) {
+        throw new Error("Remotion 渲染任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "Remotion 渲染失败");
+      }
+      setResult(final.result ?? data);
+      setMessage("Remotion 包装视频已生成");
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Remotion 渲染请求失败");
+    } finally {
+      setRemotionBusy(false);
+    }
+  }
+
+  async function runFullChainAction() {
+    if (!form.scriptTopic.trim()) {
+      setMessage("先填写选题，再一键全链路");
+      return;
+    }
+
+    setFullChainBusy(true);
+    setMessage("");
+    try {
+      const platform = form.douyin ? "douyin" : form.kuaishou ? "kuaishou" : form.bilibili ? "bilibili" : "douyin";
+      const variantTargets = (["douyin", "kuaishou", "bilibili"] as const).filter((id) => form[id]);
+      const evidence = (evidenceReport?.results ?? []).slice(0, 6).map((item) => ({
+        title: item.title,
+        url: item.url,
+        snippet: item.snippet,
+        publishedAt: item.publishedAt
+      }));
+      const data = await runPost("/api/full-chain", {
+        topic: form.scriptTopic,
+        platform,
+        audience: form.audience || undefined,
+        references: form.references.split("\n").map((line) => line.trim()).filter(Boolean),
+        evidence,
+        aspectRatio: platform === "bilibili" ? "16:9" : "9:16",
+        narrated: form.narrated,
+        ...(form.narrated ? { ttsProvider: form.ttsProvider } : {}),
+        ...(form.bgmPath.trim() ? {
+          bgmPath: form.bgmPath.trim(),
+          bgmVolume: form.bgmVolume,
+          narrationVolume: form.narrationVolume
+        } : {}),
+        ...(variantTargets.length > 0 ? { variantTargets } : {})
+      }, form.narrated
+        ? "一键全链路已启动：脚本 → AI 配音成片 → 多平台变体"
+        : "一键全链路已启动：脚本 → Remotion 成片 → 多平台变体");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id, 1_200_000);
+      if (!final) {
+        throw new Error("全链路任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "全链路失败");
+      }
+      const chain = final.result as FullChainResult | undefined;
+      if (chain?.draft) {
+        setScriptDraft(chain.draft);
+      }
+      setFullChainResult(chain ?? null);
+      setResult(final.result ?? data);
+      setMessage(`一键全链路完成：${chain?.variants.variants.length ?? 0} 个平台成片已落盘`);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "全链路请求失败");
+    } finally {
+      setFullChainBusy(false);
+    }
+  }
+
+  async function runPublishDryRun() {
+    if (!form.publishSourcePath.trim() || !form.publishDryRunTitle.trim()) {
+      setMessage("先填成片路径(选具体 MP4)和发布标题，再做 dry-run 校验");
+      return;
+    }
+
+    setPublishDryRunBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/dry-run", {
+        platform: form.publishDryRunPlatform,
+        videoPath: form.publishSourcePath,
+        title: form.publishDryRunTitle,
+        tags: scriptDraft?.tags ?? []
+      }, "发布 dry-run 校验完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("dry-run 任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "dry-run 失败");
+      }
+      setPublishDryRunResult(final.result as PublishDryRunResult);
+      setResult(final.result ?? data);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "dry-run 请求失败");
+    } finally {
+      setPublishDryRunBusy(false);
+    }
+  }
+
+  async function createPublishQueue() {
+    if (!form.publishSourcePath.trim() || !form.publishDryRunTitle.trim()) {
+      setMessage("先填成片路径和发布标题，再加入待发布队列");
+      return;
+    }
+
+    setPublishQueueBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/queue", {
+        platform: form.publishDryRunPlatform,
+        videoPath: form.publishSourcePath,
+        title: form.publishDryRunTitle,
+        tags: scriptDraft?.tags ?? []
+      }, "已创建待发布队列项");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("创建发布队列任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "创建发布队列失败");
+      }
+      setResult(final.result ?? data);
+      await refreshPublishQueue();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "创建发布队列失败");
+    } finally {
+      setPublishQueueBusy(false);
+    }
+  }
+
+  async function approvePublishQueue(id: string) {
+    setPublishApproveBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/approve", {
+        id,
+        manualConfirm: form.publishManualConfirm,
+        note: "UI 人工确认：仅进入 approved 队列，不真发。"
+      }, "发布队列项已人工批准");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("人工批准任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "人工批准失败");
+      }
+      setResult(final.result ?? data);
+      await refreshPublishQueue();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "人工批准失败");
+    } finally {
+      setPublishApproveBusy(false);
+    }
+  }
+
+  async function dispatchPublishQueue(id: string) {
+    setPublishDispatchBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/publish/dispatch", {
+        id,
+        mode: "draft",
+        manualConfirm: form.publishManualConfirm
+      }, "发布 dispatch 已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("dispatch 任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "dispatch 失败");
+      }
+      setPublishDispatchResult(final.result as PublishDispatchResult);
+      setResult(final.result ?? data);
+      await refreshPublishQueue();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "dispatch 失败");
+    } finally {
+      setPublishDispatchBusy(false);
+    }
+  }
+
+  async function runPublishPreflight() {
+    setPublishPreflightBusy(true);
+    setMessage("");
+    try {
+      const platforms = (["douyin", "kuaishou", "bilibili"] as const).filter((id) => form[id]);
+      const data = await runPost("/api/publish/preflight", {
+        probePostiz: true,
+        platforms
+      }, "发布账号联调体检已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("发布账号联调体检任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "发布账号联调体检失败");
+      }
+      setPublishPreflightResult(final.result as PublishPreflightReport);
+      setResult(final.result ?? data);
+      await refreshTasks();
+      await refreshPublishQueue();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "发布账号联调体检请求失败");
+    } finally {
+      setPublishPreflightBusy(false);
+    }
+  }
+
+  async function importAnalytics() {
+    setAnalyticsBusy(true);
+    setMessage("");
+    try {
+      const data = await runPost("/api/analytics/import", {
+        platform: form.publishDryRunPlatform,
+        postId: form.analyticsPostId.trim() || undefined,
+        postUrl: form.analyticsPostUrl.trim() || undefined,
+        title: form.publishDryRunTitle,
+        window: form.analyticsWindow,
+        metrics: {
+          views: form.analyticsViews,
+          likes: form.analyticsLikes,
+          comments: form.analyticsComments,
+          shares: form.analyticsShares,
+          favorites: form.analyticsFavorites,
+          followersDelta: form.analyticsFollowersDelta,
+          completionRate: form.analyticsCompletionRate
+        }
+      }, "数据回流快照已导入");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("数据回流任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "数据回流失败");
+      }
+      setResult(final.result ?? data);
+      await refreshAnalyticsLedger();
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "数据回流失败");
+    } finally {
+      setAnalyticsBusy(false);
+    }
+  }
+
+  async function triggerN8n(mode: "dry-run" | "webhook", exportWorkflow = false) {
+    if (!form.scriptTopic.trim()) {
+      setMessage("先填写选题，再生成 n8n 全链路编排。");
+      return;
+    }
+
+    setN8nBusy(true);
+    setMessage("");
+    try {
+      const approvedItem = publishQueue.find((item) => item.status === "approved");
+      const data = await runPost("/api/orchestration/n8n", {
+        topic: form.scriptTopic,
+        platform: form.publishDryRunPlatform,
+        mode,
+        category: trendCategory,
+        topN,
+        audience: form.audience || undefined,
+        durationSec: 45,
+        references: form.references.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        videoPath: form.publishSourcePath.trim() || undefined,
+        queueItemId: approvedItem?.id,
+        analyticsWindow: form.analyticsWindow,
+        manualConfirm: form.n8nManualConfirm || undefined,
+        exportWorkflow
+      }, exportWorkflow ? "n8n workflow JSON 已导出" : mode === "webhook" ? "n8n webhook 触发流程已完成" : "n8n 编排 payload 已生成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("n8n 编排任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "n8n 编排失败");
+      }
+      setN8nResult(final.result as N8nOrchestrationResult);
+      setResult(final.result ?? data);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "n8n 编排请求失败");
+    } finally {
+      setN8nBusy(false);
+    }
+  }
+
+  async function importReferenceMaterial() {
+    setMaterialBusy(true);
+    setMessage("");
+    setResult(null);
+
+    try {
+      const data = await runPost("/api/materials/import", {
+        url: form.materialUrl,
+        collectionName: form.materialCollection,
+        quality: form.materialQuality,
+        allowPlaylist: false,
+        writeSubtitles: true,
+        writeAutoSubtitles: true,
+        subtitleLanguages: ["zh-Hans", "zh", "en"]
+      }, "素材导入任务已启动，右侧任务面板会显示 yt-dlp 日志和 manifest 输出");
+      setResult(data);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "素材导入请求失败");
+    } finally {
+      setMaterialBusy(false);
+    }
+  }
+
+  async function runTikHubResearchAction() {
+    setResearchBusy(true);
+    setMessage("");
+    setResult(null);
+
+    try {
+      const data = await runPost("/api/trend/research", {
+        platform: form.researchPlatform,
+        query: form.researchQuery.trim() || undefined,
+        url: form.researchUrl.trim() || undefined,
+        itemId: form.researchItemId.trim() || undefined,
+        includeComments: form.researchIncludeComments,
+        limit: 10
+      }, "TikHub 爆款研究已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("TikHub 爆款研究任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "TikHub 爆款研究失败");
+      }
+
+      const report = final.result as TikHubResearchReport;
+      setResearchReport(report);
+      if (report.materialCandidates[0]?.url) {
+        update("materialUrl", report.materialCandidates[0].url);
+      }
+      if (report.materialCandidates.length) {
+        update("references", report.materialCandidates.map((candidate) => candidate.title || candidate.url).join("\n"));
+      }
+      setResult(report);
+      setMessage(`TikHub 研究完成：${report.searchItems.length} 个搜索结果、${report.comments.length} 条评论样本`);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "TikHub 爆款研究请求失败");
+    } finally {
+      setResearchBusy(false);
+    }
+  }
+
+  async function runEvidenceSearchAction() {
+    const query = form.researchQuery.trim();
+    if (!query) {
+      setMessage("先填关键词,再做证据搜索");
+      return;
+    }
+    setEvidenceBusy(true);
+    setMessage("");
+    setResult(null);
+    try {
+      const data = await runPost("/api/trend/evidence", {
+        query,
+        provider: form.evidenceProvider,
+        limit: 8,
+        includeContents: true
+      }, "证据搜索已完成");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id);
+      if (!final) {
+        throw new Error("证据搜索任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "证据搜索失败");
+      }
+      const report = final.result as EvidenceReport;
+      setEvidenceReport(report);
+      setResult(report);
+      setMessage(`证据搜索完成:${report.provider} 返回 ${report.results.length} 条事实参考`);
+      await refreshTasks();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "证据搜索请求失败");
+    } finally {
+      setEvidenceBusy(false);
+    }
+  }
+
+  async function autoPickBgm() {
+    const mood = scriptDraft?.bgm?.trim() || form.scriptTopic.trim();
+    if (!mood) {
+      setMessage("先生成脚本(取 LLM 推荐的曲风)或填选题,再 AI 选曲");
+      return;
+    }
+    setBgmPickBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/bgm/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mood, fallbackFirst: true })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? "BGM 选曲失败");
+      }
+      if (data.libraryCount === 0) {
+        setMessage("BGM 库为空。把免费 mp3 放到 workspace/input/audio/<mood>/ 下(CC0 来源:pixabay.com/music、mixkit.co、freepd.com)");
+        setResult(data);
+        return;
+      }
+      if (data.pick?.relativePath) {
+        update("bgmPath", data.pick.relativePath);
+        setMessage(`AI 选曲:${data.pick.relativePath}(命中 ${data.score} 关键词:${data.matchedKeywords.join("/") || "fallback"})`);
+        setResult(data);
+      } else {
+        setMessage(`无匹配 BGM。${data.nextActions?.[0] ?? ""}`);
+        setResult(data);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "BGM 选曲请求失败");
+    } finally {
+      setBgmPickBusy(false);
+    }
+  }
+
+  async function analyzeReferenceMaterial() {
+    setAnalysisBusy(true);
+    setMessage("");
+    setResult(null);
+
+    try {
+      const analysisInput = materialAnalysisPayload(form.materialAnalysisPath);
+      const data = await runPost("/api/materials/analyze", {
+        ...analysisInput,
+        transcriptionMode: form.materialTranscriptionMode,
+        whisperModel: form.whisperModel,
+        whisperLanguage: form.whisperLanguage || undefined,
+        sceneBackend: form.sceneBackend,
+        autoEditorEnabled: form.autoEditorEnabled,
+        sceneThreshold: 0.3,
+        maxScenes: 40,
+        silenceNoiseDb: -35,
+        silenceMinDurationSec: 0.8,
+        minClipMs: 1500,
+        targetClipMs: 6000
+      }, "素材分析已启动，右侧任务面板会显示 ASR/场景/静音检测进度");
+      const final = data.task?.status === "completed" || data.task?.status === "failed"
+        ? data.task as TaskRecord
+        : await pollTaskUntilDone(data.task.id, 900000);
+      if (!final) {
+        throw new Error("素材分析任务超时");
+      }
+      if (final.status === "failed") {
+        throw new Error(final.error ?? "素材分析任务失败");
+      }
+      setResult(final.result ?? data);
+      setMessage("素材分析已完成，已生成 transcript/scene/candidate clips JSON");
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "素材分析请求失败");
+    } finally {
+      setAnalysisBusy(false);
+    }
+  }
+
+  async function renderFromAnalysis() {
+    setRenderAnalysisBusy(true);
+    setMessage("");
+    setResult(null);
+
+    try {
+      const data = await runPost("/api/auto/render", {
+        projectTitle: "分析结果粗剪",
+        analysisPath: form.roughCutAnalysisPath
+      }, "分析结果粗剪已完成，输出 rough cut MP4 和 JianYing plan JSON");
+      setResult(data.task?.result ?? data);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "分析结果粗剪请求失败");
+    } finally {
+      setRenderAnalysisBusy(false);
+    }
+  }
+
+  async function generatePlatformVariants() {
+    setVariantBusy(true);
+    setMessage("");
+    setResult(null);
+
+    try {
+      const targets = [
+        form.douyin ? "douyin" : "",
+        form.kuaishou ? "kuaishou" : "",
+        form.bilibili ? "bilibili" : "",
+        "square"
+      ].filter(Boolean);
+      const data = await runPost("/api/video/variants", {
+        inputPath: form.publishSourcePath,
+        title: "平台发布版本",
+        targets,
+        mode: "crop"
+      }, "平台视频版本已生成，输出到 workspace/output/publish");
+      setResult(data.task?.result ?? data);
+      await refreshTasks();
+      await refreshWorkspaceAssets();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "平台视频版本生成失败");
+    } finally {
+      setVariantBusy(false);
     }
   }
 
   return (
-    <main className="console-shell creator-shell">
-      <aside className="sidebar">
+    <main className="console-shell creator-shell command-shell">
+      <aside className="sidebar command-sidebar">
         <div className="brand">
           <div className="brand-mark"><Wand2 size={20} /></div>
           <div>
-            <strong>{text.app}</strong>
-            <span>{text.subtitle}</span>
+            <strong>AI 视频任务指挥舱</strong>
+            <span>Trend → Script → Cut → Publish → Learn</span>
           </div>
         </div>
 
-        <div className="feature-list">
-          {capabilities.map((item) => {
+        <div className="mission-brief">
+          <span>今日链路</span>
+          <strong>{activePipelineIndex >= 0 ? `${activePipelineIndex + 1}/7` : "辅助"}</strong>
+          <small>{activeCapability.title} · {activeCapability.body}</small>
+        </div>
+
+        <div className="feature-list pipeline-rail">
+          <div className="nav-group">七阶段生产轨道</div>
+          {pipelineStages.map((item, index) => {
             const Icon = item.icon;
             return (
               <button
+                aria-pressed={activeStage === item.id}
                 className={activeStage === item.id ? "feature-item active" : "feature-item"}
-                key={item.title}
-                onClick={() => setActiveStage(item.id)}
+                key={item.id}
+                onClick={() => {
+                  setActiveStage(item.id);
+                  setMessage("");
+                }}
                 type="button"
               >
+                <span className="feature-index">{String(index + 1).padStart(2, "0")}</span>
                 <Icon size={18} />
                 <div>
                   <strong>{item.title}</strong>
@@ -384,24 +1249,93 @@ export default function Home() {
           })}
         </div>
 
+        <div className="support-dock">
+          <span>辅助工具</span>
+          {supportStages.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                aria-pressed={activeStage === item.id}
+                className={activeStage === item.id ? "support-tool active" : "support-tool"}
+                key={item.id}
+                onClick={() => {
+                  setActiveStage(item.id);
+                  setMessage("");
+                }}
+                type="button"
+              >
+                <Icon size={15} />
+                {item.title}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="workspace-box">
-          <span>{text.workspace}</span>
+          <span>工作区</span>
           <code>workspace/input/references</code>
           <code>workspace/input/raw</code>
           <code>workspace/output/publish</code>
+          <code>workspace/drafts</code>
         </div>
       </aside>
 
       <section className="workbench">
-        <header className="topbar hero-bar">
-          <div>
-            <p>{text.heroKicker}</p>
-            <h1>{text.heroTitle}</h1>
-            <span>{text.heroText}</span>
+        <header className="topbar command-topbar">
+          <div className="hero-bar command-hero">
+            <div>
+              <p>AI VIDEO OPERATIONS COMMAND</p>
+              <h1>从热点判断到成片发布的本地执行台</h1>
+              <span>真实数据进来，AI 只做推理和执行建议；素材、剪辑、发布全部经过本地文件、任务日志和人工闸门验证。</span>
+            </div>
+            <button className="icon-button" onClick={refreshTasks} title="刷新任务" type="button">
+              <Clock3 size={18} />
+            </button>
           </div>
-          <button className="icon-button" onClick={refreshTasks} title={text.refresh} type="button">
-            <Clock3 size={18} />
-          </button>
+
+          <div className="mission-metrics">
+            <div>
+              <span>执行中</span>
+              <strong>{runningTaskCount}</strong>
+              <small>任务队列</small>
+            </div>
+            <div>
+              <span>素材库</span>
+              <strong>{workspaceAssets?.total ?? 0}</strong>
+              <small>workspace 文件</small>
+            </div>
+            <div>
+              <span>发布闸门</span>
+              <strong>{approvedQueueCount}/{readyQueueCount}</strong>
+              <small>approved / ready</small>
+            </div>
+            <div>
+              <span>系统能力</span>
+              <strong>{systemTotalCount ? `${systemOkCount}/${systemTotalCount}` : "待检"}</strong>
+              <small>服务与本地工具</small>
+            </div>
+          </div>
+
+          <div className="phase-map" aria-label="AI 视频全流程阶段">
+            {pipelineStages.map((item, index) => {
+              const isActive = activeStage === item.id;
+              const isPast = activePipelineIndex >= 0 && index < activePipelineIndex;
+              return (
+                <button
+                  className={isActive ? "phase-node active" : isPast ? "phase-node past" : "phase-node"}
+                  key={item.id}
+                  onClick={() => {
+                    setActiveStage(item.id);
+                    setMessage("");
+                  }}
+                  type="button"
+                >
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{item.title}</strong>
+                </button>
+              );
+            })}
+          </div>
         </header>
 
         <form
@@ -411,307 +1345,1468 @@ export default function Home() {
             void runStageAction();
           }}
         >
-          <WorkflowActionPanel
+          <StageWorkspace
             activeStage={activeStage}
-            busy={submitting || simulating}
-            onRun={runStageAction}
+            busy={busy}
+            form={form}
+            update={update}
+            trendCategory={trendCategory}
+            onTrendCategoryChange={setTrendCategory}
+            trendPlatform={trendPlatform}
+            onTrendPlatformChange={setTrendPlatform}
+            topN={topN}
+            onTopNChange={setTopN}
+            trendReport={trendReport}
+            scriptDraft={scriptDraft}
+            readiness={readiness}
+            workspaceAssets={workspaceAssets}
+            materialBusy={materialBusy}
+            analysisBusy={analysisBusy}
+            renderAnalysisBusy={renderAnalysisBusy}
+            scriptPlanBusy={scriptPlanBusy}
+            remotionBusy={remotionBusy}
+            fullChainBusy={fullChainBusy}
+            fullChainResult={fullChainResult}
+            variantBusy={variantBusy}
+            onImportMaterial={importReferenceMaterial}
+            researchBusy={researchBusy}
+            researchReport={researchReport}
+            onRunTikHubResearch={runTikHubResearchAction}
+            evidenceBusy={evidenceBusy}
+            evidenceReport={evidenceReport}
+            onRunEvidenceSearch={runEvidenceSearchAction}
+            onAnalyzeMaterial={analyzeReferenceMaterial}
+            onCreatePlanFromScript={createPlanFromScript}
+            onRenderScriptPackage={renderScriptPackage}
+            onRunFullChain={runFullChainAction}
+            onRenderFromAnalysis={renderFromAnalysis}
+            onGeneratePlatformVariants={generatePlatformVariants}
+            bgmPickBusy={bgmPickBusy}
+            onAutoPickBgm={autoPickBgm}
+            publishDryRunBusy={publishDryRunBusy}
+            publishQueueBusy={publishQueueBusy}
+            publishApproveBusy={publishApproveBusy}
+            publishDispatchBusy={publishDispatchBusy}
+            publishPreflightBusy={publishPreflightBusy}
+            publishDryRunResult={publishDryRunResult}
+            publishDispatchResult={publishDispatchResult}
+            publishPreflightResult={publishPreflightResult}
+            publishQueue={publishQueue}
+            publishAdapters={publishAdapters}
+            analyticsBusy={analyticsBusy}
+            analyticsSnapshots={analyticsSnapshots}
+            n8nBusy={n8nBusy}
+            n8nResult={n8nResult}
+            onPublishDryRun={runPublishDryRun}
+            onCreatePublishQueue={createPublishQueue}
+            onApprovePublishQueue={approvePublishQueue}
+            onDispatchPublishQueue={dispatchPublishQueue}
+            onRunPublishPreflight={runPublishPreflight}
+            onImportAnalytics={importAnalytics}
+            onTriggerN8n={triggerN8n}
+            selfCheckBusy={selfCheckBusy}
+            selfCheckReport={selfCheckReport}
+            onRunSelfCheck={runSelfCheckAction}
+            smokeBusy={smokeBusy}
+            smokeTaskId={smokeTaskId}
+            onRunEndToEndSmoke={runEndToEndSmokeAction}
           />
 
-          <StageWorkspace activeStage={activeStage} form={form} update={update} />
-
           <footer className="form-actions">
-            <p>{message || cn("%E5%A1%AB%E5%A5%BD%E8%B4%A6%E5%8F%B7%E6%96%B9%E5%90%91%E5%92%8C%E5%8F%82%E8%80%83%E7%88%86%E6%AC%BE%EF%BC%8C%E7%94%9F%E6%88%90%E5%8F%AF%E6%89%A7%E8%A1%8C%E7%9A%84%E5%85%A8%E9%93%BE%E8%B7%AF%E6%96%B9%E6%A1%88%E3%80%82")}</p>
-            <div className="action-buttons">
-              <button className="secondary-button" disabled={simulating} onClick={runSimulation} type="button">
-                {simulating ? <Loader2 className="spin" size={18} /> : <Scissors size={18} />}
-                {cn("%E4%B8%80%E9%94%AE%E7%9C%9F%E5%AE%9E%E6%A8%A1%E6%8B%9F%E5%89%AA%E8%BE%91")}
-              </button>
-              <button className="secondary-button" disabled={generatingDraft} onClick={generateDraft} type="button">
-                {generatingDraft ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
-                生成真实剪映草稿
-              </button>
-              <button className="primary-button" disabled={submitting} onClick={submitSuite} type="button">
-                {submitting ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
-                {text.run}
-              </button>
-            </div>
+            <p>{message || "选择左侧模块开始。"}</p>
           </footer>
         </form>
       </section>
 
-      <TaskPanel readiness={readiness} result={result} tasks={tasks} />
+      <TaskPanel readiness={readiness} result={result} tasks={tasks} workspaceAssets={workspaceAssets} />
     </main>
-  );
-}
-
-function latestDraftPlanPath(tasks: TaskRecord[]): string | null {
-  for (const task of tasks) {
-    if (task.status !== "completed" || !task.result || typeof task.result !== "object") {
-      continue;
-    }
-    const result = task.result as Record<string, unknown>;
-    if (task.type === "auto-simulate") {
-      const render = result.render as Record<string, unknown> | undefined;
-      if (render && typeof render.draftPlanPath === "string") {
-        return render.draftPlanPath;
-      }
-    }
-    if (task.type === "auto-render" && typeof result.draftPlanPath === "string") {
-      return result.draftPlanPath;
-    }
-    if (task.type === "jianying-plan" && typeof result.outputPath === "string") {
-      return result.outputPath;
-    }
-  }
-  return null;
-}
-
-function stageEndpoint(endpoint: StageEndpoint) {
-  const endpoints = {
-    suite: "/api/creator/suite",
-    integrations: "/api/integrations",
-    plan: "/api/auto/plan",
-    simulate: "/api/auto/simulate",
-    readiness: "/api/creator/readiness"
-  };
-  return endpoints[endpoint];
-}
-
-function stagePayload(endpoint: StageEndpoint, form: CreatorForm) {
-  if (endpoint === "plan") {
-    return {
-      projectTitle: cn("%E7%88%86%E6%AC%BE%E6%8B%86%E8%A7%A3%E5%88%B0%E5%88%9D%E5%89%AA"),
-      materialDir: "workspace/input",
-      instructions: cn("%E6%A0%B9%E6%8D%AE%E7%88%86%E6%AC%BE%E5%8F%82%E8%80%83%E6%8B%86%E5%87%BA%E5%BC%BA%E9%92%A9%E5%AD%90%E3%80%81%E6%A0%B8%E5%BF%83%E6%BC%94%E7%A4%BA%E3%80%81%E7%BB%93%E5%B0%BE%E8%BD%AC%E5%8C%96%E4%B8%89%E4%B8%AA%E7%89%87%E6%AE%B5%EF%BC%8C%E7%94%9F%E6%88%90%E8%87%AA%E5%8A%A8%E5%89%AA%E8%BE%91decision JSON%E3%80%82")
-    };
-  }
-
-  return {
-    niche: form.niche,
-    audience: form.audience,
-    persona: form.persona,
-    platforms: [
-      form.douyin ? "douyin" : "",
-      form.kuaishou ? "kuaishou" : "",
-      form.bilibili ? "bilibili" : ""
-    ].filter(Boolean),
-    keywords: splitLines(form.keywords),
-    references: splitLines(form.references),
-    materialNeeds: form.materialNeeds,
-    campaignGoal: form.campaignGoal,
-    competitorStyle: form.competitorStyle,
-    webSearchEnabled: form.webSearchEnabled === "true",
-    riskTolerance: "medium"
-  };
-}
-
-function WorkflowActionPanel({
-  activeStage,
-  busy,
-  onRun
-}: {
-  activeStage: WorkflowStage;
-  busy: boolean;
-  onRun: () => void;
-}) {
-  const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
-  const Icon = stage.icon;
-
-  return (
-    <section className="workflow-action-panel">
-      <Icon size={22} />
-      <div>
-        <strong>{stage.title}</strong>
-        <p>{stage.body}</p>
-      </div>
-      <button className="primary-button" disabled={busy} onClick={onRun} type="button">
-        {busy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
-        {stage.action}
-      </button>
-    </section>
   );
 }
 
 function StageWorkspace({
   activeStage,
+  busy,
   form,
-  update
+  update,
+  trendCategory,
+  onTrendCategoryChange,
+  trendPlatform,
+  onTrendPlatformChange,
+  topN,
+  onTopNChange,
+  trendReport,
+  scriptDraft,
+  readiness,
+  workspaceAssets,
+  materialBusy,
+  analysisBusy,
+  renderAnalysisBusy,
+  scriptPlanBusy,
+  remotionBusy,
+  fullChainBusy,
+  fullChainResult,
+  variantBusy,
+  onImportMaterial,
+  researchBusy,
+  researchReport,
+  onRunTikHubResearch,
+  evidenceBusy,
+  evidenceReport,
+  onRunEvidenceSearch,
+  onAnalyzeMaterial,
+  onCreatePlanFromScript,
+  onRenderScriptPackage,
+  onRunFullChain,
+  onRenderFromAnalysis,
+  onGeneratePlatformVariants,
+  bgmPickBusy,
+  onAutoPickBgm,
+  publishDryRunBusy,
+  publishQueueBusy,
+  publishApproveBusy,
+  publishDispatchBusy,
+  publishPreflightBusy,
+  publishDryRunResult,
+  publishDispatchResult,
+  publishPreflightResult,
+  publishQueue,
+  publishAdapters,
+  analyticsBusy,
+  analyticsSnapshots,
+  n8nBusy,
+  n8nResult,
+  onPublishDryRun,
+  onCreatePublishQueue,
+  onApprovePublishQueue,
+  onDispatchPublishQueue,
+  onRunPublishPreflight,
+  onImportAnalytics,
+  onTriggerN8n,
+  selfCheckBusy,
+  selfCheckReport,
+  onRunSelfCheck,
+  smokeBusy,
+  smokeTaskId,
+  onRunEndToEndSmoke
 }: {
   activeStage: WorkflowStage;
+  busy: boolean;
   form: CreatorForm;
   update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
+  trendCategory: string;
+  onTrendCategoryChange: (value: string) => void;
+  trendPlatform: string;
+  onTrendPlatformChange: (value: string) => void;
+  topN: number;
+  onTopNChange: (value: number) => void;
+  trendReport: IntelligenceReport | null;
+  scriptDraft: ScriptDraft | null;
+  readiness: Readiness | null;
+  workspaceAssets: WorkspaceAssetIndex | null;
+  materialBusy: boolean;
+  analysisBusy: boolean;
+  renderAnalysisBusy: boolean;
+  scriptPlanBusy: boolean;
+  remotionBusy: boolean;
+  fullChainBusy: boolean;
+  fullChainResult: FullChainResult | null;
+  variantBusy: boolean;
+  onImportMaterial: () => void;
+  researchBusy: boolean;
+  researchReport: TikHubResearchReport | null;
+  onRunTikHubResearch: () => void;
+  evidenceBusy: boolean;
+  evidenceReport: EvidenceReport | null;
+  onRunEvidenceSearch: () => void;
+  onAnalyzeMaterial: () => void;
+  onCreatePlanFromScript: () => void;
+  onRenderScriptPackage: () => void;
+  onRunFullChain: () => void;
+  onRenderFromAnalysis: () => void;
+  onGeneratePlatformVariants: () => void;
+  bgmPickBusy: boolean;
+  onAutoPickBgm: () => void;
+  publishDryRunBusy: boolean;
+  publishQueueBusy: boolean;
+  publishApproveBusy: boolean;
+  publishDispatchBusy: boolean;
+  publishPreflightBusy: boolean;
+  publishDryRunResult: PublishDryRunResult | null;
+  publishDispatchResult: PublishDispatchResult | null;
+  publishPreflightResult: PublishPreflightReport | null;
+  publishQueue: PublishQueueItem[];
+  publishAdapters: PublishAdapterStatus[];
+  analyticsBusy: boolean;
+  analyticsSnapshots: AnalyticsSnapshot[];
+  n8nBusy: boolean;
+  n8nResult: N8nOrchestrationResult | null;
+  onPublishDryRun: () => void;
+  onCreatePublishQueue: () => void;
+  onApprovePublishQueue: (id: string) => void;
+  onDispatchPublishQueue: (id: string) => void;
+  onRunPublishPreflight: () => void;
+  onImportAnalytics: () => void;
+  onTriggerN8n: (mode: "dry-run" | "webhook", exportWorkflow?: boolean) => void;
+  selfCheckBusy: boolean;
+  selfCheckReport: SelfCheckReport | null;
+  onRunSelfCheck: () => void;
+  smokeBusy: boolean;
+  smokeTaskId: string | null;
+  onRunEndToEndSmoke: () => void;
 }) {
   const copy = stageCopy[activeStage];
+  const stage = capabilities.find((item) => item.id === activeStage) ?? capabilities[0];
 
   return (
     <section className="stage-workspace">
       <div className="stage-hero">
         <div>
-          <p>{copy.eyebrow}</p>
+          <p>{activeStage.toUpperCase()}</p>
           <h2>{copy.headline}</h2>
           <span>{copy.description}</span>
+          <div className="stage-proof">
+            {copy.proof.map((item) => <span key={item}>{item}</span>)}
+          </div>
         </div>
-        <div className="stage-proof">
-          {copy.proof.map((item) => <span key={item}>{item}</span>)}
+        <div className="stage-action">
+          <button className="primary-button" disabled={busy} type="submit">
+            {busy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
+            {stage.action}
+          </button>
         </div>
       </div>
 
-      {activeStage === "trend" ? (
-        <div className="stage-layout trend-layout">
-          <section className="stage-form-card">
-            <Field label={text.niche} value={form.niche} onChange={(value) => update("niche", value)} />
-            <Field label={text.audience} value={form.audience} onChange={(value) => update("audience", value)} />
-            <Field label={text.keywords} multiline value={form.keywords} onChange={(value) => update("keywords", value)} />
-          </section>
-          <section className="stage-side-card">
-            <StageCard icon={Target} title="输出目标" body={copy.output} />
-            <PlatformSelector form={form} update={update} />
-            <WebSearchSelector form={form} update={update} />
-          </section>
-        </div>
+      {(activeStage === "trend" || activeStage === "predict") ? (
+        <TrendIntelligencePanel
+          category={trendCategory}
+          onCategoryChange={onTrendCategoryChange}
+          platform={trendPlatform}
+          onPlatformChange={onTrendPlatformChange}
+          topN={topN}
+          onTopNChange={onTopNChange}
+          report={trendReport}
+        />
       ) : null}
 
       {activeStage === "collect" ? (
-        <div className="stage-layout collect-layout">
-          <section className="stage-form-card">
-            <Field label={text.references} multiline value={form.references} onChange={(value) => update("references", value)} />
-            <Field label={text.materials} multiline value={form.materialNeeds} onChange={(value) => update("materialNeeds", value)} />
-          </section>
-          <section className="tool-grid">
-            <StageCard icon={Search} title="联网搜索" body="Exa / Firecrawl / TikHub 用来找标题、评论、热点和参考素材。" />
-            <StageCard icon={DownloadCloud} title="素材导入" body="yt-dlp 负责导入公开视频、封面、字幕和元数据，先 dry-run 再落盘。" />
-            <StageCard icon={FileJson} title="素材目录" body="workspace/input/references、raw、broll、audio 作为统一入口。" />
-          </section>
-        </div>
+        <CollectPanel
+          form={form}
+          assets={workspaceAssets?.assets ?? []}
+          analysisBusy={analysisBusy}
+          materialBusy={materialBusy}
+          researchBusy={researchBusy}
+          researchReport={researchReport}
+          evidenceBusy={evidenceBusy}
+          evidenceReport={evidenceReport}
+          onAnalyzeMaterial={onAnalyzeMaterial}
+          onImportMaterial={onImportMaterial}
+          onRunTikHubResearch={onRunTikHubResearch}
+          onRunEvidenceSearch={onRunEvidenceSearch}
+          update={update}
+        />
       ) : null}
-
-      {activeStage === "analyze" ? (
-        <div className="stage-layout analyze-layout">
-          <section className="stage-form-card">
-            <Field label={text.references} multiline value={form.references} onChange={(value) => update("references", value)} />
-            <Field label={text.competitor} multiline value={form.competitorStyle} onChange={(value) => update("competitorStyle", value)} />
-          </section>
-          <section className="analysis-strip">
-            <StageCard icon={PlayCircle} title="前 3 秒" body="拆冲突、结果前置、反差句，形成 hook 候选。" />
-            <StageCard icon={Scissors} title="剪辑节奏" body="接 PySceneDetect / Auto-Editor，输出候选切点。" />
-            <StageCard icon={ListChecks} title="决策 JSON" body="生成 scenes、targetDurationMs、字幕风格和镜头用途。" />
-          </section>
-        </div>
-      ) : null}
-
+      {activeStage === "analyze" ? <AnalyzePanel form={form} update={update} /> : null}
       {activeStage === "script" ? (
-        <div className="stage-layout script-layout">
-          <section className="stage-form-card">
-            <Field label={text.persona} value={form.persona} onChange={(value) => update("persona", value)} />
-            <Field label={text.goal} value={form.campaignGoal} onChange={(value) => update("campaignGoal", value)} />
-            <Field label={text.keywords} multiline value={form.keywords} onChange={(value) => update("keywords", value)} />
-          </section>
-          <section className="script-preview">
-            <strong>脚本结构预览</strong>
-            <ol>
-              <li>3 秒钩子：先给反差或结果。</li>
-              <li>中段方法：每 2-4 秒一个信息点。</li>
-              <li>画面要求：口播、屏录、B-roll 交替。</li>
-              <li>结尾转化：评论问题或收藏理由。</li>
-            </ol>
-          </section>
-        </div>
+        <ScriptPanel
+          form={form}
+          update={update}
+          draft={scriptDraft}
+          scriptPlanBusy={scriptPlanBusy}
+          remotionBusy={remotionBusy}
+          fullChainBusy={fullChainBusy}
+          fullChainResult={fullChainResult}
+          evidenceCount={evidenceReport?.results.length ?? 0}
+          bgmPickBusy={bgmPickBusy}
+          onCreatePlanFromScript={onCreatePlanFromScript}
+          onRenderScriptPackage={onRenderScriptPackage}
+          onRunFullChain={onRunFullChain}
+          onAutoPickBgm={onAutoPickBgm}
+        />
       ) : null}
-
       {activeStage === "edit" ? (
-        <div className="stage-layout edit-layout">
-          <section className="edit-pipeline">
-            <StageCard icon={Settings2} title="1. 生成测试素材" body="创建本地 12 秒测试视频，证明链路不是空按钮。" />
-            <StageCard icon={Scissors} title="2. 裁剪三段" body="FFmpeg clip 输出 hook、demo、ending 三个片段。" />
-            <StageCard icon={Files} title="3. 合成粗剪" body="FFmpeg merge 输出 rough cut MP4。" />
-            <StageCard icon={FileJson} title="4. 剪映计划" body="写入 JianYing plan JSON，下一步映射 MCP。" />
-          </section>
-          <section className="stage-form-card compact">
-            <Field label={text.materials} multiline value={form.materialNeeds} onChange={(value) => update("materialNeeds", value)} />
-            <StageCard icon={PlayCircle} title="当前动作" body="点击上方“立即模拟剪辑”会真实生成视频文件和草稿计划。" />
-          </section>
-        </div>
+        <EditPanel
+          form={form}
+          assets={workspaceAssets?.assets ?? []}
+          renderAnalysisBusy={renderAnalysisBusy}
+          onRenderFromAnalysis={onRenderFromAnalysis}
+          update={update}
+        />
       ) : null}
-
       {activeStage === "publish" ? (
-        <div className="stage-layout publish-layout">
-          <section className="stage-form-card">
-            <Field label={text.goal} value={form.campaignGoal} onChange={(value) => update("campaignGoal", value)} />
-            <Field label={text.competitor} multiline value={form.competitorStyle} onChange={(value) => update("competitorStyle", value)} />
-            <PlatformSelector form={form} update={update} />
-          </section>
-          <section className="publish-board">
-            <StageCard icon={Megaphone} title="抖音" body="9:16、18-45 秒、强钩子、标题短、评论引导。" />
-            <StageCard icon={Megaphone} title="快手" body="9:16、真实感、人设强、生活场景优先。" />
-            <StageCard icon={Megaphone} title="B站" body="16:9、结构完整、标题信息密度更高。" />
-          </section>
-        </div>
+        <PublishPanel
+          form={form}
+          assets={workspaceAssets?.assets ?? []}
+          variantBusy={variantBusy}
+          onGeneratePlatformVariants={onGeneratePlatformVariants}
+          publishDryRunBusy={publishDryRunBusy}
+          publishQueueBusy={publishQueueBusy}
+          publishApproveBusy={publishApproveBusy}
+          publishDispatchBusy={publishDispatchBusy}
+          publishPreflightBusy={publishPreflightBusy}
+          publishDryRunResult={publishDryRunResult}
+          publishDispatchResult={publishDispatchResult}
+          publishPreflightResult={publishPreflightResult}
+          publishQueue={publishQueue}
+          publishAdapters={publishAdapters}
+          onPublishDryRun={onPublishDryRun}
+          onCreatePublishQueue={onCreatePublishQueue}
+          onApprovePublishQueue={onApprovePublishQueue}
+          onDispatchPublishQueue={onDispatchPublishQueue}
+          onRunPublishPreflight={onRunPublishPreflight}
+          update={update}
+        />
       ) : null}
-
       {activeStage === "review" ? (
-        <div className="stage-layout review-layout">
-          <section className="tool-grid">
-            <StageCard icon={CheckCircle2} title="环境体检" body="检查 FFmpeg、外部工具、API Key 和 MCP 路径。" />
-            <StageCard icon={BarChart3} title="30 分钟复盘" body="看 5 秒留存、完播、点赞、评论密度。" />
-            <StageCard icon={Rocket} title="下一轮动作" body="根据数据决定重剪、追更、换标题或换选题。" />
-          </section>
-          <section className="stage-form-card compact">
-            <Field label={text.goal} value={form.campaignGoal} onChange={(value) => update("campaignGoal", value)} />
-            <WebSearchSelector form={form} update={update} />
-          </section>
+        <ReviewPanel
+          analyticsBusy={analyticsBusy}
+          analyticsSnapshots={analyticsSnapshots}
+          form={form}
+          n8nBusy={n8nBusy}
+          n8nResult={n8nResult}
+          onImportAnalytics={onImportAnalytics}
+          onTriggerN8n={onTriggerN8n}
+          readiness={readiness}
+          update={update}
+        />
+      ) : null}
+      {activeStage === "selfcheck" ? (
+        <SelfCheckPanel
+          busy={selfCheckBusy}
+          report={selfCheckReport}
+          onRun={onRunSelfCheck}
+          smokeBusy={smokeBusy}
+          smokeTaskId={smokeTaskId}
+          onRunEndToEndSmoke={onRunEndToEndSmoke}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function SelfCheckPanel({
+  busy,
+  report,
+  onRun,
+  smokeBusy,
+  smokeTaskId,
+  onRunEndToEndSmoke
+}: {
+  busy: boolean;
+  report: SelfCheckReport | null;
+  onRun: () => void;
+  smokeBusy: boolean;
+  smokeTaskId: string | null;
+  onRunEndToEndSmoke: () => void;
+}) {
+  useEffect(() => {
+    if (!report) {
+      void onRun();
+    }
+    // 仅在面板首次打开时自动跑一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const statusLabel: Record<string, string> = {
+    ok: "可用",
+    down: "已断",
+    degraded: "未接线",
+    unconfigured: "未配置"
+  };
+  const pillClass: Record<string, string> = {
+    ok: "ok",
+    down: "down",
+    degraded: "missing",
+    unconfigured: "unconfigured"
+  };
+  const services = report?.items.filter((item) => item.category === "service") ?? [];
+  const localCaps = report?.items.filter((item) => item.category === "capability") ?? [];
+
+  return (
+    <div className="material-import">
+      <div className="material-import-actions">
+        <button className="primary-button" disabled={busy} onClick={onRun} type="button">
+          {busy ? <Loader2 className="spin" size={18} /> : <Gauge size={18} />}
+          {busy ? "自检中…" : "重新自检"}
+        </button>
+        {report ? (
+          <span className="hint-pill">
+            {report.summary.ok}/{report.summary.total} 可用
+            {report.summary.down ? ` · ${report.summary.down} 断` : ""}
+            {report.summary.degraded ? ` · ${report.summary.degraded} 未接线` : ""}
+            {report.summary.unconfigured ? ` · ${report.summary.unconfigured} 未配置` : ""}
+          </span>
+        ) : null}
+      </div>
+
+      {report ? (
+        <>
+          <SelfCheckGroup title="在线服务" items={services} statusLabel={statusLabel} pillClass={pillClass} />
+          <SelfCheckGroup title="本地能力" items={localCaps} statusLabel={statusLabel} pillClass={pillClass} />
+          <p className="check-detail" style={{ marginTop: 12 }}>
+            检查时间 {new Date(report.checkedAt).toLocaleString()}
+          </p>
+        </>
+      ) : (
+        <p className="check-detail">{busy ? "正在探测各服务…" : "点击运行自检。"}</p>
+      )}
+
+      <div className="selfcheck-live-run">
+        <div>
+          <strong>真实端到端成片实测</strong>
+          <small>启动文案生成、Remotion 渲染与多平台变体任务，产物写入 workspace/output/publish。</small>
+        </div>
+        <button className="secondary-button" disabled={smokeBusy} onClick={onRunEndToEndSmoke} type="button">
+          {smokeBusy ? <Loader2 className="spin" size={17} /> : <Rocket size={17} />}
+          {smokeBusy ? "启动中" : "运行真实链路"}
+        </button>
+        {smokeTaskId ? <code>任务 {smokeTaskId}</code> : null}
+      </div>
+
+      <ConfigCenter onSaved={onRun} />
+    </div>
+  );
+}
+
+function SelfCheckGroup({
+  title,
+  items,
+  statusLabel,
+  pillClass
+}: {
+  title: string;
+  items: SelfCheckItem[];
+  statusLabel: Record<string, string>;
+  pillClass: Record<string, string>;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <div className="selfcheck-group">
+      <h4>{title}</h4>
+      {items.map((item) => (
+        <div key={item.id} className={`selfcheck-row status-${item.status}`}>
+          <div className="selfcheck-row-head">
+            <span className={`pill ${pillClass[item.status] ?? "missing"}`}>
+              {statusLabel[item.status] ?? item.status}
+            </span>
+            <strong>{item.label}</strong>
+          </div>
+          <small>{item.detail}</small>
+          {item.hint ? <code>{item.hint}</code> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrendIntelligencePanel({
+  category,
+  onCategoryChange,
+  platform,
+  onPlatformChange,
+  topN,
+  onTopNChange,
+  report
+}: {
+  category: string;
+  onCategoryChange: (value: string) => void;
+  platform: string;
+  onPlatformChange: (value: string) => void;
+  topN: number;
+  onTopNChange: (value: number) => void;
+  report: IntelligenceReport | null;
+}) {
+  return (
+    <div className="stage-layout trend-layout">
+      <section className="trend-controls">
+        <label className="field">
+          <span>平台</span>
+          <select value={platform} onChange={(event) => onPlatformChange(event.target.value)}>
+            <option value="bilibili">B站（真实榜单）</option>
+            <option value="kuaishou">快手（TikHub 热榜）</option>
+            <option value="youtube">YouTube（需 YOUTUBE_API_KEY）</option>
+            <option value="douyin">抖音（TikHub 热榜）</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>分类 / 榜单类型</span>
+          <select value={category} onChange={(event) => onCategoryChange(event.target.value)}>
+            {biliCategories.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>抓取数量</span>
+          <input
+            min={1}
+            max={50}
+            type="number"
+            value={topN}
+            onChange={(event) => onTopNChange(Number(event.target.value))}
+          />
+        </label>
+        <small>潜力分 = 互动率 × 播放速度，置信度 = 数据支撑强度;不承诺“必火”。</small>
+      </section>
+
+      {!report ? (
+        <section className="trend-empty">
+          <Flame size={28} />
+          <span>点击“生成热点情报”后，这里会展示真实榜单、潜力分、置信度和 AI 分析状态。</span>
+        </section>
+      ) : (
+        <TrendReport report={report} />
+      )}
+    </div>
+  );
+}
+
+function TrendReport({ report }: { report: IntelligenceReport }) {
+  return (
+    <section className="trend-report">
+      {report.aiStatus === "failed" ? (
+        <p className="trend-degraded">AI 分析未启用或失败：以下仅展示真实榜单和客观评分。配置 DEEPSEEK_API_KEY 后可生成爆火逻辑和可模仿选题卡。</p>
+      ) : null}
+
+      <ol className="trend-list">
+        {report.items.map((item, index) => (
+          <li className="trend-item" key={item.id}>
+            <div className="trend-rank">{index + 1}</div>
+            <div className="trend-main">
+              <a href={item.url} target="_blank" rel="noreferrer"><strong>{item.title}</strong></a>
+              <small>{item.author} / {item.category || report.category}</small>
+              <div className="trend-metrics">
+                <span><Gauge size={14} /> 潜力 {item.potentialScore}</span>
+                <span><Target size={14} /> 置信 {item.confidence}</span>
+                <span>播放 {formatCount(item.metrics.views)}</span>
+                <span>赞 {formatCount(item.metrics.likes)}</span>
+                <span>互动率 {(item.signals.engagementRate * 100).toFixed(1)}%</span>
+              </div>
+              {item.viralLogic ? <p className="trend-logic">{item.viralLogic}</p> : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {report.patterns.length > 0 ? (
+        <div className="trend-patterns">
+          <strong>共性套路</strong>
+          <ul>{report.patterns.map((pattern) => <li key={pattern}>{pattern}</li>)}</ul>
         </div>
       ) : null}
 
-      {activeStage === "predict" ? (
-        <div className="stage-layout predict-layout">
-          <section className="score-board">
-            <StageCard icon={Gauge} title="关键词强度" body={`${splitLines(form.keywords).length} 个关键词参与评分。`} />
-            <StageCard icon={Files} title="参考完整度" body={`${splitLines(form.references).length} 条参考链接或标题。`} />
-            <StageCard icon={Target} title="平台匹配" body="平台越明确，发布包和剪辑比例越可控。" />
-          </section>
-          <section className="stage-form-card">
-            <Field label={text.keywords} multiline value={form.keywords} onChange={(value) => update("keywords", value)} />
-            <Field label={text.references} multiline value={form.references} onChange={(value) => update("references", value)} />
-            <Field label={text.materials} multiline value={form.materialNeeds} onChange={(value) => update("materialNeeds", value)} />
-          </section>
+      {report.topicCards.length > 0 ? (
+        <div className="trend-cards">
+          <strong>可模仿选题卡</strong>
+          {report.topicCards.map((card) => (
+            <article className="topic-card" key={card.angle + card.hook}>
+              <strong>{card.angle}</strong>
+              <p>钩子：{card.hook}</p>
+              <p>结构：{card.structure}</p>
+            </article>
+          ))}
         </div>
       ) : null}
     </section>
   );
 }
 
-function PlatformSelector({
+function CollectPanel({
   form,
+  update,
+  assets,
+  materialBusy,
+  analysisBusy,
+  researchBusy,
+  researchReport,
+  evidenceBusy,
+  evidenceReport,
+  onImportMaterial,
+  onAnalyzeMaterial,
+  onRunTikHubResearch,
+  onRunEvidenceSearch
+}: FormPanelProps & {
+  assets: WorkspaceAsset[];
+  materialBusy: boolean;
+  analysisBusy: boolean;
+  researchBusy: boolean;
+  researchReport: TikHubResearchReport | null;
+  evidenceBusy: boolean;
+  evidenceReport: EvidenceReport | null;
+  onImportMaterial: () => void;
+  onAnalyzeMaterial: () => void;
+  onRunTikHubResearch: () => void;
+  onRunEvidenceSearch: () => void;
+}) {
+  const analyzableAssets = assets
+    .filter((asset) => asset.role === "input" && (asset.kind === "manifest" || asset.kind === "video"))
+    .slice(0, 5);
+
+  return (
+    <div className="stage-layout collect-layout">
+      <section className="tool-grid">
+        <StageCard icon={Search} title="搜索与热点" body="Exa、Firecrawl、TikHub/KSD 找热点、标题、参考链接。" />
+        <StageCard icon={DownloadCloud} title="视频素材导入" body="yt-dlp 把可合法使用的视频、字幕、元数据入库。" />
+        <StageCard icon={FileJson} title="素材目录" body="统一落盘 references / raw / broll / audio。" />
+      </section>
+
+      <section className="stage-form-card material-import-card research-card">
+        <div className="form-card-title">
+          <strong>TikHub / KSD 爆款研究</strong>
+          <span>关键词搜索走 TikHub；快手单视频详情可走本地 KS-Downloader 免费路径。</span>
+        </div>
+        <div className="form-grid">
+          <label className="field">
+            <span>平台</span>
+            <select value={form.researchPlatform} onChange={(event) => update("researchPlatform", event.target.value)}>
+              <option value="douyin">抖音</option>
+              <option value="kuaishou">快手</option>
+            </select>
+          </label>
+          <Field label="关键词" value={form.researchQuery} onChange={(value) => update("researchQuery", value)} />
+          <Field label="爆款链接 / 分享文本" value={form.researchUrl} onChange={(value) => update("researchUrl", value)} />
+          <Field label="视频 ID" value={form.researchItemId} onChange={(value) => update("researchItemId", value)} />
+        </div>
+        <label className="toggle-row">
+          <input checked={form.researchIncludeComments} onChange={(event) => update("researchIncludeComments", event.target.checked)} type="checkbox" />
+          <span>抓取评论样本</span>
+        </label>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={researchBusy} onClick={onRunTikHubResearch} type="button">
+            {researchBusy ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+            研究爆款信号
+          </button>
+          <small>关键词/评论需要 TIKHUB_API_KEY；快手详情可配置 KSD_BASE_URL。结果只用于结构参考和合规素材选择。</small>
+        </div>
+        {researchReport ? (
+          <div className="research-result">
+            <div className="research-stats">
+              <span>{researchReport.searchItems.length} 搜索结果</span>
+              <span>{researchReport.detail ? "1 个详情" : "无详情"}</span>
+              <span>{researchReport.comments.length} 评论样本</span>
+            </div>
+            {researchReport.materialCandidates.length ? (
+              <div className="research-candidates">
+                {researchReport.materialCandidates.slice(0, 5).map((candidate) => (
+                  <article className="research-candidate" key={`${candidate.source}-${candidate.url}`}>
+                    <strong>{candidate.title}</strong>
+                    <small>{candidate.source} / {candidate.reason}</small>
+                    <button className="secondary-button" onClick={() => update("materialUrl", candidate.url)} type="button">
+                      填入导入链接
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {researchReport.nextActions.length ? (
+              <ul className="research-actions">
+                {researchReport.nextActions.map((action) => <li key={action}>{action}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="stage-form-card material-import-card research-card">
+        <div className="form-card-title">
+          <strong>网页事实证据搜索</strong>
+          <span>Exa / Firecrawl 真实搜索;只用于脚本的事实背书,不抓视频画面。</span>
+        </div>
+        <div className="form-grid">
+          <Field label="关键词(复用上面的研究关键词)" value={form.researchQuery} onChange={(value) => update("researchQuery", value)} />
+          <label className="field">
+            <span>证据源</span>
+            <select value={form.evidenceProvider} onChange={(event) => update("evidenceProvider", event.target.value)}>
+              <option value="auto">自动(有谁用谁)</option>
+              <option value="exa">Exa(需 EXA_API_KEY)</option>
+              <option value="firecrawl">Firecrawl(需 FIRECRAWL_API_KEY)</option>
+            </select>
+          </label>
+        </div>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={evidenceBusy} onClick={onRunEvidenceSearch} type="button">
+            {evidenceBusy ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+            搜索事实证据
+          </button>
+          <small>需要 EXA_API_KEY 或 FIRECRAWL_API_KEY;未配置会明确报错,不返回伪造结果。</small>
+        </div>
+        {evidenceReport ? (
+          <div className="research-result">
+            <div className="research-stats">
+              <span>{evidenceReport.provider}</span>
+              <span>{evidenceReport.results.length} 条结果</span>
+            </div>
+            {evidenceReport.results.length ? (
+              <div className="research-candidates">
+                {evidenceReport.results.slice(0, 5).map((item) => (
+                  <article className="research-candidate" key={item.url}>
+                    <strong>{item.title}</strong>
+                    <small>
+                      <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>
+                      {item.publishedAt ? ` · ${item.publishedAt.slice(0, 10)}` : ""}
+                    </small>
+                    {item.snippet ? <p className="evidence-snippet">{item.snippet}</p> : null}
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {evidenceReport.nextActions.length ? (
+              <ul className="research-actions">
+                {evidenceReport.nextActions.map((action) => <li key={action}>{action}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="stage-form-card material-import-card">
+        <div className="form-card-title">
+          <strong>导入参考素材</strong>
+          <span>保存视频/音频、封面、字幕、info.json 和 manifest.json</span>
+        </div>
+        <Field label="公开视频链接" value={form.materialUrl} onChange={(value) => update("materialUrl", value)} />
+        <Field label="素材集合名" value={form.materialCollection} onChange={(value) => update("materialCollection", value)} />
+        <label className="field">
+          <span>导入质量</span>
+          <select value={form.materialQuality} onChange={(event) => update("materialQuality", event.target.value)}>
+            <option value="720p">720p 推荐</option>
+            <option value="1080p">1080p</option>
+            <option value="480p">480p</option>
+            <option value="best">最佳质量</option>
+            <option value="audio">仅音频 MP3</option>
+            <option value="metadata">仅元数据</option>
+          </select>
+        </label>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={materialBusy} onClick={onImportMaterial} type="button">
+            {materialBusy ? <Loader2 className="spin" size={18} /> : <DownloadCloud size={18} />}
+            导入参考素材
+          </button>
+          <small>只导入你有权使用的内容;登录态平台可配 YTDLP_COOKIES_PATH。</small>
+        </div>
+      </section>
+
+      <section className="stage-form-card material-import-card">
+        <div className="form-card-title">
+          <strong>分析素材信号</strong>
+          <span>读取最新 manifest 或本地视频，输出字幕片段、场景变化和候选切点 analysis JSON</span>
+        </div>
+        <Field label="素材目录 / manifest / 视频路径" value={form.materialAnalysisPath} onChange={(value) => update("materialAnalysisPath", value)} />
+        <div className="form-grid">
+          <label className="field">
+            <span>转写模式</span>
+            <select value={form.materialTranscriptionMode} onChange={(event) => update("materialTranscriptionMode", event.target.value)}>
+              <option value="auto">字幕优先，缺字幕用 faster-whisper</option>
+              <option value="subtitle-only">只读字幕文件</option>
+              <option value="faster-whisper">强制 faster-whisper</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Whisper 模型</span>
+            <select value={form.whisperModel} onChange={(event) => update("whisperModel", event.target.value)}>
+              <option value="tiny">tiny 快速验证</option>
+              <option value="base">base</option>
+              <option value="small">small</option>
+              <option value="medium">medium</option>
+            </select>
+          </label>
+          <Field label="语言" value={form.whisperLanguage} onChange={(value) => update("whisperLanguage", value)} />
+          <label className="field">
+            <span>场景检测</span>
+            <select value={form.sceneBackend} onChange={(event) => update("sceneBackend", event.target.value)}>
+              <option value="auto">PySceneDetect 优先，失败回退 FFmpeg</option>
+              <option value="pyscenedetect">强制 PySceneDetect</option>
+              <option value="ffmpeg">FFmpeg scene 基线</option>
+            </select>
+          </label>
+        </div>
+        <label className="toggle-row">
+          <input checked={form.autoEditorEnabled} onChange={(event) => update("autoEditorEnabled", event.target.checked)} type="checkbox" />
+          <span>运行 Auto-Editor 预览信号</span>
+        </label>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={analysisBusy} onClick={onAnalyzeMaterial} type="button">
+            {analysisBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
+            分析素材
+          </button>
+          <small>字幕优先，缺字幕走本地 faster-whisper ASR;场景检测 + 跳剪预览。</small>
+        </div>
+      </section>
+      <AssetQuickList
+        actionLabel="填入分析路径"
+        assets={analyzableAssets}
+        empty="还没有可分析的 manifest 或视频。先导入素材，或把本地视频放进 workspace/input。"
+        onUse={(asset) => update("materialAnalysisPath", asset.relativePath)}
+        title="最近可分析素材"
+      />
+    </div>
+  );
+}
+
+function AnalyzePanel({ form, update }: FormPanelProps) {
+  return (
+    <div className="stage-layout analyze-layout">
+      <section className="stage-form-card">
+        <Field label="参考爆款链接/标题" multiline value={form.references} onChange={(value) => update("references", value)} />
+        <Field label="想模仿的爆款风格" multiline value={form.competitorStyle} onChange={(value) => update("competitorStyle", value)} />
+      </section>
+      <section className="analysis-strip">
+        <StageCard icon={Search} title="只拆方法" body="拆开头、节奏、评论引导和留存结构，不搬运画面和原文案。" />
+        <StageCard icon={Scissors} title="剪辑信号" body="后续接 ASR、PySceneDetect、Auto-Editor 后，用真实信号选择片段。" />
+        <StageCard icon={FileJson} title="decision JSON" body="当前按钮生成自动剪辑计划，作为后续 rough cut 的输入。" />
+      </section>
+    </div>
+  );
+}
+
+function ScriptPanel({
+  form,
+  update,
+  draft,
+  scriptPlanBusy,
+  remotionBusy,
+  fullChainBusy,
+  fullChainResult,
+  evidenceCount,
+  bgmPickBusy,
+  onCreatePlanFromScript,
+  onRenderScriptPackage,
+  onRunFullChain,
+  onAutoPickBgm
+}: FormPanelProps & {
+  draft: ScriptDraft | null;
+  scriptPlanBusy: boolean;
+  remotionBusy: boolean;
+  fullChainBusy: boolean;
+  fullChainResult: FullChainResult | null;
+  evidenceCount: number;
+  bgmPickBusy: boolean;
+  onCreatePlanFromScript: () => void;
+  onRenderScriptPackage: () => void;
+  onRunFullChain: () => void;
+  onAutoPickBgm: () => void;
+}) {
+  return (
+    <div className="stage-layout script-layout">
+      <section className="stage-form-card">
+        <Field label="选题（来自热点选题卡或自己写）" multiline value={form.scriptTopic} onChange={(value) => update("scriptTopic", value)} />
+        <Field label="目标人群" value={form.audience} onChange={(value) => update("audience", value)} />
+        <Field label="参考爆款（只借鉴方法，每行一个）" multiline value={form.references} onChange={(value) => update("references", value)} />
+        <small className="hint">
+          LLM 产出可直接开拍的分镜脚本;未配 key 会明确报错，不出假模板。
+          {evidenceCount > 0 ? (
+            <span className="hint-pill"> · 已挂载 {evidenceCount} 条网页事实证据,会自动喂给 LLM 引用</span>
+          ) : null}
+        </small>
+        <div className="full-chain-config">
+          <label className="toggle-row">
+            <input checked={form.narrated} onChange={(event) => update("narrated", event.target.checked)} type="checkbox" />
+            <span>AI 配音口播（TTS 合成 + 成片按配音时长动态对齐）</span>
+          </label>
+          {form.narrated ? (
+            <label className="field">
+              <span>配音引擎</span>
+              <select value={form.ttsProvider} onChange={(event) => update("ttsProvider", event.target.value)}>
+                <option value="edge">edge-tts（neural 中文，音质好，需联网）</option>
+                <option value="sapi">SAPI（本地保底，零依赖）</option>
+              </select>
+            </label>
+          ) : null}
+          <Field label="BGM 音频路径（可选，本地 mp3/wav/m4a）" value={form.bgmPath} onChange={(value) => update("bgmPath", value)} />
+          <div className="material-import-actions">
+            <button className="secondary-button" disabled={bgmPickBusy} onClick={onAutoPickBgm} type="button">
+              {bgmPickBusy ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />}
+              AI 选曲(读 workspace/input/audio)
+            </button>
+            <small>按脚本 LLM 推荐曲风扫本地库匹配;库空时引导你下 CC0 mp3 到该目录。</small>
+          </div>
+          <div className="form-grid">
+            <label className="field">
+              <span>BGM 音量</span>
+              <input
+                max={1}
+                min={0}
+                step={0.01}
+                type="number"
+                value={form.bgmVolume}
+                onChange={(event) => update("bgmVolume", Number(event.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>口播音量</span>
+              <input
+                disabled={!form.narrated}
+                max={2}
+                min={0}
+                step={0.05}
+                type="number"
+                value={form.narrationVolume}
+                onChange={(event) => update("narrationVolume", Number(event.target.value))}
+              />
+            </label>
+          </div>
+        </div>
+        <div className="material-import-actions full-chain-action">
+          <button className="primary-button" disabled={fullChainBusy} onClick={onRunFullChain} type="button">
+            {fullChainBusy ? <Loader2 className="spin" size={18} /> : <Rocket size={18} />}
+            {form.narrated ? "一键全链路：选题 → AI 配音成片 → 多平台" : "一键全链路：选题 → 成片 → 多平台"}
+          </button>
+          <small>脚本 →{form.narrated ? " AI 配音 +" : ""} Remotion 成片{form.bgmPath.trim() ? " + BGM混音" : ""} → 抖音/快手/B站多平台变体，一步到位(约 2-4 分钟{form.narrated ? "，配音版略长" : ""})。</small>
+        </div>
+        {fullChainResult ? (
+          <div className="full-chain-result">
+            <strong>全链路产出：{fullChainResult.draft.titles[0] ?? fullChainResult.topic}</strong>
+            <p className="hint">成片：{fullChainResult.packageVideoPath}</p>
+            {fullChainResult.narration ? (
+              <p className="hint">配音：{fullChainResult.narration.provider}/{fullChainResult.narration.voice} · {fullChainResult.narration.durationSec.toFixed(1)}s</p>
+            ) : null}
+            {fullChainResult.bgm ? (
+              <p className="hint">BGM：{fullChainResult.bgm.audioPath} · 音量 {fullChainResult.bgm.volume}</p>
+            ) : null}
+            <ul>
+              {fullChainResult.variants.variants.map((variant) => (
+                <li key={variant.id}>{variant.label} · {variant.width}×{variant.height}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+      {draft ? (
+        <section className="script-result">
+          <div className="script-titles">
+            <strong>候选标题</strong>
+            <ul>{draft.titles.map((title) => <li key={title}>{title}</li>)}</ul>
+          </div>
+          <p className="script-hook"><strong>开场钩子：</strong>{draft.hook}</p>
+          <ol className="script-beats">
+            {draft.beats.map((beat, index) => (
+              <li key={index} className="script-beat">
+                <span className="beat-time">{beat.time}</span>
+                <div className="beat-body">
+                  <p><strong>画面：</strong>{beat.shot}</p>
+                  <p><strong>口播：</strong>{beat.voiceover}</p>
+                  <p><strong>字幕：</strong>{beat.caption}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="script-bgm"><strong>配乐：</strong>{draft.bgm}</p>
+          <p className="script-tags">{draft.tags.map((tag) => <span key={tag}>{tag.startsWith("#") ? tag : `#${tag}`}</span>)}</p>
+          {draft.platformTips ? <p className="script-tips"><strong>平台适配：</strong>{draft.platformTips}</p> : null}
+          {draft.citedSources && draft.citedSources.length > 0 ? (
+            <div className="script-cited">
+              <strong>事实引用</strong>
+              <ul>
+                {draft.citedSources.map((source) => (
+                  <li key={source.url}>
+                    <a href={source.url} target="_blank" rel="noreferrer">{source.url}</a>
+                    {source.used ? <span> — {source.used}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="material-import-actions">
+            <button className="primary-button" disabled={scriptPlanBusy} onClick={onCreatePlanFromScript} type="button">
+              {scriptPlanBusy ? <Loader2 className="spin" size={18} /> : <FileJson size={18} />}
+              转自动剪辑计划
+            </button>
+            <small>按分镜生成 decision JSON，落到 workspace/drafts。</small>
+          </div>
+          <div className="material-import-actions">
+            <button className="primary-button" disabled={remotionBusy} onClick={onRenderScriptPackage} type="button">
+              {remotionBusy ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+              渲染包装视频
+            </button>
+            <small>Remotion 渲染带字幕和进度条的成片 MP4。</small>
+          </div>
+        </section>
+      ) : (
+        <section className="script-preview">
+          <strong>真实输出（点“生成脚本方案”后显示）</strong>
+          <ol>
+            <li>候选标题和前 3 秒钩子。</li>
+            <li>分镜节拍：时间 / 画面 / 口播 / 字幕。</li>
+            <li>配乐建议和话题标签。</li>
+            <li>平台适配建议。</li>
+          </ol>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function EditPanel({ form, update, assets, renderAnalysisBusy, onRenderFromAnalysis }: FormPanelProps & {
+  assets: WorkspaceAsset[];
+  renderAnalysisBusy: boolean;
+  onRenderFromAnalysis: () => void;
+}) {
+  const analysisAssets = assets.filter((asset) => asset.kind === "material-analysis").slice(0, 5);
+  const inputVideos = assets.filter((asset) => asset.kind === "video" && asset.role === "input");
+  const outputVideos = assets.filter((asset) => asset.kind === "video" && asset.role === "output");
+  const jianyingPlans = assets.filter((asset) => asset.kind === "jianying-plan");
+  const selectedAnalysis = form.roughCutAnalysisPath.trim().length > 0;
+  const editSignals = [
+    {
+      label: "素材入轨",
+      value: `${inputVideos.length} 个输入视频`,
+      state: inputVideos.length > 0 ? "ready" : "waiting"
+    },
+    {
+      label: "分析信号",
+      value: selectedAnalysis
+        ? "已指定分析路径"
+        : analysisAssets.length > 0
+          ? `${analysisAssets.length} 份可用分析`
+          : "等待素材分析",
+      state: selectedAnalysis || analysisAssets.length > 0 ? "ready" : "waiting"
+    },
+    {
+      label: "FFmpeg 粗剪",
+      value: renderAnalysisBusy
+        ? "正在裁剪合并"
+        : outputVideos.length > 0
+          ? `${outputVideos.length} 个输出视频`
+          : "等待执行",
+      state: renderAnalysisBusy ? "running" : outputVideos.length > 0 ? "ready" : "waiting"
+    },
+    {
+      label: "剪映计划",
+      value: jianyingPlans.length > 0 ? `${jianyingPlans.length} 份计划` : "等待粗剪结果",
+      state: jianyingPlans.length > 0 ? "ready" : "waiting"
+    }
+  ] as const;
+
+  return (
+    <div className="stage-layout edit-layout">
+      <section className="edit-console">
+        <div className="edit-console-head">
+          <div>
+            <span>EDIT SIGNAL BUS</span>
+            <strong>自动剪辑执行轨</strong>
+          </div>
+          <small>状态来自工作区资产和当前 FFmpeg 任务</small>
+        </div>
+        <div className="edit-signal-track">
+          {editSignals.map((signal, index) => (
+            <div className={`edit-signal ${signal.state}`} key={signal.label}>
+              <div className="edit-signal-index">
+                {signal.state === "ready" ? (
+                  <CheckCircle2 size={16} />
+                ) : signal.state === "running" ? (
+                  <Loader2 className="spin" size={16} />
+                ) : (
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                )}
+              </div>
+              <strong>{signal.label}</strong>
+              <small>{signal.value}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="stage-form-card compact">
+        <div className="form-card-title">
+          <strong>用素材分析结果粗剪</strong>
+          <span>读取 material-analysis JSON 的 candidate clips，真实调用 FFmpeg 裁片、合并，并输出 JianYing plan</span>
+        </div>
+        <Field label="分析 JSON / drafts 目录" value={form.roughCutAnalysisPath} onChange={(value) => update("roughCutAnalysisPath", value)} />
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={renderAnalysisBusy} onClick={onRenderFromAnalysis} type="button">
+            {renderAnalysisBusy ? <Loader2 className="spin" size={18} /> : <Scissors size={18} />}
+            用分析结果粗剪
+          </button>
+          <small>默认读最新 material-analysis JSON，也可填具体路径。</small>
+        </div>
+      </section>
+      <section className="stage-form-card compact">
+        <Field label="素材需求" multiline value={form.materialNeeds} onChange={(value) => update("materialNeeds", value)} />
+      </section>
+      <AssetQuickList
+        actionLabel="用于粗剪"
+        assets={analysisAssets}
+        empty="还没有素材分析 JSON。先到“联网素材”里分析一个视频或 manifest。"
+        onUse={(asset) => update("roughCutAnalysisPath", asset.relativePath)}
+        title="最近分析结果"
+      />
+    </div>
+  );
+}
+
+function PublishPanel({
+  form,
+  update,
+  assets,
+  variantBusy,
+  onGeneratePlatformVariants,
+  publishDryRunBusy,
+  publishQueueBusy,
+  publishApproveBusy,
+  publishDispatchBusy,
+  publishPreflightBusy,
+  publishDryRunResult,
+  publishDispatchResult,
+  publishPreflightResult,
+  publishQueue,
+  publishAdapters,
+  onPublishDryRun,
+  onCreatePublishQueue,
+  onApprovePublishQueue,
+  onDispatchPublishQueue,
+  onRunPublishPreflight
+}: FormPanelProps & {
+  assets: WorkspaceAsset[];
+  variantBusy: boolean;
+  onGeneratePlatformVariants: () => void;
+  publishDryRunBusy: boolean;
+  publishQueueBusy: boolean;
+  publishApproveBusy: boolean;
+  publishDispatchBusy: boolean;
+  publishPreflightBusy: boolean;
+  publishDryRunResult: PublishDryRunResult | null;
+  publishDispatchResult: PublishDispatchResult | null;
+  publishPreflightResult: PublishPreflightReport | null;
+  publishQueue: PublishQueueItem[];
+  publishAdapters: PublishAdapterStatus[];
+  onPublishDryRun: () => void;
+  onCreatePublishQueue: () => void;
+  onApprovePublishQueue: (id: string) => void;
+  onDispatchPublishQueue: (id: string) => void;
+  onRunPublishPreflight: () => void;
+}) {
+  const outputVideos = assets
+    .filter((asset) => asset.kind === "video" && asset.role === "output")
+    .slice(0, 6);
+
+  return (
+    <div className="stage-layout publish-layout">
+      <section className="stage-form-card">
+        <Field label="运营目标" value={form.campaignGoal} onChange={(value) => update("campaignGoal", value)} />
+        <Field label="发布参考风格" multiline value={form.competitorStyle} onChange={(value) => update("competitorStyle", value)} />
+        <PlatformSelector form={form} update={update} />
+      </section>
+      <section className="stage-form-card compact">
+        <div className="form-card-title">
+          <strong>生成平台视频版本</strong>
+          <span>把粗剪 MP4 转成抖音/快手 9:16、B站 16:9 和 1:1 方版，输出到 workspace/output/publish。</span>
+        </div>
+        <Field label="源视频 / output 目录" value={form.publishSourcePath} onChange={(value) => update("publishSourcePath", value)} />
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={variantBusy} onClick={onGeneratePlatformVariants} type="button">
+            {variantBusy ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />}
+            生成平台版本
+          </button>
+          <small>可填具体 MP4 或 output 目录(自动取最新)。</small>
+        </div>
+      </section>
+      <AssetQuickList
+        actionLabel="作为源视频"
+        assets={outputVideos}
+        empty="还没有输出视频。先在“自动剪辑”里生成 rough cut。"
+        onUse={(asset) => update("publishSourcePath", asset.relativePath)}
+        title="最近输出视频"
+      />
+      <section className="stage-form-card compact">
+        <div className="form-card-title">
+          <strong>发布前 dry-run 校验</strong>
+          <span>对成片做本地校验：文件 / 视频流 / 标题长度 / 标签数 / 画幅 / 时长，并预览发布载荷。不真发。</span>
+        </div>
+        <label className="field">
+          <span>目标平台</span>
+          <select value={form.publishDryRunPlatform} onChange={(event) => update("publishDryRunPlatform", event.target.value)}>
+            <option value="douyin">抖音</option>
+            <option value="kuaishou">快手</option>
+            <option value="bilibili">B站</option>
+          </select>
+        </label>
+        <Field label="成片路径（选具体 MP4，可用上方“作为源视频”填入）" value={form.publishSourcePath} onChange={(value) => update("publishSourcePath", value)} />
+        <Field label="发布标题" value={form.publishDryRunTitle} onChange={(value) => update("publishDryRunTitle", value)} />
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={publishDryRunBusy} onClick={onPublishDryRun} type="button">
+            {publishDryRunBusy ? <Loader2 className="spin" size={18} /> : <CheckCircle2 size={18} />}
+            dry-run 校验
+          </button>
+          <button className="secondary-button" disabled={publishQueueBusy} onClick={onCreatePublishQueue} type="button">
+            {publishQueueBusy ? <Loader2 className="spin" size={16} /> : <UploadCloud size={16} />}
+            加入待发布队列
+          </button>
+          <small>标签取自最近草稿；队列只保存待发布载荷和人工确认状态，当前版本不会真发。</small>
+        </div>
+        {publishDryRunResult ? (
+          <div className={`publish-dryrun-result ${publishDryRunResult.willPublish ? "ok" : "blocked"}`}>
+            <strong>{publishDryRunResult.platformLabel} · {publishDryRunResult.willPublish ? "可发布" : "有阻断项，先修复"}</strong>
+            <ul>
+              {publishDryRunResult.checks.map((check) => (
+                <li key={check.label} className={`check-${check.status}`}>
+                  <span className="check-label">{check.label}</span>
+                  <span className="check-detail">{check.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <small>{publishDryRunResult.note}</small>
+          </div>
+        ) : null}
+      </section>
+      <section className="stage-form-card compact publish-queue-card">
+        <div className="material-import-actions">
+          <button className="secondary-button" disabled={publishPreflightBusy} onClick={onRunPublishPreflight} type="button">
+            {publishPreflightBusy ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />}
+            发布账号联调体检
+          </button>
+          <small>检查 Postiz API、integration id、social-auto-upload 登录态目录；不会上传或发布。</small>
+        </div>
+        {publishPreflightResult ? (
+          <div className={`publish-dispatch-result ${publishPreflightResult.blockers.length === 0 ? "ok" : "blocked"}`}>
+            <strong>preflight · {publishPreflightResult.blockers.length === 0 ? "ready" : `${publishPreflightResult.blockers.length} blockers`}</strong>
+            <small>Postiz {publishPreflightResult.postiz.probeStatus} / integrations {publishPreflightResult.postiz.integrations.length}</small>
+            <small>social-auto-upload {publishPreflightResult.socialAutoUpload.configured ? "configured" : "missing"}</small>
+            {publishPreflightResult.blockers.slice(0, 3).map((blocker) => <code key={blocker}>{blocker}</code>)}
+            {publishPreflightResult.nextActions.slice(0, 2).map((action) => <small key={action}>{action}</small>)}
+          </div>
+        ) : null}
+        <div className="form-card-title">
+          <strong>平台 adapter 与人工确认闸门</strong>
+          <span>真实发布前必须 dry-run 通过，再输入确认口令进入 approved 队列；上传 adapter 仍保持关闭。</span>
+        </div>
+        <div className="adapter-grid">
+          {publishAdapters.map((adapter) => (
+            <article className="adapter-card" key={adapter.platform}>
+              <strong>{adapter.platformLabel}</strong>
+              <span className={adapter.configured ? "pill ok" : "pill missing"}>
+                {adapter.adapter} / {adapter.configured ? "已配置" : "未配置"}
+              </span>
+              <small>{adapter.dryRunOnly ? "dry-run only · 不真发" : "可发布"}</small>
+            </article>
+          ))}
+        </div>
+        <Field label="人工确认口令" value={form.publishManualConfirm} onChange={(value) => update("publishManualConfirm", value)} />
+        <div className="publish-queue-list">
+          {publishQueue.length === 0 ? (
+            <small>暂无待发布队列。先选择成片并点击“加入待发布队列”。</small>
+          ) : publishQueue.slice(0, 6).map((item) => (
+            <article className={`publish-queue-item status-${item.status}`} key={item.id}>
+              <div>
+                <strong>{item.dryRun.platformLabel} · {item.input.title}</strong>
+                <small>{item.status} / {item.input.videoPath}</small>
+              </div>
+              {item.status === "ready" ? (
+                <button
+                  className="secondary-button"
+                  disabled={publishApproveBusy}
+                  onClick={() => onApprovePublishQueue(item.id)}
+                  type="button"
+                >
+                  {publishApproveBusy ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />}
+                  人工批准
+                </button>
+              ) : item.status === "approved" ? (
+                <button
+                  className="secondary-button"
+                  disabled={publishDispatchBusy}
+                  onClick={() => onDispatchPublishQueue(item.id)}
+                  type="button"
+                >
+                  {publishDispatchBusy ? <Loader2 className="spin" size={16} /> : <Rocket size={16} />}
+                  dispatch 草稿
+                </button>
+              ) : (
+                <span className="pill missing">{item.status}</span>
+              )}
+            </article>
+          ))}
+        </div>
+        {publishDispatchResult ? (
+          <div className="publish-dispatch-result">
+            <strong>{publishDispatchResult.adapter} · {publishDispatchResult.status}</strong>
+            <small>{publishDispatchResult.message}</small>
+            {publishDispatchResult.endpoint ? <code>{publishDispatchResult.endpoint}</code> : null}
+          </div>
+        ) : null}
+      </section>
+      <section className="publish-board">
+        <StageCard icon={Megaphone} title="抖音" body="9:16、强开头、标题短、评论引导。" />
+        <StageCard icon={Megaphone} title="快手" body="9:16、人设强、真实生活场景。" />
+        <StageCard icon={Megaphone} title="B站" body="16:9、结构完整、信息密度更高。" />
+      </section>
+    </div>
+  );
+}
+
+function ReviewPanel({
+  analyticsBusy,
+  analyticsSnapshots,
+  form,
+  n8nBusy,
+  n8nResult,
+  onImportAnalytics,
+  onTriggerN8n,
+  readiness,
   update
 }: {
+  analyticsBusy: boolean;
+  analyticsSnapshots: AnalyticsSnapshot[];
   form: CreatorForm;
+  n8nBusy: boolean;
+  n8nResult: N8nOrchestrationResult | null;
+  onImportAnalytics: () => void;
+  onTriggerN8n: (mode: "dry-run" | "webhook", exportWorkflow?: boolean) => void;
+  readiness: Readiness | null;
   update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
 }) {
   return (
+    <div className="stage-layout review-layout">
+      <section className="tool-grid">
+        <StageCard icon={CheckCircle2} title="本机命令" body="node/npm/python/uv/yt-dlp/ffmpeg/n8n。" />
+        <StageCard icon={BarChart3} title="数据复盘" body="导入播放、完播、点赞、评论、涨粉指标，生成下一步动作。" />
+        <StageCard icon={Rocket} title="下一轮动作" body="根据复盘决定追更、重剪、换标题或换选题。" />
+      </section>
+      <section className="stage-form-card compact n8n-card">
+        <div className="form-card-title">
+          <strong>n8n 全链路编排</strong>
+          <span>把热点、脚本、成片、发布队列、dispatch 草稿和复盘导入串成 webhook 工作流。</span>
+        </div>
+        <div className="form-grid">
+          <Field label="n8n webhook 确认口令" value={form.n8nManualConfirm} onChange={(value) => update("n8nManualConfirm", value)} />
+          <Field label="成片路径 / 可选" value={form.publishSourcePath} onChange={(value) => update("publishSourcePath", value)} />
+        </div>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={n8nBusy} onClick={() => onTriggerN8n("dry-run")} type="button">
+            {n8nBusy ? <Loader2 className="spin" size={18} /> : <Network size={18} />}
+            生成编排 payload
+          </button>
+          <button className="secondary-button" disabled={n8nBusy} onClick={() => onTriggerN8n("webhook")} type="button">
+            {n8nBusy ? <Loader2 className="spin" size={16} /> : <Rocket size={16} />}
+            触发 n8n webhook
+          </button>
+          <button className="secondary-button" disabled={n8nBusy} onClick={() => onTriggerN8n("dry-run", true)} type="button">
+            {n8nBusy ? <Loader2 className="spin" size={16} /> : <FileJson size={16} />}
+            导出 workflow JSON
+          </button>
+          <small>触发 webhook 需要填写 CONFIRM_N8N_WEBHOOK；payload 不包含任何 API key。</small>
+        </div>
+        {n8nResult ? (
+          <div className={`publish-dispatch-result ${n8nResult.sent ? "ok" : "blocked"}`}>
+            <strong>{n8nResult.status} · {n8nResult.sent ? "webhook 已发送" : "预览/拦截"}</strong>
+            <small>{n8nResult.message}</small>
+            {n8nResult.endpoint ? <code>{n8nResult.endpoint}</code> : null}
+            {n8nResult.workflowExport ? <code>{n8nResult.workflowExport.workflowPath}</code> : null}
+            <small>{n8nResult.payload.steps.length} steps / run {n8nResult.payload.runId.slice(0, 8)}</small>
+          </div>
+        ) : null}
+      </section>
+      <section className="stage-form-card compact analytics-card">
+        <div className="form-card-title">
+          <strong>导入平台数据快照</strong>
+          <span>先支持手动/脚本导入，后续再接 TikHub/Postiz/平台 analytics 自动同步。</span>
+        </div>
+        <div className="form-grid">
+          <label className="field">
+            <span>复盘窗口</span>
+            <select value={form.analyticsWindow} onChange={(event) => update("analyticsWindow", event.target.value)}>
+              <option value="30m">30分钟</option>
+              <option value="24h">24小时</option>
+              <option value="7d">7天</option>
+              <option value="custom">自定义</option>
+            </select>
+          </label>
+          <Field label="Post ID" value={form.analyticsPostId} onChange={(value) => update("analyticsPostId", value)} />
+          <Field label="Post URL" value={form.analyticsPostUrl} onChange={(value) => update("analyticsPostUrl", value)} />
+        </div>
+        <div className="form-grid analytics-metrics-grid">
+          <NumberField label="播放" value={form.analyticsViews} onChange={(value) => update("analyticsViews", value)} />
+          <NumberField label="点赞" value={form.analyticsLikes} onChange={(value) => update("analyticsLikes", value)} />
+          <NumberField label="评论" value={form.analyticsComments} onChange={(value) => update("analyticsComments", value)} />
+          <NumberField label="分享" value={form.analyticsShares} onChange={(value) => update("analyticsShares", value)} />
+          <NumberField label="收藏" value={form.analyticsFavorites} onChange={(value) => update("analyticsFavorites", value)} />
+          <NumberField label="涨粉" value={form.analyticsFollowersDelta} onChange={(value) => update("analyticsFollowersDelta", value)} />
+          <NumberField label="完播率" max={1} min={0} step={0.01} value={form.analyticsCompletionRate} onChange={(value) => update("analyticsCompletionRate", value)} />
+        </div>
+        <div className="material-import-actions">
+          <button className="primary-button" disabled={analyticsBusy} onClick={onImportAnalytics} type="button">
+            {analyticsBusy ? <Loader2 className="spin" size={18} /> : <BarChart3 size={18} />}
+            导入复盘快照
+          </button>
+          <small>会写入 workspace/drafts/analytics-ledger.json，并给出追更/重剪/换标题建议。</small>
+        </div>
+        <div className="analytics-snapshot-list">
+          {analyticsSnapshots.length === 0 ? (
+            <small>暂无复盘快照。</small>
+          ) : analyticsSnapshots.slice(0, 5).map((snapshot) => (
+            <article className="analytics-snapshot" key={snapshot.id}>
+              <strong>{snapshot.platform} · {snapshot.window} · {snapshot.metrics.views} 播放</strong>
+              <small>互动率 {(snapshot.signals.engagementRate * 100).toFixed(2)}% / 分享率 {(snapshot.signals.shareRate * 100).toFixed(2)}%</small>
+              <ul>{snapshot.nextActions.slice(0, 2).map((action) => <li key={action}>{action}</li>)}</ul>
+            </article>
+          ))}
+        </div>
+      </section>
+      {readiness?.llm ? (
+        <section className="stage-form-card compact">
+          <strong>LLM 体检</strong>
+          <span className={readiness.llm.ok ? "pill ok" : "pill missing"}>
+            {readiness.llm.ok ? "OK" : "KEY"} {readiness.llm.provider} / {readiness.llm.keyName}
+          </span>
+          <small>{readiness.llm.hint}</small>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+interface FormPanelProps {
+  form: CreatorForm;
+  update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
+}
+
+function PlatformSelector({ form, update }: FormPanelProps) {
+  return (
     <section className="selector-box">
-      <strong>{text.platforms}</strong>
-      <label><input checked={form.douyin} onChange={(event) => update("douyin", event.target.checked)} type="checkbox" /> {cn("%E6%8A%96%E9%9F%B3")}</label>
-      <label><input checked={form.kuaishou} onChange={(event) => update("kuaishou", event.target.checked)} type="checkbox" /> {cn("%E5%BF%AB%E6%89%8B")}</label>
-      <label><input checked={form.bilibili} onChange={(event) => update("bilibili", event.target.checked)} type="checkbox" /> {cn("B%E7%AB%99")}</label>
+      <strong>平台</strong>
+      <label><input checked={form.douyin} onChange={(event) => update("douyin", event.target.checked)} type="checkbox" /> 抖音</label>
+      <label><input checked={form.kuaishou} onChange={(event) => update("kuaishou", event.target.checked)} type="checkbox" /> 快手</label>
+      <label><input checked={form.bilibili} onChange={(event) => update("bilibili", event.target.checked)} type="checkbox" /> B站</label>
     </section>
   );
 }
 
-function WebSearchSelector({
-  form,
-  update
+function AssetQuickList({
+  actionLabel,
+  assets,
+  empty,
+  onUse,
+  title
 }: {
-  form: CreatorForm;
-  update: <K extends keyof CreatorForm>(key: K, value: CreatorForm[K]) => void;
+  actionLabel: string;
+  assets: WorkspaceAsset[];
+  empty: string;
+  onUse: (asset: WorkspaceAsset) => void;
+  title: string;
 }) {
   return (
-    <section className="selector-box">
-      <strong>{text.web}</strong>
-      <select value={form.webSearchEnabled} onChange={(event) => update("webSearchEnabled", event.target.value)}>
-        <option value="true">ON</option>
-        <option value="false">OFF</option>
-      </select>
-      <small>{cn("%E9%85%8D%E7%BD%AEExa/Firecrawl/TikHub%E5%90%8E%EF%BC%8C%E8%BF%99%E9%87%8C%E7%9A%84%E6%90%9C%E7%B4%A2%E8%AF%8D%E5%B0%B1%E8%83%BD%E8%BD%AC%E6%88%90%E7%9C%9F%E5%AE%9E%E9%87%87%E9%9B%86%E4%BB%BB%E5%8A%A1%E3%80%82")}</small>
+    <section className="stage-form-card asset-quick-list">
+      <div className="form-card-title">
+        <strong>{title}</strong>
+        <span>workspace 真实文件，点击填入路径。</span>
+      </div>
+      {assets.length === 0 ? (
+        <small>{empty}</small>
+      ) : (
+        <div className="asset-list">
+          {assets.map((asset) => (
+            <article className="asset-row" key={asset.id}>
+              <FileJson size={16} />
+              <div>
+                <strong>{asset.fileName}</strong>
+                <small>{asset.kind} / {formatBytes(asset.sizeBytes)} / {asset.relativePath}</small>
+              </div>
+              <button className="secondary-button" onClick={() => onUse(asset)} type="button">
+                {actionLabel}
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -734,10 +2829,6 @@ function StageCard({
       </div>
     </article>
   );
-}
-
-function splitLines(value: string) {
-  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
 function Field({
@@ -763,51 +2854,161 @@ function Field({
   );
 }
 
-function TaskPanel({ tasks, result, readiness }: { tasks: TaskRecord[]; result: unknown; readiness: Readiness | null }) {
+function NumberField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max,
+  step = 1
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        max={max}
+        min={min}
+        step={step}
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
+  );
+}
+
+function TaskPanel({
+  tasks,
+  result,
+  readiness,
+  workspaceAssets
+}: {
+  tasks: TaskRecord[];
+  result: unknown;
+  readiness: Readiness | null;
+  workspaceAssets: WorkspaceAssetIndex | null;
+}) {
+  const recentAssets = workspaceAssets?.assets
+    .filter((asset) => ["video", "material-analysis", "jianying-plan", "manifest"].includes(asset.kind))
+    .slice(0, 5) ?? [];
+  const taskSummary = {
+    running: tasks.filter((task) => task.status === "processing").length,
+    queued: tasks.filter((task) => task.status === "pending").length,
+    completed: tasks.filter((task) => task.status === "completed").length,
+    failed: tasks.filter((task) => task.status === "failed").length
+  };
+
   return (
     <aside className="task-panel">
       <div className="panel-title">
         <div>
-          <p>{text.tasks}</p>
+          <p>AI EXECUTION TOWER</p>
+          <span>AI 执行塔</span>
           <h2>{tasks.length}</h2>
         </div>
-        <Files size={20} />
+        <div className={`tower-beacon ${taskSummary.running > 0 ? "active" : ""}`} title={taskSummary.running > 0 ? "有任务正在执行" : "当前无运行任务"}>
+          <Network size={18} />
+        </div>
       </div>
 
-      {result ? (
-        <section className="result-box">
-          <strong>{text.result}</strong>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
-        </section>
-      ) : null}
+      <section className="tower-summary" aria-label="任务状态汇总">
+        <div className="running">
+          <span>运行中</span>
+          <strong>{taskSummary.running}</strong>
+        </div>
+        <div>
+          <span>排队</span>
+          <strong>{taskSummary.queued}</strong>
+        </div>
+        <div className="completed">
+          <span>完成</span>
+          <strong>{taskSummary.completed}</strong>
+        </div>
+        <div className={taskSummary.failed > 0 ? "failed" : ""}>
+          <span>失败</span>
+          <strong>{taskSummary.failed}</strong>
+        </div>
+      </section>
 
       {readiness ? (
-        <section className="result-box readiness-box">
-          <strong>{cn("%E5%85%A8%E9%93%BE%E8%B7%AF%E9%85%8D%E7%BD%AE%E4%BD%93%E6%A3%80")}</strong>
+        <details className="panel-fold readiness-box">
+          <summary>
+            环境就绪
+            <span className="fold-count">
+              {[...readiness.commands, ...readiness.env, ...(readiness.llm ? [readiness.llm] : [])].filter((c) => c.ok).length}
+              /{readiness.commands.length + readiness.env.length + (readiness.llm ? 1 : 0)}
+            </span>
+          </summary>
           <div className="readiness-grid">
             {readiness.commands.map((item) => (
               <span className={item.ok ? "pill ok" : "pill missing"} key={item.id}>
                 {item.ok ? "OK" : "MISS"} {item.id}
               </span>
             ))}
-          </div>
-          <div className="readiness-grid">
             {readiness.env.map((item) => (
               <span className={item.ok ? "pill ok" : "pill missing"} key={item.name}>
                 {item.ok ? "OK" : "KEY"} {item.name}
               </span>
             ))}
+            {readiness.llm ? (
+              <span className={readiness.llm.ok ? "pill ok" : "pill missing"}>
+                {readiness.llm.ok ? "OK" : "KEY"} {readiness.llm.keyName}
+              </span>
+            ) : null}
           </div>
-        </section>
+        </details>
       ) : null}
 
+      {result ? (
+        <details className="panel-fold">
+          <summary>最新结果 JSON</summary>
+          <pre>{JSON.stringify(result, null, 2)}</pre>
+        </details>
+      ) : null}
+
+      <section className="result-box asset-summary">
+        <strong>工作区资产</strong>
+        <div className="asset-counts">
+          <span>全部 {workspaceAssets?.total ?? 0}</span>
+          <span>视频 {workspaceAssets?.counts.video ?? 0}</span>
+          <span>分析 {workspaceAssets?.counts["material-analysis"] ?? 0}</span>
+          <span>剪映计划 {workspaceAssets?.counts["jianying-plan"] ?? 0}</span>
+        </div>
+        {recentAssets.length === 0 ? (
+          <small>暂无素材、分析或输出文件。</small>
+        ) : (
+          <div className="mini-asset-list">
+            {recentAssets.map((asset) => (
+              <div className="mini-asset" key={asset.id}>
+                <span>{asset.kind}</span>
+                <strong>{asset.fileName}</strong>
+                <small>{formatBytes(asset.sizeBytes)}</small>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="task-list">
+        {tasks.length > 0 ? (
+          <div className="task-list-head">
+            <span>最近任务</span>
+            <small>共 {tasks.length} 条</small>
+          </div>
+        ) : null}
         {tasks.length === 0 ? (
           <div className="empty-state">
             <FileJson size={28} />
-            <span>{text.empty}</span>
+            <span>暂无任务</span>
           </div>
-        ) : tasks.map((task) => (
+        ) : tasks.slice(0, 6).map((task) => (
           <article className="task-card" key={task.id}>
             <div className="task-head">
               <StatusIcon status={task.status} />
@@ -824,7 +3025,6 @@ function TaskPanel({ tasks, result, readiness }: { tasks: TaskRecord[]; result: 
               <span>{task.progress}%</span>
             </div>
             {task.error ? <p className="task-error">{task.error}</p> : null}
-            {task.result ? <pre>{JSON.stringify(task.result, null, 2)}</pre> : null}
           </article>
         ))}
       </div>
@@ -843,4 +3043,126 @@ function StatusIcon({ status }: { status: TaskStatus }) {
     return <Loader2 className="status processing spin" size={20} />;
   }
   return <Clock3 className="status pending" size={20} />;
+}
+
+function creatorSuitePayload(form: CreatorForm) {
+  return {
+    niche: form.niche,
+    audience: form.audience,
+    persona: form.persona,
+    platforms: [
+      form.douyin ? "douyin" : "",
+      form.kuaishou ? "kuaishou" : "",
+      form.bilibili ? "bilibili" : ""
+    ].filter(Boolean),
+    keywords: splitLines(form.keywords),
+    references: splitLines(form.references),
+    materialNeeds: form.materialNeeds,
+    campaignGoal: form.campaignGoal,
+    competitorStyle: form.competitorStyle,
+    webSearchEnabled: form.webSearchEnabled === "true",
+    riskTolerance: "medium"
+  };
+}
+
+function materialAnalysisPayload(value: string) {
+  const trimmed = value.trim();
+  if (/manifest\.json$/i.test(trimmed)) {
+    return { manifestPath: trimmed };
+  }
+  if (/\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(trimmed)) {
+    return { videoPath: trimmed };
+  }
+  return { materialDir: trimmed };
+}
+
+function scriptDraftToAutoPlanPayload(draft: ScriptDraft, form: CreatorForm) {
+  const title = draft.titles[0] ?? form.scriptTopic;
+  const script = [
+    `开场钩子：${draft.hook}`,
+    ...draft.beats.map((beat) => `${beat.time} 画面:${beat.shot} 口播:${beat.voiceover} 字幕:${beat.caption}`),
+    `配乐：${draft.bgm}`,
+    `平台适配：${draft.platformTips}`
+  ].filter(Boolean).join("\n");
+
+  return {
+    projectTitle: title,
+    script,
+    materialDir: "workspace/input",
+    instructions: [
+      "把文案分镜转成可执行自动剪辑 decision JSON。",
+      "按每个 beat 寻找匹配素材，优先保留强钩子、清晰演示、结尾行动号召。",
+      `目标人群：${form.audience}`,
+      `素材需求：${form.materialNeeds}`,
+      `话题标签：${draft.tags.join(" ")}`
+    ].join("\n"),
+    scenes: draft.beats.map((beat, index) => ({
+      id: `beat-${String(index + 1).padStart(2, "0")}`,
+      title: `${beat.time} ${beat.caption || beat.shot}`.slice(0, 48),
+      keywords: sceneKeywords(beat),
+      targetDurationMs: beatDurationMs(beat.time)
+    })),
+    style: {
+      cutPace: "tight",
+      colorLook: "clean high-retention social video",
+      subtitleStyle: "large high-contrast captions",
+      aspectRatio: form.bilibili && !form.douyin && !form.kuaishou ? "16:9" : "9:16"
+    }
+  };
+}
+
+function beatDurationMs(time: string) {
+  const match = time.match(/(\d+(?:\.\d+)?)\s*[-~至到]\s*(\d+(?:\.\d+)?)/);
+  if (!match) {
+    return 6000;
+  }
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const duration = Math.max(1, end - start);
+  return Math.round(duration * 1000);
+}
+
+function sceneKeywords(beat: ScriptDraft["beats"][number]) {
+  const text = `${beat.shot} ${beat.voiceover} ${beat.caption}`;
+  const words = text
+    .split(/[^\u4e00-\u9fa5a-zA-Z0-9]+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 2);
+  return [...new Set(words)].slice(0, 8);
+}
+
+function splitLines(value: string) {
+  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+async function pollTaskUntilDone(id: string, timeoutMs = 90000): Promise<TaskRecord | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await fetch(`/api/tasks?id=${id}`, { cache: "no-store" });
+    if (response.ok) {
+      const { task } = await response.json();
+      if (task && (task.status === "completed" || task.status === "failed")) {
+        return task as TaskRecord;
+      }
+    }
+  }
+  return null;
+}
+
+function formatCount(value: number): string {
+  if (value >= 10000) {
+    return `${(value / 10000).toFixed(1)}万`;
+  }
+  return String(value);
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }

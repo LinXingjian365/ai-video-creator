@@ -19,40 +19,43 @@
 
 目标：从真实参考视频到结构化剪辑决策。
 
-- 接 yt-dlp：导入视频、封面、字幕、元数据。
-- 接 faster-whisper：生成字幕和时间戳。
-- 接 PySceneDetect：镜头边界和缩略图。
-- 接 Auto-Editor：静音段、口播停顿、快剪建议。
+- 接 yt-dlp：导入视频、封面、字幕、元数据。状态：API/UI 已接入，py312 环境 `python -m yt_dlp` 已验证可用；公开视频导入可生成 manifest。
+- 接 faster-whisper：生成字幕和时间戳。状态：py312 已安装并接入 `/api/materials/analyze` 的 `transcriptionMode=auto|faster-whisper`，字幕文件优先，缺字幕时可本地 ASR。
+- 接 PySceneDetect：镜头边界和缩略图。状态：py312 已安装并纳入 readiness；`/api/materials/analyze` 已支持 `sceneBackend=auto|pyscenedetect|ffmpeg`，强制 PySceneDetect 已用红蓝硬切测试视频验证 2000ms 切点。
+- 接静音检测/Auto-Editor：静音段、口播停顿、快剪建议。状态：已接 FFmpeg silencedetect 基线；Auto-Editor 已纳入 readiness，并已接入 `autoEditor` preview 统计信号，不直接修改视频。
 - 统一生成 `workspace/drafts/*-analysis.json`。
+- 从 `material-analysis-*.json` 驱动 `/api/auto/render` 自动粗剪。状态：已接入，支持传具体 JSON 或 `workspace/drafts` 目录自动取最新。
 
 验收：
 
-- 给一个本地视频或公开视频链接，能生成转写、场景列表、候选切点。
+- 给一个本地视频或公开视频链接，能生成转写、场景列表、静音/有声段、候选切点。状态：本地视频 + 字幕文件/faster-whisper 可选 ASR + PySceneDetect/FFmpeg 场景检测 + FFmpeg 静音基线 + Auto-Editor preview 已可生成 `material-analysis-*.json`。
+- 给一个 `material-analysis-*.json`，能生成 rough cut MP4 和 JianYing plan JSON。状态：已接入 `/api/auto/render` 和“自动剪辑”UI 按钮。
 
 ## P2：接入热点和选题
 
 目标：输入账号方向，输出可验证的选题池。
 
-- 接 TikHub 或平台 MCP：搜索热点、竞品、评论、标题。
-- 接 Exa/Firecrawl：补网页资料、案例、脚本事实依据。
+- 接 TikHub 或平台 MCP：搜索热点、竞品、评论、标题。状态：已接 TikHub 抖音热榜、快手热榜、关键词搜索、单视频详情和评论样本；抖音热榜已接 TTD 免费路径；快手单视频详情已接 KSD 免费路径；统一归一化到 `TrendItem` 和素材候选后进入本地评分、DeepSeek 分析与素材导入 UI。**完全免费路径**: 自托管 [JoeanAmier/TikTokDownloader](https://github.com/JoeanAmier/TikTokDownloader) (Apache 2.0, 11.4k★) + [KS-Downloader](https://github.com/JoeanAmier/KS-Downloader),见 `docs/FREE_ALTERNATIVES.md`。
+- 接 Exa/Firecrawl：补网页资料、案例、脚本事实依据。状态：已接 `src/lib/trend/evidence.ts` 双源适配(auto 自动按 key 可用性选)、`/api/trend/evidence`、"联网素材"面板"网页事实证据搜索"卡;未配 key 时诚实抛错,不伪造结果。
 - 输出选题评分、参考链接、拆解要点。
 
 验收：
 
-- 输入赛道和人群，生成 20 个选题，每个选题有参考证据和拍摄建议。
+- 输入赛道和人群，生成 20 个选题，每个选题有参考证据和拍摄建议。状态：热榜报告、TikHub 竞品研究、Exa/Firecrawl 网页证据、脚本生成和素材候选回填均已具备;**网页证据已自动喂进脚本 LLM**,DeepSeek 把真实数字/结论融入口播并在 `citedSources` 标注引用(commit 3d6e0e5)。
 
 ## P3：Remotion 图文包装
 
 目标：让粗剪不只是拼接，而有可复用的视频包装层。
 
-- 新增 Remotion 子项目。
-- 建字幕组件、标题卡、步骤卡、数据卡、片尾关注组件。
-- 从自动剪辑决策 JSON 生成 Remotion props。
-- 输出 9:16、16:9、1:1 多平台版本。
+- 新增 Remotion 子项目。状态：已接 `src/remotion/*`，包含 `ScriptPackageVertical` 和 `ScriptPackageWide` 两个 composition。
+- 建字幕组件、标题卡、步骤卡、数据卡、片尾关注组件。状态：已完成脚本包装 MVP：标题、钩子、分镜字幕、标签、进度条；数据卡/片尾关注后续增强。
+- 从自动剪辑决策 JSON 生成 Remotion props。状态：已从脚本分镜 props 渲染，后续接 auto-plan/material-analysis props。
+- 输出 9:16、16:9、1:1 多平台版本。状态：已接 FFmpeg 平台版本导出；Remotion 已实测 9:16 输出 MP4。
+- BGM 混音。状态：已接 `src/lib/audio-mix.ts`，Remotion 无配音成片可混入本地 BGM；AI 配音成片可用 `amix` 混合口播+BGM，并在一键全链路 UI 暴露音量参数。**自动选曲**(commit 87e5ce1):`src/lib/bgm/library.ts` 扫 `workspace/input/audio` 按 mood 关键词匹配 LLM 推荐曲风;ScriptPanel"AI 选曲"按钮一键填路径,无 API 无月费。
 
 验收：
 
-- 同一条内容能输出抖音、快手、B站不同尺寸版本。
+- 同一条内容能输出抖音、快手、B站不同尺寸版本。状态：脚本包装视频已实测输出 1080x1920 H.264/AAC 45 秒 MP4；16:9 composition 已注册，1:1 可复用 FFmpeg variants；BGM 混音已通过 FFmpeg/FFprobe 验证路径覆盖。
 
 ## P4：JianYing MCP 真实草稿
 
@@ -70,16 +73,17 @@
 
 目标：发布不是最后一步，数据回流驱动下一轮内容。
 
-- 接 social-auto-upload 做国内平台 dry-run。
-- 接 Postiz 做多平台排程候选。
-- 接 n8n 编排采集、剪辑、发布、复盘工作流。
-- 建 30 分钟、24 小时、7 天复盘报告。
+- 接 social-auto-upload 做国内平台 dry-run。状态：已建立本地发布队列、adapter 状态检查、账号 preflight 和人工确认闸门；已检查 session/config 文件并生成 social-auto-upload 命令预览，仍不执行外部上传。
+- 接 Postiz 做多平台排程候选。状态：已接 Postiz Public API 草稿 adapter 和 integrations probe；默认只预览，`PUBLISH_LIVE_ENABLED=true` 时只创建 `draft`，不直接真发。**完全免费路径**: 自托管开源 Postiz (Apache 2.0),`POSTIZ_BASE_URL=http://localhost:5000`,见 `docs/FREE_ALTERNATIVES.md`。
+- 接 n8n 编排采集、剪辑、发布、复盘工作流。状态：已接 `/api/orchestration/n8n`、Review UI 编排按钮、dry-run payload、确认后 webhook 触发、可导入 workflow JSON 导出，以及 `npm run n8n:smoke` 自托管 n8n 真实执行烟测；`N8N_SMOKE_MODE=orchestration` 已能分阶段执行蓝图读取、readiness、workspace assets 和 dry-run payload。导出 workflow 已带 HTTP retry、disabled dispatch/analytics 闸门和 approved 队列 id 映射提示。下一步继续接真实 analytics 数据源映射。
+- 建 30 分钟、24 小时、7 天复盘报告。状态：已接本地 analytics ledger、指标导入、信号计算和下一步动作建议。
 
 验收：
 
 - 发布包包含视频、标题、简介、标签、封面、发布时间建议。
-- 真发前必须人工确认。
-- 发布后回流播放、完播、点赞、评论、涨粉等指标。
+- 发布前可生成抖音/快手/B站/方版视频文件。状态：已接 `/api/video/variants` 和 UI 入口。
+- 真发前必须人工确认。状态：已接 `/api/publish/queue` 和 `/api/publish/approve`，确认口令为 `CONFIRM_DRY_RUN_ONLY`，当前仍不真发。
+- 发布后回流播放、完播、点赞、评论、涨粉等指标。状态：已接 `/api/analytics/import` 和运营复盘 UI，真实平台自动拉取待接。
 
 ## P6：生产级工程
 
@@ -90,4 +94,5 @@
 - 日志、错误追踪、重试。
 - 本地模型和云模型可切换。
 - 权限和密钥管理。
+- 本机配置中心。状态：已接四组配置 UI、白名单 `.env.local` 原子写入、本机同源限制、敏感值不回显、DeepSeek 最小真实探针；发布仍受人工批准闸门保护。
 - E2E 测试覆盖核心链路。

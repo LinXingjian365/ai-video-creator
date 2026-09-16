@@ -6,17 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "n8n:smoke": "node scripts/n8n-smoke-test.mjs",
+    "smoke:live": "node scripts/live-smoke.mjs",
+    "smoke:live:full": "node scripts/live-smoke-full.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
+    "@remotion/bundler": "^4.0.479",
+    "@remotion/renderer": "^4.0.479",
     "fluent-ffmpeg": "^2.1.3",
     "lucide-react": "^0.468.0",
     "next": "^15.0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "remotion": "^4.0.479",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -26,6 +34,7 @@
     "@types/react-dom": "^19.0.2",
     "eslint": "^9.16.0",
     "eslint-config-next": "^15.0.4",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.9"
   }
 }
