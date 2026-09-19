@@ -67,18 +67,20 @@ faster-whisper，因此解释器解析顺序是：
 | `DEEPSEEK_API_KEY` | LLM 脚本生成（默认 provider） | 热点/榜单仍可用，AI 分析降级为「无 Key 不伪装 AI」 |
 | `TIKHUB_API_KEY` | 抖音/快手第三方数据 | 抖音可切 TTD 免费路径，快手不可用 |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 | YouTube 热点不可用（已下线免登录 Trending） |
-| `POSTIZ_API_KEY` / `POSTIZ_URL` | 发布网关 | 发布 preflight 报 unconfigured |
-| `POSTIZ_INTEGRATION_ID_DOUYIN` / `_KUAISHOU` / `_BILIBILI` | 已连接渠道 | 无法 dispatch 到对应平台 |
 | `TTD_ENABLED` / `TTD_BASE_URL` | TikTokDownloader 自托管免费路径 | 抖音热榜改走 TikHub |
 | `VIDEO_TOOLS_PYTHON` | Python 工具链解释器 | 自动探测，见上文「Python 工具链」 |
+| `POSTIZ_API_KEY` / `POSTIZ_URL` | **海外平台**发布网关（可选） | 不影响国内平台，海外平台才需要 |
+| `SOCIAL_AUTO_UPLOAD_*` | 国内平台命令行发布（可选） | 不配则国内平台走手动发布 |
 
-配置发布渠道只需一条命令（需先在 Postiz UI 完成平台 OAuth）:
-
-```bash
-docker compose -f deployments/postiz/docker-compose.yml up -d
-npm run postiz:channels            # 查看识别到的渠道
-npm run postiz:channels -- --write # 确认后自动回填 .env.local
-```
+> **发布方式（诚实说明）**：抖音 / 快手 / B站 这些**国内平台默认手动发布**——项目产出
+> 符合各平台规格的成片、标题、简介、标签、封面，人工到平台后台上传。国内平台的自动发布
+> API 普遍要求企业资质，个人账号通常拿不到。**Postiz 只支持海外平台**（TikTok/YouTube/X 等），
+> 不支持国内平台，所以它只作为海外发布的可选网关。
+>
+> ```bash
+> docker compose -f deployments/postiz/docker-compose.yml up -d
+> npm run postiz:channels            # 探测 Postiz 实际支持的海外渠道（会提示国内平台不支持）
+> ```
 
 > **诚实降级**：任何外部 Key 缺失都不会让界面报错或伪造数据，而是在对应面板明确标注状态。`/api/health/self-check` 会一次性探 TTD / n8n / Postiz / KSD / LLM / BGM / FFmpeg / yt-dlp 的真实可用情况。
 
@@ -113,6 +115,9 @@ npm run postiz:channels -- --write # 确认后自动回填 .env.local
 
 ## 已知的边界
 
+- **国内平台自动发布（抖音/快手/B站）**：目前没有开箱即用的自动发布途径。Postiz 只支持海外平台；
+  国内平台的开放发布 API 普遍要求企业资质，个人账号通常拿不到。因此这三个平台默认**手动发布**——
+  项目产出合规成片与文案，人工上传。这是现实约束，不是本项目偷懒。
 - **快手热榜**：目前没有可用的免费源（TikHub 快手热榜计费、KS-Downloader 无热榜端点），保留 TikHub 路径，不伪造数据。
 - **抖音热榜免费路径**：依赖自托管的 TikTokDownloader，需单独安装且**手动启动**（不随系统/项目自启）。
   没跑时会自动回退到 TikHub（已有 Key），不会让链路挂掉。安装见 `patches/README.md`，启动用 `npm run ttd:start`。

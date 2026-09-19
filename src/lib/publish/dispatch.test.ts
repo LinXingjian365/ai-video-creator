@@ -82,7 +82,9 @@ describe("publish dispatch", () => {
     ).rejects.toThrow(PUBLISH_CONFIRM_TEXT);
   });
 
-  it("returns Postiz request preview unless live is explicitly enabled", async () => {
+  it("never dispatches a domestic platform to Postiz, even with Postiz env set", async () => {
+    // 回归:Postiz 不支持抖音/快手/B站。配了 Postiz env 也不该走 postiz adapter,
+    // 而是走 manual(产出合规成片,人工发布)。
     const queue: PublishQueueState = { schema: "ai-video-assistant.publish-queue.v1", updatedAt: "", items: [approvedItem] };
     const result = await dispatchPublishQueueItem(
       { id: "q1", manualConfirm: PUBLISH_CONFIRM_TEXT, mode: "draft" },
@@ -90,42 +92,14 @@ describe("publish dispatch", () => {
         env: {
           POSTIZ_URL: "https://postiz.example.com",
           POSTIZ_API_KEY: "key",
-          POSTIZ_INTEGRATION_ID_DOUYIN: "int-1",
-          POSTIZ_PLATFORM_TYPE_DOUYIN: "tiktok"
+          POSTIZ_INTEGRATION_ID_DOUYIN: "int-1"
         },
         readPublishQueue: vi.fn(async () => queue),
         writePublishQueue: vi.fn(async (next) => next)
       }
     );
-    expect(result).toMatchObject({ adapter: "postiz", sent: false, status: "preview" });
-    expect(result.endpoint).toBe("https://postiz.example.com/public/v1/posts");
-  });
-
-  it("sends Postiz draft when live flag is enabled but still uses draft type", async () => {
-    const queue: PublishQueueState = { schema: "ai-video-assistant.publish-queue.v1", updatedAt: "", items: [approvedItem] };
-    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
-      new Response(JSON.stringify([{ postId: "p1", integration: "int-1" }]), { status: 200 })
-    );
-    const writeQueue = vi.fn(async (next: PublishQueueState) => next);
-    const result = await dispatchPublishQueueItem(
-      { id: "q1", manualConfirm: PUBLISH_CONFIRM_TEXT, mode: "draft" },
-      {
-        env: {
-          PUBLISH_LIVE_ENABLED: "true",
-          POSTIZ_URL: "https://postiz.example.com",
-          POSTIZ_API_KEY: "key",
-          POSTIZ_INTEGRATION_ID_DOUYIN: "int-1",
-          POSTIZ_PLATFORM_TYPE_DOUYIN: "tiktok"
-        },
-        fetch: fetchMock as never,
-        readPublishQueue: vi.fn(async () => queue),
-        writePublishQueue: writeQueue
-      }
-    );
-    expect(result).toMatchObject({ adapter: "postiz", sent: true, status: "drafted" });
-    expect(fetchMock).toHaveBeenCalledWith("https://postiz.example.com/public/v1/posts", expect.objectContaining({ method: "POST" }));
-    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
-    expect(JSON.parse(requestInit.body as string).type).toBe("draft");
-    expect(writeQueue.mock.calls[0][0].items[0].status).toBe("published");
+    expect(result.adapter).toBe("manual");
+    expect(result.sent).toBe(false);
+    expect(result.message).toContain("手动发布");
   });
 });

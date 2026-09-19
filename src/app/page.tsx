@@ -2563,7 +2563,7 @@ function PublishPanel({
             {publishPreflightBusy ? <Loader2 className="spin" size={16} /> : <CheckCircle2 size={16} />}
             发布账号联调体检
           </button>
-          <small>检查 Postiz API、integration id、social-auto-upload 登录态目录；不会上传或发布。</small>
+          <small>检查 social-auto-upload 登录态目录与 Postiz 海外渠道；不会上传或发布。国内平台默认手动发布。</small>
         </div>
         {publishPreflightResult ? (
           <div className={`publish-dispatch-result ${publishPreflightResult.blockers.length === 0 ? "ok" : "blocked"}`}>

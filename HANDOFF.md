@@ -1,8 +1,27 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-09-16(工具链可移植化 + n8n/yt-dlp 打通)  
-**分支**:`main`(`feat/s1-trend-intelligence` 已并入,merge commit a6c1ace)  
-**状态**:✅ **261 tests 绿(41 files)** / typecheck 绿 / lint 绿 / production build 绿 / 环境体检 9/9 命令 + n8n HTTP 全绿
+**最后更新**:2026-09-19(纠正发布链路:Postiz 不支持国内平台)  
+**分支**:`main`  
+**状态**:✅ 测试绿 / typecheck 绿 / lint 绿 / 环境体检 9/9 命令 + n8n HTTP 全绿
+
+## 2026-09-19 第四轮：纠正「Postiz 能发国内平台」的错误假设
+
+实测确认:Postiz 只支持海外平台(TikTok/YouTube/X/Instagram/LinkedIn/Facebook/Bluesky/Mastodon 等 30+),
+**不支持抖音/快手/B站**。此前发布链路从 `adapters.ts`→`preflight.ts`→`config/postiz.ts`→`config-postiz.mjs`
+→文档 全部假设 Postiz 能连国内平台,给用户一个永远连不上的假选项。
+
+修正(诚实降级,与项目「不伪造能力」原则一致):
+
+- `adapters.ts`:douyin/kuaishou/bilibili 不再映射到 postiz,改为 social-auto-upload(若配)/ manual。
+- `preflight.ts`:移除 `POSTIZ_INTEGRATION_ID_DOUYIN/KUAISHOU/BILIBILI` 作为 blocker;Postiz 定位为
+  「海外平台可选网关」,国内平台提示手动发布。
+- `config/postiz.ts` + `config-postiz.mjs`:`PostizPlatform` 改为海外平台 union,`inferPostizPlatformHint`
+  改为匹配海外平台;脚本明确提示「国内平台不支持,走手动发布」。
+- `.env.example`:移除 `POSTIZ_INTEGRATION_ID_DOUYIN/_KUAISHOU/_BILIBILI`,补国内平台手动发布说明。
+- 文档(README/CONFIG_AND_LAUNCH/MANUAL_SETUP):发布方式改为「国内手动发布 + 海外走 Postiz」。
+
+**国内平台发布现状**:项目产出合规成片+标题/简介/标签/封面,人工到平台后台上传。国内平台自动发布
+API 普遍要求企业资质,个人账号通常拿不到——这是现实约束,不是本项目偷懒。
 
 ## 2026-09-19 第三轮：打通 TikTokDownloader 免费抖音热榜
 

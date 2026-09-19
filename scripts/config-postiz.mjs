@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 一键配置 Postiz 渠道 → 自动回填 POSTIZ_INTEGRATION_ID_*
+ * 一键探测 Postiz 渠道,并自动回填 POSTIZ_INTEGRATION_ID_*
  *
  * 用法:
  *   npm run postiz:channels           # 只查看当前渠道与被识别的平台
@@ -11,6 +11,10 @@
  *   2. .env.local 已填 POSTIZ_URL 与 POSTIZ_API_KEY
  *   3. 已在 Postiz UI 完成平台 OAuth(Settings → Channels)
  *
+ * ⚠️ 重要:Postiz 只支持海外平台(TikTok/YouTube/X/Instagram/LinkedIn/Facebook 等),
+ *   不支持抖音 / 快手 / B站 这些国内平台。国内平台请走项目的手动发布流程
+ *   (成片 + 标题/简介/标签/封面已按平台规格生成,人工去平台后台发布)。
+ *
  * 注意:只写 .env.local(已被 .gitignore 排除),绝不提交任何密钥。
  */
 
@@ -20,12 +24,13 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_FILE = path.join(ROOT, '.env.local');
-const PLATFORMS = ['douyin', 'kuaishou', 'bilibili'];
+
+/** Postiz 实际支持的海外平台(用于回填 POSTIZ_INTEGRATION_ID_*) */
+const PLATFORMS = ['tiktok', 'youtube', 'twitter', 'instagram', 'linkedin', 'facebook', 'bluesky', 'mastodon', 'reddit', 'threads'];
 
 function readEnvFile(file) {
   if (!fs.existsSync(file)) return null;
-  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-  return lines;
+  return fs.readFileSync(file, 'utf8').split(/\r?\n/);
 }
 
 function parseEnv(lines) {
@@ -54,12 +59,19 @@ function publicBaseUrl(env) {
   return /\/public\/v1$/i.test(raw) ? raw : `${raw}/public/v1`;
 }
 
-/** 与 src/lib/config/postiz.ts 的 inferPostizPlatformHint 保持一致 */
+/** 识别 Postiz 真实支持的海外平台(注意:tiktok 是国际版,不是抖音) */
 function inferPlatformHint(input) {
   const text = String(input || '').toLowerCase();
-  if (/(bilibili|bili|b站|哔哩|哔哩哔哩)/.test(text)) return 'bilibili';
-  if (/(kuaishou|kwai|快手)/.test(text)) return 'kuaishou';
-  if (/(douyin|抖音|tiktok|tik tok)/.test(text)) return 'douyin';
+  if (/(youtube|谷歌视频|油管)/.test(text)) return 'youtube';
+  if (/(instagram|\binsta\b|\bins\b)/.test(text)) return 'instagram';
+  if (/(linkedin|领英)/.test(text)) return 'linkedin';
+  if (/(facebook|脸书)/.test(text)) return 'facebook';
+  if (/(tiktok|tik tok)/.test(text)) return 'tiktok';
+  if (/(bluesky|bsky)/.test(text)) return 'bluesky';
+  if (/(mastodon)/.test(text)) return 'mastodon';
+  if (/(reddit)/.test(text)) return 'reddit';
+  if (/(threads)/.test(text)) return 'threads';
+  if (/(twitter|推特|\bx\b)/.test(text)) return 'twitter';
   return 'unknown';
 }
 
@@ -167,7 +179,9 @@ async function main() {
   const integrations = normalize(payload);
   if (!integrations.length) {
     console.log('⚠️  Postiz API 可用,但没有返回任何已连接渠道。');
-    console.log('   请先在 Postiz UI(Settings → Channels)完成抖音 / 快手 / B站 的 OAuth 授权,再重跑本命令。');
+    console.log('   请先在 Postiz UI(Settings → Channels)完成海外平台(如 TikTok / YouTube / X)的 OAuth 授权,再重跑本命令。');
+    console.log('');
+    console.log('   另:抖音 / 快手 / B站 这些国内平台 Postiz 不支持,请走项目的手动发布流程。');
     process.exit(3);
   }
 
@@ -194,6 +208,8 @@ async function main() {
     console.log(`\n⚠️  未能自动识别: ${unmatched.join('、')}`);
     console.log('   渠道名的 id/名称里没带上平台关键词,请按上面列表手动填入对应字段。');
   }
+
+  console.log('\n📌 说明:Postiz 只支持海外平台。抖音/快手/B站 请走项目「手动发布」流程,不依赖 Postiz。');
 
   if (!write) {
     console.log('\n(只读模式。加 --write 会把以上 id 写回 .env.local)');

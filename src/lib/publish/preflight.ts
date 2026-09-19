@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { getPublishAdapterStatus, listPublishAdapterStatus } from "@/lib/publish/adapters";
 import { publishSpecs, type PublishPlatform } from "@/lib/publish/dry-run";
-import { postizIntegrationEnvName, postizPublicBaseUrl } from "@/lib/publish/dispatch";
+import { postizPublicBaseUrl } from "@/lib/publish/dispatch";
 
 export interface PublishPreflightInput {
   probePostiz?: boolean;
@@ -21,12 +21,11 @@ export interface PublishPreflightReport {
   liveEnabled: boolean;
   adapters: ReturnType<typeof listPublishAdapterStatus>;
   postiz: {
+    /** Postiz 仅用于海外平台(TikTok/YouTube/X 等),不是国内平台(抖音/快手/B站)的发布途径。 */
     configured: boolean;
     baseUrl: string;
     endpoint: string;
     hasApiKey: boolean;
-    missingIntegrationEnv: string[];
-    configuredIntegrationEnv: string[];
     probeStatus: "skipped" | "ok" | "failed";
     integrations: PostizIntegrationSummary[];
     error?: string;
@@ -58,13 +57,9 @@ export async function runPublishPreflight(
   const postizBase = postizPublicBaseUrl(env);
   const postizEndpoint = `${postizBase}/integrations`;
   const hasPostizApiKey = Boolean(env.POSTIZ_API_KEY);
-  const missingIntegrationEnv = platforms
-    .map((platform) => postizIntegrationEnvName(platform))
-    .filter((name) => !env[name]);
-  const configuredIntegrationEnv = platforms
-    .map((platform) => postizIntegrationEnvName(platform))
-    .filter((name) => Boolean(env[name]));
 
+  // 国内平台(抖音/快手/B站)不通过 Postiz 发布,所以 integration id 缺失不再是 blocker。
+  // Postiz 探测仅作为「海外平台可选网关」的参考,显式 probePostiz 时才发起。
   let probeStatus: PublishPreflightReport["postiz"]["probeStatus"] = "skipped";
   let integrations: PostizIntegrationSummary[] = [];
   let postizError: string | undefined;
@@ -98,14 +93,12 @@ export async function runPublishPreflight(
   };
 
   const blockers = [
-    ...(!hasPostizApiKey ? ["POSTIZ_API_KEY is not configured."] : []),
-    ...(missingIntegrationEnv.length ? [`Missing platform integration ids: ${missingIntegrationEnv.join(", ")}`] : []),
     ...(socialSessionDir && socialAutoUpload.sessionDirExists === false ? [`SOCIAL_AUTO_UPLOAD_SESSION_DIR not found: ${socialSessionDir}`] : []),
     ...(socialConfig && socialAutoUpload.configPathExists === false ? [`SOCIAL_AUTO_UPLOAD_CONFIG not found: ${socialConfig}`] : []),
     ...(probeStatus === "failed" && postizError ? [postizError] : [])
   ];
 
-  const nextActions = buildNextActions({ liveEnabled, hasPostizApiKey, missingIntegrationEnv, socialAutoUpload, probeStatus });
+  const nextActions = buildNextActions({ liveEnabled, socialAutoUpload, probeStatus });
 
   return {
     checkedAt: (deps.now?.() ?? new Date()).toISOString(),
@@ -116,8 +109,6 @@ export async function runPublishPreflight(
       baseUrl: postizBase,
       endpoint: postizEndpoint,
       hasApiKey: hasPostizApiKey,
-      missingIntegrationEnv,
-      configuredIntegrationEnv,
       probeStatus,
       integrations,
       error: postizError
@@ -140,26 +131,22 @@ function normalizeIntegration(value: Record<string, unknown>): PostizIntegration
 
 function buildNextActions(input: {
   liveEnabled: boolean;
-  hasPostizApiKey: boolean;
-  missingIntegrationEnv: string[];
   socialAutoUpload: PublishPreflightReport["socialAutoUpload"];
   probeStatus: PublishPreflightReport["postiz"]["probeStatus"];
 }) {
   const actions: string[] = [];
-  if (!input.hasPostizApiKey) {
-    actions.push("Configure POSTIZ_API_KEY before probing connected channels.");
-  }
-  if (input.missingIntegrationEnv.length) {
-    actions.push("Set POSTIZ_INTEGRATION_ID_DOUYIN/KUAISHOU/BILIBILI for every platform you want to draft.");
-  }
+  actions.push("国内平台(抖音/快手/B站)默认手动发布:成片、标题、简介、标签、封面已按平台规格生成,人工到平台后台上传。");
   if (!input.socialAutoUpload.configured) {
-    actions.push("Configure SOCIAL_AUTO_UPLOAD_SESSION_DIR or SOCIAL_AUTO_UPLOAD_CONFIG before domestic-platform browser automation.");
+    actions.push("如需命令行发布,配置 SOCIAL_AUTO_UPLOAD_SESSION_DIR 或 SOCIAL_AUTO_UPLOAD_CONFIG(国内平台浏览器自动化)。");
   }
   if (input.probeStatus === "ok") {
-    actions.push("Create one approved queue item, then dispatch mode=draft with PUBLISH_LIVE_ENABLED=false first.");
+    actions.push("Postiz 已连接海外平台渠道,如需发 TikTok/YouTube/X 可继续配置海外平台。");
+  }
+  if (input.probeStatus === "skipped") {
+    actions.push("海外平台(TikTok/YouTube/X)可选走 Postiz:配置 POSTIZ_URL+POSTIZ_API_KEY 后重跑体检。");
   }
   if (!input.liveEnabled) {
-    actions.push("Keep PUBLISH_LIVE_ENABLED=false until a Postiz draft smoke test is reviewed.");
+    actions.push("保持 PUBLISH_LIVE_ENABLED=false,直到人工审阅通过。");
   }
   return actions;
 }

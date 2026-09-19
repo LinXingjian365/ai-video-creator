@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { runPublishPreflight } from "@/lib/publish/preflight";
 
 describe("publish preflight", () => {
-  it("reports missing publish credentials without failing", async () => {
+  it("treats domestic platforms as manual publish, not blocked by missing Postiz", async () => {
+    // 回归:此前把 POSTIZ_API_KEY / POSTIZ_INTEGRATION_ID_DOUYIN 缺失当成 blocker,
+    // 但 Postiz 不支持国内平台,这些缺失根本不该阻塞国内平台的手动发布。
     const report = await runPublishPreflight(
       { platforms: ["douyin"], probePostiz: true },
       { env: {}, now: () => new Date("2026-06-18T00:00:00.000Z") }
@@ -11,24 +13,21 @@ describe("publish preflight", () => {
     expect(report.checkedAt).toBe("2026-06-18T00:00:00.000Z");
     expect(report.postiz.probeStatus).toBe("skipped");
     expect(report.postiz.hasApiKey).toBe(false);
-    expect(report.blockers).toEqual(expect.arrayContaining([
-      "POSTIZ_API_KEY is not configured.",
-      "Missing platform integration ids: POSTIZ_INTEGRATION_ID_DOUYIN"
-    ]));
-    expect(report.nextActions.length).toBeGreaterThan(0);
+    expect(report.blockers).toEqual([]);
+    expect(report.nextActions.some((action) => action.includes("手动发布"))).toBe(true);
+    expect(report.adapters[0].adapter).toBe("manual");
   });
 
-  it("probes Postiz integrations when configured", async () => {
+  it("probes Postiz integrations when explicitly configured (海外平台)", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
-      new Response(JSON.stringify([{ id: "int-1", name: "Douyin", identifier: "tiktok", profile: "demo" }]), { status: 200 })
+      new Response(JSON.stringify([{ id: "int-1", name: "My TikTok", identifier: "tiktok", profile: "demo" }]), { status: 200 })
     );
     const report = await runPublishPreflight(
       { platforms: ["douyin"], probePostiz: true },
       {
         env: {
           POSTIZ_URL: "https://postiz.example.com",
-          POSTIZ_API_KEY: "secret-key",
-          POSTIZ_INTEGRATION_ID_DOUYIN: "int-1"
+          POSTIZ_API_KEY: "secret-key"
         },
         fetch: fetchMock as never
       }
@@ -50,8 +49,7 @@ describe("publish preflight", () => {
       {
         env: {
           POSTIZ_URL: "https://postiz.example.com/public/v1",
-          POSTIZ_API_KEY: "secret-key",
-          POSTIZ_INTEGRATION_ID_BILIBILI: "int-bili"
+          POSTIZ_API_KEY: "secret-key"
         },
         fetch: fetchMock as never
       }

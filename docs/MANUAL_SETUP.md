@@ -32,35 +32,35 @@ docker ps               # 应该能看到 n8n / postiz / temporal / postgres / r
 
 ---
 
-## 第 1 步：Postiz 连平台拿渠道 ID（唯一无法代办的一步）
+## 第 1 步：发布方式（国内平台手动发布，Postiz 只用于海外）
 
-Postiz 是发布网关。它的 API 必须先由你在它的界面里完成 OAuth 授权，才会有渠道 ID。
+先说清楚一个关键事实，避免你白找：**Postiz 不支持抖音、快手、B站**——它只支持海外平台
+（TikTok / YouTube / X / Instagram / LinkedIn / Facebook / Bluesky / Mastodon 等 30+）。
+你在它的 Channels 里找不到国内平台是正常的。
+
+所以：
+
+- **国内平台（抖音/快手/B站）→ 手动发布**：项目已经按各平台规格生成好成片、标题、简介、
+  标签、封面，你到平台后台手动上传即可。国内平台的自动发布 API 普遍要求企业资质，
+  个人账号通常拿不到，这是现实。
+- **海外平台（可选）→ 走 Postiz**：如果以后要做 TikTok/YouTube，再用下面这套。
+
+### 如果你要做海外平台（可选），才需要配 Postiz：
 
 1. 浏览器打开 **http://localhost:5000**
 2. **注册账号**（首个注册的账号自动成为 admin）
    - 注册完建议把 `deployments/postiz/docker-compose.yml` 里 `DISABLE_REGISTRATION` 改成 `"true"`
      再 `docker compose ... up -d` 重启，避免后续被外人注册。
    - ⚠️ 用你自己注册的账号，不要用任何文档里出现过的示例凭据。
-3. 进 **Settings → Channels（或 Add channel）**，分别连接：
-   - **抖音**（douyin）
-   - **快手**（kuaishou）
-   - **B站**（bilibili）
-4. 连完后回到项目，一条命令自动回填：
+3. 进 **Settings → Channels**，连接你想用的海外平台（TikTok / YouTube / X …）
+4. 连完后回到项目，一条命令探测：
 
 ```powershell
-npm run postiz:channels            # 先看看识别到哪些渠道
-npm run postiz:channels -- --write # 确认无误后写回 .env.local
+npm run postiz:channels            # 探测 Postiz 实际支持的渠道，并提示国内平台不支持
+npm run postiz:channels -- --write # 把识别到的海外渠道 id 写回 .env.local
 ```
 
-脚本会调用本地 Postiz `/public/v1/integrations`，按平台关键词匹配，
-写入 `POSTIZ_INTEGRATION_ID_DOUYIN` / `_KUAISHOU` / `_BILIBILI`。
-若某个平台识别成 unknown，脚本会列出全部渠道 id，手动填这三个字段即可。
-
-5. 改完 `.env.local` **重启 dev server**（Next 才会读新 env），再跑 `npm run smoke:live`，
-   blockers 应为 0。
-
-> 抖音 = douyin，和 TikTok 是不同平台。连 TikTok 报 `client_key` 错是 Postiz 自己的
-> TikTok OAuth 缺开发者凭证（要去 developers.tiktok.com 注册 app），**抖音不受影响**。
+> TikTok 是国际版，和抖音是不同平台，两者账号体系互不相通。
 
 ---
 
@@ -117,8 +117,8 @@ npm run smoke:live     # ~70s：趋势 → 脚本 → preflight，不渲染
 |---|---|---|
 | n8n / Postiz 全红 | Docker Desktop 没开 | 第 0 步 |
 | TTD 5555 不通 | 手动服务没起 | 第 2 步 `npm run ttd:start` |
-| Postiz 报 `client_key` | 连的是 TikTok 不是抖音 | 第 1 步注释，连抖音 |
-| 发布 dispatch 报 unconfigured | `POSTIZ_INTEGRATION_ID_*` 没填 | 第 1 步第 4 小步 |
+| 找不到抖音/快手/B站的 channel | Postiz 不支持国内平台 | 第 1 步，国内平台走手动发布 |
+| 想发海外平台但 dispatch 无渠道 | 没在 Postiz 连海外渠道 | 第 1 步「海外平台」小节 |
 | 抖音热榜空 | TTD 在跑但被风控 | `.env.local` 配 `TTD_DOUYIN_COOKIE`（公开热榜通常不需要） |
 
 完整排查表见 [`CONFIG_AND_LAUNCH.md`](./CONFIG_AND_LAUNCH.md#3-排查表)。

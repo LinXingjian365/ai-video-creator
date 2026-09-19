@@ -2,7 +2,21 @@ import { postizIntegrationEnvName, postizPublicBaseUrl } from "@/lib/publish/dis
 
 type Env = Record<string, string | undefined>;
 
-export type PostizPlatform = "douyin" | "kuaishou" | "bilibili";
+/**
+ * Postiz 实际支持的海外平台。注意:Postiz 不支持抖音(douyin)/快手(kuaishou)/B站(bilibili)
+ * 这些国内平台,tiktok 是国际版、与抖音账号体系互不相通。
+ */
+export type PostizPlatform =
+  | "tiktok"
+  | "youtube"
+  | "twitter"
+  | "instagram"
+  | "linkedin"
+  | "facebook"
+  | "bluesky"
+  | "mastodon"
+  | "reddit"
+  | "threads";
 
 export interface PostizIntegrationSummary {
   id: string;
@@ -29,7 +43,18 @@ export interface PostizIntegrationsProbeResult {
   platforms: PostizPlatformBinding[];
 }
 
-const REQUIRED_PLATFORMS: PostizPlatform[] = ["douyin", "kuaishou", "bilibili"];
+const REQUIRED_PLATFORMS: PostizPlatform[] = [
+  "tiktok",
+  "youtube",
+  "twitter",
+  "instagram",
+  "linkedin",
+  "facebook",
+  "bluesky",
+  "mastodon",
+  "reddit",
+  "threads"
+];
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -70,9 +95,16 @@ function extractArray(value: unknown): unknown[] {
 
 export function inferPostizPlatformHint(input: string): PostizPlatform | "unknown" {
   const text = input.toLowerCase();
-  if (/(bilibili|bili|b站|哔哩|哔哩哔哩)/i.test(text)) return "bilibili";
-  if (/(kuaishou|kwai|快手)/i.test(text)) return "kuaishou";
-  if (/(douyin|抖音|tiktok|tik tok)/i.test(text)) return "douyin";
+  if (/(youtube|谷歌视频|油管)/i.test(text)) return "youtube";
+  if (/(instagram|\binsta\b|\bins\b)/i.test(text)) return "instagram";
+  if (/(linkedin|领英)/i.test(text)) return "linkedin";
+  if (/(facebook|脸书)/i.test(text)) return "facebook";
+  if (/(tiktok|tik tok)/i.test(text)) return "tiktok";
+  if (/(bluesky|bsky)/i.test(text)) return "bluesky";
+  if (/(mastodon)/i.test(text)) return "mastodon";
+  if (/(reddit)/i.test(text)) return "reddit";
+  if (/(threads)/i.test(text)) return "threads";
+  if (/(twitter|推特|\bx\b)/i.test(text)) return "twitter";
   return "unknown";
 }
 

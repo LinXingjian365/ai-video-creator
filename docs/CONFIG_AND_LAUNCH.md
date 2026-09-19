@@ -3,7 +3,7 @@
 > 给你的最后一份「跑通」手册:当前栈状态已实测,**99% 配置已就绪**。这份带你走完剩下的 1 步手动配置 + 真实跑一次端到端。
 >
 > **只想看「我现在该点哪里」?直接去 [`MANUAL_SETUP.md`](./MANUAL_SETUP.md)** —— 一份按步骤的人工配置清单
-> (开 Docker → Postiz OAuth → 起 TTD → 可选 Key → 验证)。本文件是完整手册与排查表。
+> (开 Docker → 起 TTD → 国内平台手动发布 → 可选 Key → 验证)。本文件是完整手册与排查表。
 
 ---
 
@@ -30,7 +30,8 @@
 
 → **栈真的能产出可上传到抖音/快手/B站的成片**,不是空架子。
 
-**唯一阻塞**:`POSTIZ_INTEGRATION_ID_*` 未填(必须你在 Postiz UI 里 OAuth 连号后才有)。
+**发布现状**：国内三平台走**手动发布**（成片+文案已按平台规格生成）；Postiz 只支持海外平台，
+不作为国内平台依赖。
 
 ---
 
@@ -63,7 +64,16 @@ cp "<项目目录>/patches/ttd-run_api.py" run_api.py       # 非交互启动脚
 
 ---
 
-## 1. 唯一必做的手动配置:Postiz 连平台
+## 1. 发布方式:国内平台手动发布,Postiz 只用于海外
+
+> **关键事实**：Postiz 只支持海外平台（TikTok / YouTube / X / Instagram / LinkedIn / Facebook /
+> Bluesky / Mastodon 等 30+），**不支持抖音 / 快手 / B站**。你在它的 Channels 里找不到国内平台是正常的。
+
+所以发布分两路：
+
+- **国内平台（抖音/快手/B站）→ 手动发布**：项目已按各平台规格生成成片、标题、简介、标签、封面，
+  人工到平台后台上传。国内平台的自动发布 API 普遍要求企业资质，个人账号通常拿不到，这是现实约束。
+- **海外平台（可选）→ 走 Postiz**：需先在 Postiz UI 完成 OAuth（见下）。
 
 ### 先用页面配置中心补齐其余项目
 
@@ -72,32 +82,23 @@ cp "<项目目录>/patches/ttd-run_api.py" run_api.py       # 非交互启动脚
 - 敏感字段只显示“已配置/未配置”，永不回显原值。
 - 保存只写入白名单变量，并要求本机同源请求与显式确认。
 - 「实测当前模型」会真实调用一次当前 LLM；普通自检不调用模型，避免无意计费。
-- 「读取 Postiz 渠道」会调用本地 Postiz `/public/v1/integrations`，列出已连接渠道与候选 `integration_id`，可一键填回表单后再保存。
+- 「读取 Postiz 渠道」会调用本地 Postiz `/public/v1/integrations`，列出已连接的海外渠道与候选 `integration_id`。
 - 「运行真实链路」会创建真实 `/api/full-chain` 后台任务，生成 MP4 与多平台变体，但不会自动发布。
 
-2026-06-20 最新实测：配置中心成功写入 `APP_BASE_URL=http://127.0.0.1:5182` 和安全默认 `PUBLISH_LIVE_ENABLED=false`；DeepSeek 最小生成探针成功；Postiz integrations 探针返回 API 可用但渠道列表为空，说明仍需先在 Postiz UI 完成平台 OAuth。
-
-不能代办的就这一项。三步:
+### 只做海外平台才需要 Postiz（三步）
 
 1. 打开 http://localhost:5000(用**你自己在首次安装时创建**的本地 Postiz 账号登录；不要使用任何写在文档里的示例凭据)
-2. 进 Settings → Channels(或"Add channel") → 分别连接 **抖音 / 快手 / B站**(用 OAuth 走完平台授权)
-   - 抖音 TikTok 报 `client_key` 错:见 [3. 排查表](#3-排查表)
-3. 连接成功后，一条命令自动回填:
+2. 进 Settings → Channels → 连接你想用的**海外平台**(如 TikTok / YouTube / X),用 OAuth 走完授权
+   - TikTok 报 `client_key` 错:见 [3. 排查表](#3-排查表)
+3. 连接成功后，一条命令探测:
    ```bash
-   npm run postiz:channels          # 先查看识别到的渠道
+   npm run postiz:channels          # 探测 Postiz 实际支持的海外渠道
    npm run postiz:channels -- --write  # 确认无误后写回 .env.local
    ```
-   脚本会调用本地 Postiz `/public/v1/integrations`，按平台关键词(douyin / kuaishou / bilibili 及中文名)匹配渠道，
-   并写入 `POSTIZ_INTEGRATION_ID_DOUYIN` / `_KUAISHOU` / `_BILIBILI`。
-   若某平台识别为 unknown，脚本会列出全部渠道 id，手动填进这三个字段即可;
-   也可以走页面配置中心的「读取 Postiz 渠道」点「填入 id」。
-   ```
-   POSTIZ_INTEGRATION_ID_DOUYIN=<拿到的 id>
-   POSTIZ_INTEGRATION_ID_KUAISHOU=<拿到的 id>
-   POSTIZ_INTEGRATION_ID_BILIBILI=<拿到的 id>
-   ```
-4. 改完 `.env.local` 后重启 dev server(让 Next 读新 env):`npm run dev`
-5. 再跑 `npm run smoke:live`,blockers 应为 0。
+   脚本会调用本地 Postiz `/public/v1/integrations`，按海外平台关键词(tiktok / youtube / twitter 等)匹配，
+   并写入 `POSTIZ_INTEGRATION_ID_*`。若识别为 unknown，脚本会列出全部渠道 id，手动填对应字段即可。
+
+> 国内平台的发布不需要 Postiz 也不需要任何 integration id——直接手动上传即可。
 
 ---
 
@@ -170,11 +171,12 @@ curl -s -X POST http://127.0.0.1:5182/api/script/generate \
 | Remotion 成片 + 字幕 + BGM | `/api/full-chain` | ✅ |
 | 自动选曲 | `workspace/input/audio/` 8 首 CC-BY | ✅ |
 | 多平台变体 | `/api/video/variants` | ✅ |
-| 发布草稿(Postiz) | `/api/publish/dispatch` | ⏳ 等平台 OAuth 后的 integration_id |
+| 国内平台发布(抖音/快手/B站) | 手动上传(成片+文案已按规格生成) | ✅ 现实约束 |
+| 海外平台发布(可选) | Postiz `/api/publish/dispatch` | ⏳ 需先在 Postiz OAuth |
 | n8n 编排 | webhook `ai-video-full-chain` | ✅(已导入 workflow) |
 | 全链路自检 | `/api/health/self-check` + 辅助面板 | ✅ |
 | 本机配置中心 | `/api/config/local` + `/api/config/probe` + `/api/config/postiz` | ✅(密钥不回显，DeepSeek 与 Postiz 探针实测通过) |
 
 ---
 
-走完上面 1 节那 3 步,栈就完整可用。其他都已实测就绪。
+走完上面 1 节,栈就完整可用。其他都已实测就绪。
