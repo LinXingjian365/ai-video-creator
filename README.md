@@ -30,6 +30,7 @@ npm run dev                  # 打开 http://127.0.0.1:3000
 | `npm run tools:setup -- --with-asr` | 额外装 faster-whisper（本地 ASR，包体较大） |
 | `npm run tools:setup -- --with-jianying` | 额外装 `scripts/requirements.txt`（剪映草稿） |
 | `npm run postiz:channels` | 识别 Postiz 已连接渠道 |
+| `npm run ttd:start` | 启动 TikTokDownloader（抖音免费热榜，5555） |
 | `npm run smoke:live` | 对运行中的 dev server 跑真实链路冒烟 |
 
 ### Python 工具链
@@ -88,8 +89,12 @@ npm run postiz:channels -- --write # 确认后自动回填 .env.local
 | 服务 | 端口 | 启动方式 |
 |---|---|---|
 | n8n | 5678 | `docker compose -f deployments/n8n/docker-compose.yml up -d` |
-| TikTokDownloader | 5555 | Python venv 运行 `run_api.py`（抖音热榜的免费路径） |
+| TikTokDownloader | 5555 | 首次安装见 [patches/README.md](./patches/README.md)；之后 `.venv\Scripts\python.exe run_api.py` |
 | Postiz | 5000 | `docker compose -f deployments/postiz/docker-compose.yml up -d` |
+
+> n8n 与 Postiz 都走 Docker，所以**自检报红时先确认 Docker Desktop 是否开着**
+> （`docker version` 能返回 Server 版本才算正常）。TikTokDownloader 是手动起的 Python
+> 服务，不自启——它没跑时抖音热榜会自动回退到 TikHub（已有 Key 时），不会让链路挂掉。
 
 > n8n 只通过 HTTP webhook 集成，项目不调用 `n8n` 命令行。环境体检因此探测
 > `N8N_WEBHOOK_URL` 指向地址的 `/healthz`，而不是本地 CLI——容器化部署下本地没有 CLI，
@@ -99,7 +104,7 @@ npm run postiz:channels -- --write # 确认后自动回填 .env.local
 
 | 项 | 状态 |
 |---|---|
-| vitest | 261 passed / 41 files |
+| vitest | 262 passed / 42 files |
 | typecheck | 通过 |
 | lint | 通过（零警告） |
 | production build | 通过 |
@@ -109,6 +114,8 @@ npm run postiz:channels -- --write # 确认后自动回填 .env.local
 ## 已知的边界
 
 - **快手热榜**：目前没有可用的免费源（TikHub 快手热榜计费、KS-Downloader 无热榜端点），保留 TikHub 路径，不伪造数据。
+- **抖音热榜免费路径**：依赖自托管的 TikTokDownloader，需单独安装且**手动启动**（不随系统/项目自启）。
+  没跑时会自动回退到 TikHub（已有 Key），不会让链路挂掉。安装见 `patches/README.md`，启动用 `npm run ttd:start`。
 - **B站 API**：真实榜单可用，但 `code=-352` 风控会间歇触发，重试或换分区通常恢复。
 - **剪映**：新版加密草稿，改用 `pyJianYingDraft` 从零生成明文草稿绕过。
   ⚠️ **必须锁定 `pyJianYingDraft==0.2.6`**（见 `scripts/requirements.txt`）：脚本调用的是

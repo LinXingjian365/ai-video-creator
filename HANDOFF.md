@@ -4,6 +4,32 @@
 **分支**:`main`(`feat/s1-trend-intelligence` 已并入,merge commit a6c1ace)  
 **状态**:✅ **261 tests 绿(41 files)** / typecheck 绿 / lint 绿 / production build 绿 / 环境体检 9/9 命令 + n8n HTTP 全绿
 
+## 2026-09-19 第三轮：打通 TikTokDownloader 免费抖音热榜
+
+把唯一还缺的免费数据源真正装起来并跑通（此前 TTD 只写在文档里，本机从未装过）。
+
+| 检查项 | 结果 |
+|---|---|
+| TTD `/token` | ✅ 200 `{"message":"验证成功！"}` |
+| TTD `/douyin/hot` | ✅ 200，4 个榜单（抖音热榜 51 条 / 娱乐榜 50 条 / 社会榜 / 挑战榜） |
+| 项目适配器 `fetchTtdTrends` | ✅ 端到端拉到 5 条真实热搜词 |
+| vitest | ✅ 262 passed / 42 files |
+
+安装位置：`C:\Users\Administrator\Desktop\TikTokDownloader`（upstream `473c90f`）。
+
+踩到的坑与处理：
+
+- **上游重构导致原 patch 失效**：`_deal_hot_data` 从 `main_server.py` 移到了
+  `main_terminal.py` 的 `TikTok` 基类（`APIServer(TikTok)` 继承它，所以 `self._deal_hot_data`
+  仍可用），`APIModel` 需从 `src/models/base.py` 显式 import。已按新版重新生成
+  `patches/ttd-douyin-hot.patch`，并在 `patches/README.md` 记录版本对应关系与手工插入法。
+- **PowerShell 会把 git diff 的中文弄乱码**（git 输出 UTF-8，PowerShell 按 GBK 解码后再写回）。
+  生成 patch 必须走 Node 的 `spawnSync` + `encoding:null` 拿 Buffer，不能 `| Out-String`。
+- **TTD 是手动起的 Python 服务，不自启**。新增 `npm run ttd:start`
+  （`scripts/start-ttd.ps1`，自动定位目录 + 已在跑则不重复起 + 起来后探活）。
+- 新增 `src/lib/trend/sources/ttd-live-check.test.ts`：真实链路契约测试，
+  TTD 没跑时自动跳过，不污染常规 `npm test`。
+
 ## 2026-09-16 第二轮：工具链可移植化与真实联调
 
 | 检查项 | 结果 |

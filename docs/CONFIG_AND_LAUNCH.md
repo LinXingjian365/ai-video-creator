@@ -31,6 +31,35 @@
 
 ---
 
+## 0.5 首次安装 TikTokDownloader(抖音免费热榜)
+
+TTD 是抖音热榜的**免费**路径(替代 TikHub 计费接口),但它不是本仓库的一部分,需要单独装一次。
+完整步骤与上游版本对应关系见 [`patches/README.md`](../patches/README.md),精简版:
+
+```bash
+cd ~/Desktop
+git clone --depth 1 https://github.com/JoeanAmier/TikTokDownloader.git
+cd TikTokDownloader
+python -m venv .venv                                  # 需 Python >=3.12
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+git apply "<项目目录>/patches/ttd-douyin-hot.patch"     # 加 /douyin/hot 路由
+cp "<项目目录>/patches/ttd-run_api.py" run_api.py       # 非交互启动脚本
+.venv/Scripts/python.exe run_api.py                     # 监听 127.0.0.1:5555
+```
+
+自测:`curl http://127.0.0.1:5555/douyin/hot -X POST -H "Content-Type: application/json" -d "{}"`
+应返回 4 个榜单(热榜/娱乐榜/社会榜/挑战榜)。
+
+> 2026-09-19 实测:已在本机 `C:\Users\Administrator\Desktop\TikTokDownloader` 装好并跑通,
+> 4 榜共 100+ 条真实热搜词;项目侧 `fetchTtdTrends` 端到端拉到 5 条(见
+> `src/lib/trend/sources/ttd-live-check.test.ts`)。
+
+> ⚠️ 上游版本敏感:`ttd-douyin-hot.patch` 针对 upstream `473c90f`。若 `git apply` 报上下文
+> 不匹配,按 `patches/README.md` 里的两段手工插入即可(新版把 `_deal_hot_data` 移到了
+> `main_terminal.py` 的 `TikTok` 基类)。
+
+---
+
 ## 1. 唯一必做的手动配置:Postiz 连平台
 
 ### 先用页面配置中心补齐其余项目
@@ -101,8 +130,9 @@ curl -s -X POST http://127.0.0.1:5182/api/script/generate \
 | 现象 | 原因 | 解法 |
 |---|---|---|
 | `npm run smoke:live` Step 0 报 `down` | 服务下线 | 看 hint 跑对应启动命令(自检面板里也有) |
-| TTD 5555 不通 | 进程没自启 | `cd ~/Desktop/TikTokDownloader && .venv/Scripts/python.exe run_api.py` |
-| Docker 容器没跑 | DD 退出了 | 打开 Docker Desktop(可去 Settings → General → AutoStart 设开机自启);然后 `docker compose -f deployments/{n8n,postiz}/docker-compose.yml up -d` |
+| TTD 5555 不通 | 进程没自启(它是手动起的,不自启) | `cd ~/Desktop/TikTokDownloader && .venv/Scripts/python.exe run_api.py`;还没装过见 [0.5 节](#05-首次安装-tiktokdownloader抖音免费热榜) |
+| **自检里 n8n / Postiz 全红** | **Docker Desktop 没开着**(最常见) | 先确认 `docker version` 能返回 Server 版本;不能就打开 Docker Desktop(Settings → General 勾 Start Docker Desktop when you log in),再 `docker compose -f deployments/n8n/docker-compose.yml up -d` 和 `docker compose -f deployments/postiz/docker-compose.yml up -d` |
+| `docker compose` 报 `dockerDesktopLinuxEngine` 不存在 | daemon 没起来,不是配置错 | 同上:开 Docker Desktop 再重试 |
 | Postiz 连 TikTok 报 `client_key` 错 | Postiz 自己的 TikTok OAuth 缺开发者凭证 | Postiz UI → Settings → Providers → TikTok 填 client_key/secret(去 developers.tiktok.com 注册一个 app);**抖音(douyin)是不同平台,无此问题** |
 | `/api/trend/report` 抖音返回空 | TTD 在跑但 cookie 风控 | `.env.local` 配 `TTD_DOUYIN_COOKIE`(从浏览器抖音站抓);热榜通常无需 |
 | DeepSeek 慢/失败 | 网络抖动 | `.env.local` 切 `LLM_PROVIDER=openai` 用网关备用 |
