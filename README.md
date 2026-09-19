@@ -70,17 +70,18 @@ faster-whisper，因此解释器解析顺序是：
 | `TTD_ENABLED` / `TTD_BASE_URL` | TikTokDownloader 自托管免费路径 | 抖音热榜改走 TikHub |
 | `VIDEO_TOOLS_PYTHON` | Python 工具链解释器 | 自动探测，见上文「Python 工具链」 |
 | `POSTIZ_API_KEY` / `POSTIZ_URL` | **海外平台**发布网关（可选） | 不影响国内平台，海外平台才需要 |
-| `SOCIAL_AUTO_UPLOAD_*` | 国内平台命令行发布（可选） | 不配则国内平台走手动发布 |
+| `SOCIAL_AUTO_UPLOAD_DIR` / `_ACCOUNT_*` | 国内平台自动化发布 | 不配则国内平台走手动发布 |
 
-> **发布方式（诚实说明）**：抖音 / 快手 / B站 这些**国内平台默认手动发布**——项目产出
-> 符合各平台规格的成片、标题、简介、标签、封面，人工到平台后台上传。国内平台的自动发布
-> API 普遍要求企业资质，个人账号通常拿不到。**Postiz 只支持海外平台**（TikTok/YouTube/X 等），
-> 不支持国内平台，所以它只作为海外发布的可选网关。
+> **国内平台自动化发布（抖音/快手/B站）**：走 [`social-auto-upload`](https://github.com/dreammis/social-auto-upload)
+> （11K★ 开源），用**浏览器自动化**操作各平台创作者后台。国内平台都没有面向个人的开放上传 API
+> （要企业资质），这是唯一现实路径。安装与扫码登录见 [`docs/MANUAL_SETUP.md`](./docs/MANUAL_SETUP.md)，
+> 登录用 `npm run sau:login`。
 >
-> ```bash
-> docker compose -f deployments/postiz/docker-compose.yml up -d
-> npm run postiz:channels            # 探测 Postiz 实际支持的海外渠道（会提示国内平台不支持）
-> ```
+> **绝不静默上传**：默认只生成可执行命令、不真发。真正执行需三重闸门全开——
+> `SOCIAL_AUTO_UPLOAD_EXECUTE=true` + `PUBLISH_LIVE_ENABLED=true` + `mode=live`。
+>
+> **海外平台（可选）**：走 Postiz（`docker compose -f deployments/postiz/docker-compose.yml up -d`
+> 后 `npm run postiz:channels`）。⚠️ Postiz 只支持海外平台，**不支持抖音/快手/B站**。
 
 > **诚实降级**：任何外部 Key 缺失都不会让界面报错或伪造数据，而是在对应面板明确标注状态。`/api/health/self-check` 会一次性探 TTD / n8n / Postiz / KSD / LLM / BGM / FFmpeg / yt-dlp 的真实可用情况。
 
@@ -115,9 +116,10 @@ faster-whisper，因此解释器解析顺序是：
 
 ## 已知的边界
 
-- **国内平台自动发布（抖音/快手/B站）**：目前没有开箱即用的自动发布途径。Postiz 只支持海外平台；
-  国内平台的开放发布 API 普遍要求企业资质，个人账号通常拿不到。因此这三个平台默认**手动发布**——
-  项目产出合规成片与文案，人工上传。这是现实约束，不是本项目偷懒。
+- **国内平台自动发布（抖音/快手/B站）**：走 `social-auto-upload`（浏览器自动化）。
+  国内平台的开放上传 API 普遍要求企业资质，个人拿不到，浏览器自动化是唯一现实路径。
+  需安装 + 各平台扫码登录一次（登录态会过期，过期需重新扫）。不配置时降级为手动发布。
+  真正执行上传需三重闸门全开，默认只给命令预览——这是「绝不静默上传」原则。
 - **快手热榜**：目前没有可用的免费源（TikHub 快手热榜计费、KS-Downloader 无热榜端点），保留 TikHub 路径，不伪造数据。
 - **抖音热榜免费路径**：依赖自托管的 TikTokDownloader，需单独安装且**手动启动**（不随系统/项目自启）。
   没跑时会自动回退到 TikHub（已有 Key），不会让链路挂掉。安装见 `patches/README.md`，启动用 `npm run ttd:start`。

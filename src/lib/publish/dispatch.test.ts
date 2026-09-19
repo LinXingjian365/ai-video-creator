@@ -62,9 +62,44 @@ describe("publish dispatch", () => {
     });
   });
 
-  it("previews social-auto-upload command without executing it", () => {
-    const args = buildSocialAutoUploadCommand(approvedItem, { SOCIAL_AUTO_UPLOAD_COMMAND: "sau" });
-    expect(args).toEqual(expect.arrayContaining(["sau", "--platform", "douyin", "--dry-run"]));
+  it("builds the real social-auto-upload CLI shape (not the old flag style)", () => {
+    // 回归:此前生成的是 `--platform/--video/--dry-run` 这套上游根本不存在的参数。
+    // 上游真实形态是 `sau <platform> upload-video --account ... --file ...`,且没有 --dry-run。
+    const args = buildSocialAutoUploadCommand(approvedItem, {});
+    expect(args).toEqual([
+      "python",
+      "sau_cli.py",
+      "douyin",
+      "upload-video",
+      "--account", "douyin",
+      "--file", "workspace/output/demo.mp4",
+      "--title", "标题",
+      "--desc", "简介",
+      "--tags", "AI,剪辑"
+    ]);
+    expect(args).not.toContain("--dry-run");
+  });
+
+  it("adds the required --tid and --desc for bilibili", () => {
+    const biliItem = { ...approvedItem, input: { ...approvedItem.input, platform: "bilibili" as const } };
+    const args = buildSocialAutoUploadCommand(biliItem, {
+      SOCIAL_AUTO_UPLOAD_DIR: "A:/sau",
+      SOCIAL_AUTO_UPLOAD_ACCOUNT_BILIBILI: "my_bili",
+      SOCIAL_AUTO_UPLOAD_BILIBILI_TID: "249"
+    });
+
+    expect(args[0]).toBe("A:/sau\\.venv\\Scripts\\python.exe");
+    expect(args[1]).toBe("A:/sau\\sau_cli.py");
+    expect(args).toEqual(expect.arrayContaining(["--account", "my_bili", "--tid", "249", "--desc", "简介"]));
+  });
+
+  it("gives bilibili an empty --desc when description is missing", () => {
+    const biliItem = {
+      ...approvedItem,
+      input: { ...approvedItem.input, platform: "bilibili" as const, description: undefined }
+    };
+    const args = buildSocialAutoUploadCommand(biliItem, {});
+    expect(args).toEqual(expect.arrayContaining(["--desc", ""]));
   });
 
   it("requires approved queue item and manual confirmation", async () => {
@@ -101,5 +136,66 @@ describe("publish dispatch", () => {
     expect(result.adapter).toBe("manual");
     expect(result.sent).toBe(false);
     expect(result.message).toContain("手动发布");
+  });
+});
+
+describe("social-auto-upload 执行闸门", () => {
+  const queue = (): PublishQueueState => ({
+    schema: "ai-video-assistant.publish-queue.v1",
+    updatedAt: "",
+    items: [approvedItem]
+  });
+  // CLI 指到一个真实存在的文件,让 existsSync 通过;DIR 非空才会选 social-auto-upload adapter。
+  const baseEnv = { SOCIAL_AUTO_UPLOAD_DIR: ".", SOCIAL_AUTO_UPLOAD_CLI: "package.json" };
+
+  it("默认只预览,不执行外部命令", async () => {
+    const run = vi.fn();
+    const result = await dispatchPublishQueueItem(
+      { id: "q1", manualConfirm: PUBLISH_CONFIRM_TEXT, mode: "live" },
+      {
+        env: { ...baseEnv, PUBLISH_LIVE_ENABLED: "true" },
+        runPublishCommand: run as never,
+        readPublishQueue: vi.fn(async () => queue()),
+        writePublishQueue: vi.fn(async (next) => next)
+      }
+    );
+
+    expect(result.status).toBe("preview");
+    expect(result.sent).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("三个闸门全开才真正执行并落库", async () => {
+    const run = vi.fn(async () => ({ code: 0, stdout: "上传成功", stderr: "" }));
+    const writeQueue = vi.fn(async (next: PublishQueueState) => next);
+
+    const result = await dispatchPublishQueueItem(
+      { id: "q1", manualConfirm: PUBLISH_CONFIRM_TEXT, mode: "live" },
+      {
+        env: { ...baseEnv, PUBLISH_LIVE_ENABLED: "true", SOCIAL_AUTO_UPLOAD_EXECUTE: "true" },
+        runPublishCommand: run as never,
+        readPublishQueue: vi.fn(async () => queue()),
+        writePublishQueue: writeQueue
+      }
+    );
+
+    expect(result.status).toBe("sent");
+    expect(result.sent).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(writeQueue.mock.calls[0][0].items[0].status).toBe("published");
+  });
+
+  it("找不到 CLI 时报 blocked 而不是静默成功", async () => {
+    const result = await dispatchPublishQueueItem(
+      { id: "q1", manualConfirm: PUBLISH_CONFIRM_TEXT, mode: "live" },
+      {
+        env: { SOCIAL_AUTO_UPLOAD_DIR: "A:/definitely-not-here" },
+        readPublishQueue: vi.fn(async () => queue()),
+        writePublishQueue: vi.fn(async (next) => next)
+      }
+    );
+
+    expect(result.status).toBe("blocked");
+    expect(result.message).toContain("找不到");
   });
 });

@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { getPublishAdapterStatus, type PublishAdapterId } from "@/lib/publish/adapters";
 import {
   PUBLISH_CONFIRM_TEXT,
@@ -9,6 +11,38 @@ import {
 
 export type PublishDispatchMode = "draft" | "live";
 export type PublishDispatchStatus = "preview" | "drafted" | "sent" | "blocked";
+
+export interface PublishCommandRunResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+export type RunPublishCommand = (
+  command: string[],
+  options: { cwd?: string; timeoutMs: number }
+) => Promise<PublishCommandRunResult>;
+
+/** 默认执行器:spawn 子进程,带超时与输出捕获。 */
+const defaultRunPublishCommand: RunPublishCommand = (command, { cwd, timeoutMs }) =>
+  new Promise((resolve) => {
+    const [file, ...args] = command;
+    const child = spawn(file, args, { cwd, windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+
+    child.stdout?.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.on("error", (error: Error) => {
+      clearTimeout(timer);
+      resolve({ code: null, stdout, stderr: `${stderr}${error.message}` });
+    });
+    child.on("close", (code: number | null) => {
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    });
+  });
 
 export interface PublishDispatchInput {
   id: string;
@@ -93,21 +127,82 @@ export function buildPostizDraftPayload(
   };
 }
 
+/**
+ * 构造 social-auto-upload 的真实 CLI 命令。
+ *
+ * 上游 CLI 形态是 `sau <platform> <action> --account ... --file ...`(不是 flag 式),
+ * 且**没有 --dry-run 参数**——"只预览不执行"由本项目的 adapter 层保证(默认不 spawn),
+ * 不能靠 CLI 的开关。
+ *
+ * 各平台差异:
+ *   - bilibili:`--desc` 和 `--tid`(分区 id)都是**必需**参数
+ *   - 其余平台:`--desc` / `--tags` 可选
+ *   - 账号名是用户在 `sau <platform> login --account <name>` 时自定义的,需按平台配置
+ */
 export function buildSocialAutoUploadCommand(
   item: PublishQueueItem,
   env: Record<string, string | undefined> = process.env
-) {
-  const command = env.SOCIAL_AUTO_UPLOAD_COMMAND || "social-auto-upload";
-  return [
-    command,
-    "--platform",
-    item.input.platform,
-    "--video",
-    item.input.videoPath,
-    "--title",
-    item.input.title,
-    "--dry-run"
+): string[] {
+  const platform = item.input.platform;
+  const dir = (env.SOCIAL_AUTO_UPLOAD_DIR ?? "").trim().replace(/[\\/]+$/, "");
+
+  const python = (env.SOCIAL_AUTO_UPLOAD_PYTHON ?? "").trim()
+    || (dir ? `${dir}\\.venv\\Scripts\\python.exe` : "python");
+  const cli = (env.SOCIAL_AUTO_UPLOAD_CLI ?? "").trim()
+    || (dir ? `${dir}\\sau_cli.py` : "sau_cli.py");
+  const account = (env[`SOCIAL_AUTO_UPLOAD_ACCOUNT_${platform.toUpperCase()}`] ?? "").trim() || platform;
+
+  const description = (item.input.description ?? "").trim();
+  const tags = (item.input.tags ?? []).map((tag) => tag.replace(/^#/, "")).filter(Boolean).join(",");
+
+  const args = [
+    python,
+    cli,
+    platform,
+    "upload-video",
+    "--account", account,
+    "--file", item.input.videoPath,
+    "--title", item.input.title
   ];
+
+  if (description) {
+    args.push("--desc", description);
+  }
+  if (tags) {
+    args.push("--tags", tags);
+  }
+  if (platform === "bilibili") {
+    // B站 upload-video 要求 desc 与 tid 必需;desc 缺失时补空串,避免 CLI 直接报参数错。
+    if (!description) {
+      args.push("--desc", "");
+    }
+    args.push("--tid", (env.SOCIAL_AUTO_UPLOAD_BILIBILI_TID ?? "").trim() || "249");
+  }
+
+  return args;
+}
+
+/** 供提示与 UI 使用:检查命令依赖的配置是否齐。 */
+export function describeSocialAutoUploadConfig(
+  item: PublishQueueItem,
+  env: Record<string, string | undefined> = process.env
+): { dir?: string; python: string; cli: string; account: string; sessionDir?: string; missing: string[] } {
+  const platform = item.input.platform;
+  const dir = (env.SOCIAL_AUTO_UPLOAD_DIR ?? "").trim() || undefined;
+  const python = (env.SOCIAL_AUTO_UPLOAD_PYTHON ?? "").trim()
+    || (dir ? `${dir}\\.venv\\Scripts\\python.exe` : "python");
+  const cli = (env.SOCIAL_AUTO_UPLOAD_CLI ?? "").trim()
+    || (dir ? `${dir}\\sau_cli.py` : "sau_cli.py");
+  const accountKey = `SOCIAL_AUTO_UPLOAD_ACCOUNT_${platform.toUpperCase()}`;
+  const account = (env[accountKey] ?? "").trim() || platform;
+  const sessionDir = (env.SOCIAL_AUTO_UPLOAD_SESSION_DIR ?? "").trim()
+    || (dir ? `${dir}\\cookies` : undefined);
+
+  const missing: string[] = [];
+  if (!dir) missing.push("SOCIAL_AUTO_UPLOAD_DIR");
+  if (!(env[accountKey] ?? "").trim()) missing.push(accountKey);
+
+  return { dir, python, cli, account, sessionDir, missing };
 }
 
 export async function dispatchPublishQueueItem(
@@ -117,6 +212,7 @@ export async function dispatchPublishQueueItem(
     fetch?: typeof fetch;
     readPublishQueue?: typeof readPublishQueue;
     writePublishQueue?: typeof writePublishQueue;
+    runPublishCommand?: RunPublishCommand;
   } = {}
 ): Promise<PublishDispatchResult> {
   if (input.manualConfirm !== PUBLISH_CONFIRM_TEXT) {
@@ -144,18 +240,7 @@ export async function dispatchPublishQueueItem(
   }
 
   if (adapter === "social-auto-upload") {
-    const commandPreview = buildSocialAutoUploadCommand(item, env);
-    return {
-      id: item.id,
-      platform: item.input.platform,
-      adapter,
-      mode,
-      status: "preview",
-      liveEnabled,
-      sent: false,
-      commandPreview,
-      message: "已生成 social-auto-upload 命令预览。当前不执行外部上传命令。"
-    };
+    return dispatchSocialAutoUpload(item, queue, index, mode, liveEnabled, env, deps.runPublishCommand, deps.writePublishQueue);
   }
 
   return {
@@ -167,6 +252,99 @@ export async function dispatchPublishQueueItem(
     liveEnabled,
     sent: false,
     message: "当前为 manual adapter:请手动发布并在数据回流中登记 postUrl/postId。"
+  };
+}
+
+/**
+ * social-auto-upload 执行分支(国内平台浏览器自动化)。
+ *
+ * 三重闸门全部满足才真正执行,默认只给命令预览:
+ *   1. SOCIAL_AUTO_UPLOAD_EXECUTE=true —— 明确启用外部执行
+ *   2. PUBLISH_LIVE_ENABLED=true —— 项目既有总闸门
+ *   3. mode=live —— 调用方显式指定
+ * 这是为了守住项目「绝不静默上传」的原则。
+ */
+async function dispatchSocialAutoUpload(
+  item: PublishQueueItem,
+  queue: PublishQueueState,
+  index: number,
+  mode: PublishDispatchMode,
+  liveEnabled: boolean,
+  env: Record<string, string | undefined>,
+  run: RunPublishCommand = defaultRunPublishCommand,
+  writeQueue: typeof writePublishQueue = writePublishQueue
+): Promise<PublishDispatchResult> {
+  const commandPreview = buildSocialAutoUploadCommand(item, env);
+  const config = describeSocialAutoUploadConfig(item, env);
+  const base = {
+    id: item.id,
+    platform: item.input.platform,
+    adapter: "social-auto-upload" as const,
+    mode,
+    liveEnabled,
+    commandPreview
+  };
+
+  if (!config.dir) {
+    return {
+      ...base,
+      status: "blocked",
+      sent: false,
+      message: "缺少 SOCIAL_AUTO_UPLOAD_DIR,无法定位 social-auto-upload。安装与配置见 docs/MANUAL_SETUP.md。"
+    };
+  }
+
+  if (!existsSync(config.cli)) {
+    return {
+      ...base,
+      status: "blocked",
+      sent: false,
+      message: `找不到 ${config.cli}。请确认 SOCIAL_AUTO_UPLOAD_DIR 指向 social-auto-upload 安装目录。`
+    };
+  }
+
+  const executeEnabled = env.SOCIAL_AUTO_UPLOAD_EXECUTE === "true";
+  if (!executeEnabled || !liveEnabled || mode !== "live") {
+    const reasons: string[] = [];
+    if (!executeEnabled) reasons.push("SOCIAL_AUTO_UPLOAD_EXECUTE 未设为 true");
+    if (!liveEnabled) reasons.push("PUBLISH_LIVE_ENABLED 未设为 true");
+    if (mode !== "live") reasons.push("mode 不是 live");
+    return {
+      ...base,
+      status: "preview",
+      sent: false,
+      message: `已生成可执行命令,未执行(${reasons.join(";")})。三个闸门全开才会真正上传。`
+    };
+  }
+
+  const timeoutMs = Number(env.SOCIAL_AUTO_UPLOAD_TIMEOUT_MS ?? "") || 600_000;
+  const result = await run(commandPreview, { cwd: config.dir, timeoutMs });
+  const trimmed = {
+    code: result.code,
+    stdout: result.stdout.slice(-4000),
+    stderr: result.stderr.slice(-4000)
+  };
+
+  if (result.code !== 0) {
+    return {
+      ...base,
+      status: "blocked",
+      sent: false,
+      response: trimmed,
+      message: `social-auto-upload 执行失败(code=${result.code})。stderr 见 response。`
+    };
+  }
+
+  const now = new Date().toISOString();
+  queue.items[index] = { ...item, status: "published", updatedAt: now };
+  await writeQueue(queue);
+
+  return {
+    ...base,
+    status: "sent",
+    sent: true,
+    response: trimmed,
+    message: "social-auto-upload 已执行完成。请到平台后台确认作品状态。"
   };
 }
 

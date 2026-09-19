@@ -1,4 +1,4 @@
-# 启动 TikTokDownloader(抖音热榜免费数据源,监听 127.0.0.1:5555)
+﻿# 启动 TikTokDownloader(抖音热榜免费数据源,监听 127.0.0.1:5555)
 #
 # 用法:
 #   powershell -File scripts/start-ttd.ps1

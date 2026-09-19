@@ -14,6 +14,7 @@
     "postiz:channels": "node scripts/config-postiz.mjs",
     "tools:setup": "node scripts/setup-video-tools.mjs",
     "ttd:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-ttd.ps1",
+    "sau:login": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sau-login.ps1",
     "test": "vitest run",
     "test:watch": "vitest"
   },

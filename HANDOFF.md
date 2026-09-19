@@ -1,8 +1,42 @@
 # Codex 接手指南 — AI 视频生成剪辑助手
 
-**最后更新**:2026-09-19(纠正发布链路:Postiz 不支持国内平台)  
+**最后更新**:2026-09-19(国内平台自动发布实装 social-auto-upload)  
 **分支**:`main`  
-**状态**:✅ 测试绿 / typecheck 绿 / lint 绿 / 环境体检 9/9 命令 + n8n HTTP 全绿
+**状态**:✅ 269 tests 绿 / typecheck 绿 / lint 绿 / 环境体检 9/9 命令 + n8n HTTP 全绿
+
+## 2026-09-19 第五轮：国内平台自动发布实装(social-auto-upload)
+
+用户要求「解决国内平台自动化发布」。调研后确认:**国内平台没有面向个人的开放上传 API**
+(企业资质门槛),唯一现实路径是**浏览器自动化**——直接操作各平台创作者后台。
+
+选用 [`social-auto-upload`](https://github.com/dreammis/social-auto-upload)(11K★,Apache-2.0),
+正是项目里早已预留但从未实装的那个 adapter。装在 `A:\social-auto-upload`:
+
+- venv + requirements(含 playwright/biliup/xhs)+ `conf.py`
+- `playwright install chromium` + `patchright install chromium`(抖音/快手走 patchright 防检测)
+- requirements.txt 漏了 `cv2`(opencv-python) 和 `segno`/`patchright`,已补装
+- CLI 验证:`sau_cli.py --help` 正常,支持 douyin/kuaishou/bilibili/xiaohongshu/tencent/baijiahao 等 10 个平台
+
+**真正的 CLI 形态**(此前项目里是凭空设计的,完全不匹配):
+
+```
+sau <platform> upload-video --account <账号名> --file <视频> --title <标题> [--desc] [--tags a,b]
+sau bilibili upload-video ... --desc <必填> --tid <分区id,必填>
+```
+上游**没有 `--dry-run` 参数**——"只预览不执行"必须由本项目 adapter 层保证。
+
+改动:
+- `dispatch.ts`:`buildSocialAutoUploadCommand` 重写为真实 CLI 形态(含 bilibili 的 --tid/--desc 必需项);
+  新增 `describeSocialAutoUploadConfig`;新增 `dispatchSocialAutoUpload` 执行分支 + 默认 spawn 执行器。
+- **三重闸门**才真执行(默认只给命令预览):`SOCIAL_AUTO_UPLOAD_EXECUTE=true` +
+  `PUBLISH_LIVE_ENABLED=true` + `mode=live`。守住「绝不静默上传」原则。
+- `adapters.ts`/`preflight.ts`:配置判断改为 `SOCIAL_AUTO_UPLOAD_DIR`,并按登录态/执行开关给出分步提示。
+- 新增 `npm run sau:login`(`scripts/sau-login.ps1`):定位安装目录、扫码登录、`-Check` 验登录态。
+- `.env.example` + README/MANUAL_SETUP:补完整安装配置与三重闸门说明。
+
+**⚠️ PowerShell 脚本编码坑**:Write 工具产出的是 UTF-8 **无 BOM**,而 PowerShell 5.1
+按系统 ANSI(GBK)读 .ps1 → 中文乱码导致"字符串缺少终止符"语法错误。
+`scripts/*.ps1` 必须存为 **UTF-8 with BOM**。已修 `sau-login.ps1` 与 `start-ttd.ps1`。
 
 ## 2026-09-19 第四轮：纠正「Postiz 能发国内平台」的错误假设
 

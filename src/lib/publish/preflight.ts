@@ -32,9 +32,15 @@ export interface PublishPreflightReport {
   };
   socialAutoUpload: {
     configured: boolean;
-    command: string;
+    /** social-auto-upload 安装目录 */
+    dir?: string;
+    cli?: string;
+    cliExists?: boolean;
+    /** 登录态目录(cookies/),登录后才有 */
     sessionDir?: string;
     sessionDirExists?: boolean;
+    /** 是否已开启真正执行(默认只给命令预览) */
+    executeEnabled: boolean;
     configPath?: string;
     configPathExists?: boolean;
   };
@@ -81,19 +87,26 @@ export async function runPublishPreflight(
     }
   }
 
-  const socialSessionDir = env.SOCIAL_AUTO_UPLOAD_SESSION_DIR;
-  const socialConfig = env.SOCIAL_AUTO_UPLOAD_CONFIG;
+  const socialDir = env.SOCIAL_AUTO_UPLOAD_DIR?.trim() || undefined;
+  const socialCli = env.SOCIAL_AUTO_UPLOAD_CLI?.trim()
+    || (socialDir ? `${socialDir}\\sau_cli.py` : undefined);
+  const socialSessionDir = env.SOCIAL_AUTO_UPLOAD_SESSION_DIR?.trim()
+    || (socialDir ? `${socialDir}\\cookies` : undefined);
+  const socialConfig = env.SOCIAL_AUTO_UPLOAD_CONFIG?.trim() || undefined;
   const socialAutoUpload = {
-    configured: Boolean(socialSessionDir || socialConfig),
-    command: env.SOCIAL_AUTO_UPLOAD_COMMAND || "social-auto-upload",
+    configured: Boolean(socialDir || socialSessionDir || socialConfig),
+    dir: socialDir,
+    cli: socialCli,
+    cliExists: socialCli ? fs.existsSync(socialCli) : undefined,
     sessionDir: socialSessionDir,
     sessionDirExists: socialSessionDir ? fs.existsSync(socialSessionDir) : undefined,
+    executeEnabled: env.SOCIAL_AUTO_UPLOAD_EXECUTE === "true",
     configPath: socialConfig,
     configPathExists: socialConfig ? fs.existsSync(socialConfig) : undefined
   };
 
   const blockers = [
-    ...(socialSessionDir && socialAutoUpload.sessionDirExists === false ? [`SOCIAL_AUTO_UPLOAD_SESSION_DIR not found: ${socialSessionDir}`] : []),
+    ...(socialDir && socialAutoUpload.cliExists === false ? [`social-auto-upload CLI not found: ${socialCli}`] : []),
     ...(socialConfig && socialAutoUpload.configPathExists === false ? [`SOCIAL_AUTO_UPLOAD_CONFIG not found: ${socialConfig}`] : []),
     ...(probeStatus === "failed" && postizError ? [postizError] : [])
   ];
@@ -137,7 +150,11 @@ function buildNextActions(input: {
   const actions: string[] = [];
   actions.push("国内平台(抖音/快手/B站)默认手动发布:成片、标题、简介、标签、封面已按平台规格生成,人工到平台后台上传。");
   if (!input.socialAutoUpload.configured) {
-    actions.push("如需命令行发布,配置 SOCIAL_AUTO_UPLOAD_SESSION_DIR 或 SOCIAL_AUTO_UPLOAD_CONFIG(国内平台浏览器自动化)。");
+    actions.push("如需自动化发布国内平台,安装 social-auto-upload 并配置 SOCIAL_AUTO_UPLOAD_DIR(见 docs/MANUAL_SETUP.md)。");
+  } else if (input.socialAutoUpload.sessionDirExists === false) {
+    actions.push("social-auto-upload 已配置但还没有登录态。先扫码登录:sau <platform> login --account <账号名>。");
+  } else if (!input.socialAutoUpload.executeEnabled) {
+    actions.push("登录态就绪。真正执行上传还需开启 SOCIAL_AUTO_UPLOAD_EXECUTE=true 与 PUBLISH_LIVE_ENABLED=true。");
   }
   if (input.probeStatus === "ok") {
     actions.push("Postiz 已连接海外平台渠道,如需发 TikTok/YouTube/X 可继续配置海外平台。");

@@ -32,20 +32,55 @@ docker ps               # 应该能看到 n8n / postiz / temporal / postgres / r
 
 ---
 
-## 第 1 步：发布方式（国内平台手动发布，Postiz 只用于海外）
+## 第 1 步：发布方式
 
-先说清楚一个关键事实，避免你白找：**Postiz 不支持抖音、快手、B站**——它只支持海外平台
-（TikTok / YouTube / X / Instagram / LinkedIn / Facebook / Bluesky / Mastodon 等 30+）。
-你在它的 Channels 里找不到国内平台是正常的。
+国内平台（抖音/快手/B站）有两条路，**二选一**：
 
-所以：
+### A. 自动发布（已装好，推荐）— social-auto-upload
 
-- **国内平台（抖音/快手/B站）→ 手动发布**：项目已经按各平台规格生成好成片、标题、简介、
-  标签、封面，你到平台后台手动上传即可。国内平台的自动发布 API 普遍要求企业资质，
-  个人账号通常拿不到，这是现实。
-- **海外平台（可选）→ 走 Postiz**：如果以后要做 TikTok/YouTube，再用下面这套。
+**已经装好了**：`A:\social-auto-upload`（含 venv、全部依赖、playwright + patchright 浏览器）。
 
-### 如果你要做海外平台（可选），才需要配 Postiz：
+原理是**浏览器自动化**：直接操作各平台的创作者后台，等价于「人工上传」的自动化。
+国内平台都没有面向个人的开放上传 API（要企业资质），这是唯一现实路径。
+
+**你只需扫码登录一次**：
+
+```powershell
+npm run sau:login -- -Platform douyin   -Account my_douyin
+npm run sau:login -- -Platform kuaishou -Account my_ks
+npm run sau:login -- -Platform bilibili -Account my_bili
+```
+
+- 会弹出浏览器窗口，用对应 App 扫码即可
+- 登录态存到 `A:\social-auto-upload\cookies\`，之后不用重复登录
+- 账号名（`my_douyin` 这些）随便起，是本地标识，用来区分多个账号
+- 验证是否还有效：加 `-Check`，如 `npm run sau:login -- -Platform douyin -Account my_douyin -Check`
+
+登录完在 `.env.local` 里配：
+
+```ini
+SOCIAL_AUTO_UPLOAD_DIR=A:\social-auto-upload
+SOCIAL_AUTO_UPLOAD_ACCOUNT_DOUYIN=my_douyin
+SOCIAL_AUTO_UPLOAD_ACCOUNT_KUAISHOU=my_ks
+SOCIAL_AUTO_UPLOAD_ACCOUNT_BILIBILI=my_bili
+SOCIAL_AUTO_UPLOAD_BILIBILI_TID=249
+```
+
+> ⚠️ **默认只生成命令预览，不会真发**。要真正执行上传，需**三重闸门全开**：
+> 1. `SOCIAL_AUTO_UPLOAD_EXECUTE=true`
+> 2. `PUBLISH_LIVE_ENABLED=true`
+> 3. 调用 `/api/publish/dispatch` 时传 `mode=live`
+>
+> 这是项目的「绝不静默上传」原则——任何一个没开，你拿到的都是可复制的命令而不是已发出去的作品。
+
+### B. 手动发布（零配置）
+
+项目已按各平台规格生成成片、标题、简介、标签、封面，你到平台后台手动上传即可。
+
+### 海外平台（可选）→ Postiz
+
+**Postiz 不支持抖音、快手、B站**——它只支持海外平台（TikTok / YouTube / X / Instagram /
+LinkedIn / Facebook / Bluesky / Mastodon 等 30+）。做海外才需要它：
 
 1. 浏览器打开 **http://localhost:5000**
 2. **注册账号**（首个注册的账号自动成为 admin）
@@ -117,7 +152,10 @@ npm run smoke:live     # ~70s：趋势 → 脚本 → preflight，不渲染
 |---|---|---|
 | n8n / Postiz 全红 | Docker Desktop 没开 | 第 0 步 |
 | TTD 5555 不通 | 手动服务没起 | 第 2 步 `npm run ttd:start` |
-| 找不到抖音/快手/B站的 channel | Postiz 不支持国内平台 | 第 1 步，国内平台走手动发布 |
+| 找不到抖音/快手/B站的 channel | Postiz 不支持国内平台 | 第 1 步 A，用 social-auto-upload |
+| dispatch 报 `blocked: 找不到 ... sau_cli.py` | `SOCIAL_AUTO_UPLOAD_DIR` 没配或路径错 | 第 1 步 A，指向 `A:\social-auto-upload` |
+| dispatch 返回 preview 但没真发 | 三重闸门没全开（这是设计如此） | 第 1 步 A 的警示框 |
+| 之前登过现在提示未登录 | Cookie 过期或平台风控 | `npm run sau:login -- -Platform x -Account y` 重新扫码 |
 | 想发海外平台但 dispatch 无渠道 | 没在 Postiz 连海外渠道 | 第 1 步「海外平台」小节 |
 | 抖音热榜空 | TTD 在跑但被风控 | `.env.local` 配 `TTD_DOUYIN_COOKIE`（公开热榜通常不需要） |
 
