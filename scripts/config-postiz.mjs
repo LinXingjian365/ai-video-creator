@@ -149,6 +149,12 @@ async function main() {
     if (!response.ok) {
       console.error(`✗ Postiz 返回 HTTP ${response.status}。`);
       console.error('  请确认:1) Postiz 已启动 2) API Key 正确 3) POSTIZ_URL 指向正确(自托管默认 http://localhost:5000/api)');
+      if (response.status === 401 || response.status === 403) {
+        console.error('');
+        console.error('  最常见原因:Postiz 容器是重建的,数据库 volume 也是新的,旧 API Key 已失效。');
+        console.error('  处理:打开 http://localhost:5000 → 注册/登录 → Settings → 生成新的 API Key,');
+        console.error('  然后在指挥舱「辅助 → 本机配置中心」更新 POSTIZ_API_KEY,或手动改 .env.local 后重启 dev server。');
+      }
       process.exit(2);
     }
     payload = await response.json().catch(() => []);
