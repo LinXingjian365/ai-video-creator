@@ -51,7 +51,8 @@ if (-not $Check) {
 Set-Location $dir
 
 # login 需要带界面才能扫码;check 不需要浏览器
-if ($Check) {
+# 例外:bilibili 走 biliup 官方 CLI(终端交互式扫码),它没有 --headed 参数
+if ($Check -or $Platform -eq "bilibili") {
     & $python sau_cli.py $Platform $action --account $Account
 } else {
     & $python sau_cli.py $Platform $action --account $Account --headed
